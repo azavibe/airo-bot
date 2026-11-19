@@ -22,7 +22,7 @@ path = "src/bin/airobot-cli.rs"
 # Do not add tower or hyper directly -- they arrive with axum.
 [dependencies]
 axum = "0.8"
-axum-extra = { version = "0.10", features = ["cookie"] }
+axum-extra = { version = "0.12", features = ["cookie"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "signal"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 sqlx = { version = "0.8", features = [
