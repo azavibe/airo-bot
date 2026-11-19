@@ -67,7 +67,7 @@ tower-http = { version = "0.6", features = ["fs"] }
 # Encrypts third-party provider keys (e.g. OpenRouter) at rest. They must be
 # recoverable to call the provider, so the Argon2-hash rule cannot apply;
 # already in the tree through web-push-native.
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 # Derives per-task webhook tokens so no raw webhook secret is ever stored.
 hmac = "0.12"
 
