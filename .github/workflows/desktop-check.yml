@@ -1,0 +1,66 @@
+# Checks the desktop app on the systems it ships for. Besides its unit
+# tests, this starts the whole local Airobot (a real PostgreSQL from the
+# release build plus the server) on macOS and Windows, signs in, chats with
+# a stand-in AI, restarts and checks the data survived.
+name: Desktop Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src-tauri/**"
+      - "src/**"
+      - "migrations/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/desktop-*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  POSTGRES_VERSION: "16.16.0"
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            os: macos-latest
+            postgres_target: aarch64-apple-darwin
+          - name: Windows (x64)
+            os: windows-latest
+            postgres_target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable (pinned commit)
+        with:
+          toolchain: stable
+          components: clippy
+
+      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Fetch PostgreSQL ${{ env.POSTGRES_VERSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="postgresql-${POSTGRES_VERSION}-${{ matrix.postgres_target }}"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/pg.tar.gz" \
+            "https://github.com/theseus-rs/postgresql-binaries/releases/download/${POSTGRES_VERSION}/${name}.tar.gz"
+          # Relative names: GNU tar on Windows reads "D:\..." as a remote host.
+          (cd "$RUNNER_TEMP" && tar -xzf pg.tar.gz)
+          echo "AIROBOT_TEST_POSTGRES=$RUNNER_TEMP/$name" >> "$GITHUB_ENV"
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Tests, including the full local app on PostgreSQL
+        run: cargo test --manifest-path src-tauri/Cargo.toml -- --nocapture

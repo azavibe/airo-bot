@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} stats — Air{% endblock %}
+{% block content %}
+<main class="thread">
+  <header class="thread-head">
+    <h1 class="page-h">{{ title }}</h1>
+    <p class="thread-meta">{{ success_count }} passes / {{ run_count }} runs &middot; {{ success_rate }}</p>
+  </header>
+  <ul class="log">
+    {% for item in models %}
+    <li class="note">
+      <span class="note-who">{{ item.model }}</span>
+      <span class="note-body">{{ item.success_count }} passes / {{ item.run_count }} runs &middot; {{ item.rate_label }} &middot; {{ item.average_attempts }} avg attempts</span>
+    </li>
+    {% endfor %}
+  </ul>
+</main>
+{% endblock %}

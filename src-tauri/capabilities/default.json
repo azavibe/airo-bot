@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The app's own pages (the bundled loading page). With the app's commands declared in build.rs, local pages also need them granted.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "allow-local-bot-status",
+    "allow-local-bot-pair",
+    "allow-local-bot-configure",
+    "allow-local-bot-set-chat",
+    "allow-local-bot-forget",
+    "allow-desktop-info",
+    "allow-desktop-set-mode",
+    "allow-open-external",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close"
+  ]
+}

@@ -1,0 +1,75 @@
+{% extends "app.html" %}
+{% block title %}Admin — Air{% endblock %}
+{% block app_content %}
+<p class="page-title">Admin</p>
+<p class="page-sub">Everything that manages this platform.</p>
+
+<section style="margin-bottom: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+  <h2 class="section-h">Onboarding tour</h2>
+  <p class="page-sub" style="margin-bottom: 12px;">The guided tour shown on the screens. "Every visit" is handy while demonstrating the product.</p>
+  <form method="post" action="/admin/settings" class="give-work">
+    <select name="onboarding_mode" aria-label="Onboarding tour">
+      <option value="every"{% if onboarding_mode == "every" %} selected{% endif %}>Show on every visit</option>
+      <option value="once"{% if onboarding_mode == "once" %} selected{% endif %}>Show once per person</option>
+      <option value="never"{% if onboarding_mode == "never" %} selected{% endif %}>Never show</option>
+    </select>
+    <input type="hidden" name="idempotency_key" value="onboarding-mode">
+    <button class="do-sm" type="submit">Save</button>
+  </form>
+</section>
+
+<section style="margin-bottom: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+  <h2 class="section-h">Platform</h2>
+  <p class="row-sub"><span class="num">{{ users_count }}</span> people &middot; <span class="num">{{ agents_count }}</span> bots &middot; <span class="num">{{ tasks_count }}</span> jobs &middot; <span class="num">{{ decisions_count }}</span> waiting for a person &middot; <span class="num">{{ workspaces_count }}</span> workspaces</p>
+  <p class="row-sub"><span class="num">{{ new_users_7d }}</span> joined this week &middot; <span class="num">{{ active_agents_24h }}</span> bots active today</p>
+</section>
+
+<section style="margin-bottom: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+  <h2 class="section-h">People</h2>
+  <ul class="list">
+    {% for u in users %}
+    <li class="row">
+      <div class="row-main">
+        <div>
+          <div class="row-title">{{ u.label }}</div>
+          <div class="row-sub">{% if u.is_admin %}<strong>Admin</strong> &middot; {% endif %}{% if u.is_self %}you &middot; {% endif %}{{ u.bot_count }} bots &middot; joined {{ u.joined_ago }}</div>
+        </div>
+      </div>
+      {% if !u.is_self %}
+      <form method="post" action="/admin/users/{{ u.id }}/admin" class="give-work">
+        <input type="hidden" name="is_admin" value="{% if u.is_admin %}false{% else %}true{% endif %}">
+        <input type="hidden" name="idempotency_key" value="admin-{{ u.id }}">
+        <button class="wait" style="font-size: 13.5px; padding: 8px 16px;" type="submit">{% if u.is_admin %}Revoke admin{% else %}Make admin{% endif %}</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section style="margin-bottom: 24px; padding-top: 20px; border-top: 1px solid var(--border);">
+  <h2 class="section-h">Bots</h2>
+  {% if agents.is_empty() %}
+  <p class="row-sub">No bots connected yet.</p>
+  {% else %}
+  <ul class="list">
+    {% for a in agents %}
+    <li class="row">
+      <div class="row-main">
+        <div>
+          <div class="row-title">{{ a.name }}</div>
+          <div class="row-sub">{{ a.owner_email }}{% match a.last_seen_ago %}{% when Some with (ago) %} &middot; seen {{ ago }}{% when None %} &middot; never seen{% endmatch %}{% if a.revoked %} &middot; <strong>revoked</strong>{% endif %}</div>
+        </div>
+      </div>
+      {% if !a.revoked %}
+      <form method="post" action="/admin/agents/{{ a.id }}/revoke">
+        <input type="hidden" name="idempotency_key" value="revoke-{{ a.id }}">
+        <button class="wait" style="font-size: 13.5px; padding: 8px 16px;" type="submit">Revoke</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}

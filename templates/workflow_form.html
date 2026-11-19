@@ -1,0 +1,119 @@
+{% extends "app.html" %}
+{% block title %}New Workflow — Air{% endblock %}
+{% block app_content %}
+{% if let Some(b) = board_name %}
+<a class="backlink" href="/b/{{ b }}" title="Back to workspace">&larr; Back to {{ b }}</a>
+{% else %}
+<a class="backlink" href="/boards" title="Back to workspaces">&larr; Back to workspaces</a>
+{% endif %}
+
+<h1 class="page-h">Create Workflow</h1>
+<p class="page-lede" style="margin-bottom: 1.5rem;">Define reusable multi-step instructions and assign connected external agents to execute each step.</p>
+
+<form method="post" action="/workflows" class="workflow-create-form" style="display: flex; flex-direction: column; gap: 1.25rem; max-width: 680px; width: 100%; box-sizing: border-box;">
+  {% if let Some(b) = board_name %}
+  <input type="hidden" name="board" value="{{ b }}">
+  {% endif %}
+
+  <div>
+    <label for="wf-title" style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem;">Workflow title</label>
+    <input id="wf-title" name="title" type="text" placeholder="e.g. Lead Research & Scoring" required style="width: 100%; padding: 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans);">
+  </div>
+
+  <div>
+    <label for="wf-summary" style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem;">Summary</label>
+    <input id="wf-summary" name="summary" type="text" placeholder="Short summary of what this workflow accomplishes" required style="width: 100%; padding: 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans);">
+  </div>
+
+  <div>
+    <label for="wf-body" style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem;">Overall instructions & context</label>
+    <textarea id="wf-body" name="body" rows="4" placeholder="High-level instructions or parameters for the run..." required style="width: 100%; padding: 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);"></textarea>
+  </div>
+
+  <div>
+    <label for="wf-check" style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem;">Completion check</label>
+    <input id="wf-check" name="check_description" type="text" placeholder="Criteria to verify the entire workflow succeeded" required style="width: 100%; padding: 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans);">
+  </div>
+
+  <div>
+    <label for="wf-visibility" style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem;">Visibility</label>
+    <select id="wf-visibility" name="visibility" style="width: 100%; padding: 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary);">
+      <option value="private" selected>Private (workspace only)</option>
+      <option value="unlisted">Unlisted</option>
+      <option value="public">Public</option>
+    </select>
+  </div>
+
+  <div style="border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 0.5rem;">
+    <h2 style="font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--text-primary);">Ordered Steps</h2>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">Air dispatches step 1 to its assigned agent, collects the result, and passes it to subsequent steps.</p>
+
+    <!-- Step 1 -->
+    <div class="step-card" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1rem; margin-bottom: 1rem; background: var(--surface-raised);">
+      <h3 style="font-size: 0.95rem; font-family: var(--font-mono); margin: 0 0 0.5rem 0; color: var(--text-primary);">Step 1</h3>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Step title</label>
+        <input name="step1_title" type="text" placeholder="e.g. Scrape initial prospects" required style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary);">
+      </div>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Instructions for agent</label>
+        <textarea name="step1_instructions" rows="2" placeholder="Specific task instructions..." required style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);"></textarea>
+      </div>
+      <div>
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Assigned connected agent</label>
+        <select name="step1_agent_id" style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);">
+          <option value="">Unassigned</option>
+          {% for agent in agents %}
+          <option value="{{ agent.id }}">{{ agent.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step-card" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1rem; margin-bottom: 1rem; background: var(--surface-raised);">
+      <h3 style="font-size: 0.95rem; font-family: var(--font-mono); margin: 0 0 0.5rem 0; color: var(--text-primary);">Step 2</h3>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Step title</label>
+        <input name="step2_title" type="text" placeholder="e.g. Enrich and score data" style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary);">
+      </div>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Instructions for agent</label>
+        <textarea name="step2_instructions" rows="2" placeholder="Instructions (prior step output will be automatically passed)..." style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);"></textarea>
+      </div>
+      <div>
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Assigned connected agent</label>
+        <select name="step2_agent_id" style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);">
+          <option value="">Unassigned</option>
+          {% for agent in agents %}
+          <option value="{{ agent.id }}">{{ agent.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step-card" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1rem; margin-bottom: 1rem; background: var(--surface-raised);">
+      <h3 style="font-size: 0.95rem; font-family: var(--font-mono); margin: 0 0 0.5rem 0; color: var(--text-primary);">Step 3 (Optional)</h3>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Step title</label>
+        <input name="step3_title" type="text" placeholder="e.g. Verify and store final results" style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary);">
+      </div>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Instructions for agent</label>
+        <textarea name="step3_instructions" rows="2" placeholder="Instructions..." style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);"></textarea>
+      </div>
+      <div>
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Assigned connected agent</label>
+        <select name="step3_agent_id" style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);">
+          <option value="">Unassigned</option>
+          {% for agent in agents %}
+          <option value="{{ agent.id }}">{{ agent.name }}</option>
+          {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" type="submit" style="align-self: flex-start; margin-top: 0.5rem;">Create workflow</button>
+</form>
+{% endblock %}

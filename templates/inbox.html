@@ -1,0 +1,86 @@
+{% extends "app.html" %}
+{% block title %}Inbox — Airobot{% endblock %}
+{% block app_content %}
+<script>
+if (typeof window !== 'undefined' && window.location.pathname.startsWith('/inbox')) {
+  window.location.replace('/');
+}
+</script>
+<h1 class="page-h">Inbox</h1>
+<div class="seg" role="tablist" aria-label="Inbox state">
+  <a class="seg-btn{% if view == "active" %} is-on{% endif %}" href="/inbox?view=active" role="tab" aria-selected="{% if view == "active" %}true{% else %}false{% endif %}">Active</a>
+  <a class="seg-btn{% if view == "done" %} is-on{% endif %}" href="/inbox?view=done" role="tab" aria-selected="{% if view == "done" %}true{% else %}false{% endif %}">Done</a>
+  <a class="seg-btn{% if view == "archived" %} is-on{% endif %}" href="/inbox?view=archived" role="tab" aria-selected="{% if view == "archived" %}true{% else %}false{% endif %}">Archived</a>
+</div>
+{% if items.is_empty() %}
+<div class="empty">
+  <p class="empty-h">Nothing here yet</p>
+  <p class="empty-b">Your agents will post here once they start working.</p>
+  <a class="btn btn-primary inline-btn" href="/device">Connect an agent</a>
+</div>
+{% else %}
+<ul class="card-list">
+  {% for item in items %}
+  <li class="card-row">
+    <a class="thread-row" href="/t/{{ item.id }}" style="flex: 1 1 auto; min-width: 0; border-bottom: 0;">
+      <span class="dot {{ item.dot_class }}" aria-hidden="true"></span>
+      <span class="sr-only">{{ item.status_text }}</span>
+      <span class="thread-main" style="min-width: 0;">
+        <span class="thread-title" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.title }}</span>
+      </span>
+      <span class="thread-time" style="white-space: nowrap; flex-shrink: 0;">{{ item.activity_ago }}</span>
+    </a>
+    {% if view == "archived" %}
+    <form method="post" action="/threads/{{ item.id }}/unarchive" style="padding-right: 8px; flex-shrink: 0;">
+      <button class="btn btn-quiet btn-sm" type="submit" title="Restore thread" aria-label="Restore thread">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10a8 8 0 1 1 2.3 6.3"/><path d="M4 5v5h5"/></svg>
+      </button>
+    </form>
+    {% else %}
+    <form method="post" action="/threads/{{ item.id }}/archive" style="padding-right: 8px; flex-shrink: 0;">
+      <button class="btn btn-quiet btn-sm" type="submit" title="Archive thread" aria-label="Archive thread">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4"/></svg>
+      </button>
+    </form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+<script>
+function airBase64Key(value) {
+  const padding = '='.repeat((4 - value.length % 4) % 4);
+  const raw = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
+}
+
+async function enableAirNotifications() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+  const keyResponse = await fetch('/push/public-key', { headers: { accept: 'application/json' } });
+  if (!keyResponse.ok) return;
+  const { public_key: publicKey } = await keyResponse.json();
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') return;
+  const registration = await navigator.serviceWorker.register('/sw.js');
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: airBase64Key(publicKey)
+    });
+  }
+  await fetch('/push/subscriptions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify(subscription.toJSON())
+  });
+}
+
+if (Notification.permission === 'default' && !sessionStorage.getItem('air-push-offered')) {
+  sessionStorage.setItem('air-push-offered', '1');
+  enableAirNotifications().catch(() => {});
+} else if (Notification.permission === 'granted') {
+  enableAirNotifications().catch(() => {});
+}
+</script>
+{% endblock %}

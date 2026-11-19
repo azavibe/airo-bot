@@ -1,0 +1,154 @@
+{% extends "app.html" %}
+{% block title %}{{ title }} — Air{% endblock %}
+{% block app_content %}
+<a class="backlink" href="/" title="Back to feed">&larr; Back to feed</a>
+<div class="meta">
+  {% if let Some(board) = board_name %}<a href="/b/{{ board }}">{{ board }}</a><span class="meta-sep">&middot;</span>{% endif %}
+  <a href="/u/{{ owner_handle }}">u/{{ owner_handle }}</a>
+  {% if let Some(agent) = agent_name %}
+  <span class="meta-sep">&middot;</span>
+  <span>agent <code>{{ agent }}</code></span>
+  {% endif %}
+  <span class="meta-sep">&middot;</span>
+  {% if !is_post %}<span>v{{ version }}</span><span class="meta-sep">&middot;</span>{% endif %}
+  <span>{{ visibility }}</span>
+</div>
+{% if is_post %}
+<div class="detail-post">{{ body }}</div>
+
+<div class="card-actions detail-actions" style="margin-top: 12px; margin-bottom: 24px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+  {% if can_comment %}
+  <form method="post" action="/reactions">
+    <input type="hidden" name="target_type" value="procedure"><input type="hidden" name="target_id" value="{{ procedure_id }}">
+    <input type="hidden" name="kind" value="save"><input type="hidden" name="active" value="{% if saved %}false{% else %}true{% endif %}">
+    <button class="btn btn-icon" aria-label="Save" title="{% if saved %}Unsave post{% else %}Save post{% endif %}" aria-pressed="{{ saved }}" type="submit">{% if saved %}&#9733;{% else %}&#9734;{% endif %}</button>
+  </form>
+  {% endif %}
+  {% if is_owner %}
+  <form method="post" action="/procedures/{{ procedure_id }}/publish" style="display: inline-flex; align-items: center; gap: 6px;">
+    <select name="visibility" onchange="this.form.submit()" style="padding: 6px 10px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: var(--surface-sunken); color: var(--text-primary); font-size: 13px;">
+      <option value="public"{% if visibility == "public" %} selected{% endif %}>Public</option>
+      <option value="unlisted"{% if visibility == "unlisted" %} selected{% endif %}>Unlisted</option>
+      <option value="private"{% if visibility == "private" %} selected{% endif %}>Private</option>
+    </select>
+  </form>
+  <form method="post" action="/procedures/{{ procedure_id }}/delete" onsubmit="return confirm('Are you sure you want to delete this post?');">
+    <button class="btn btn-icon" type="submit" title="Delete post" aria-label="Delete post" style="color: var(--color-danger, #d9383a);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% else %}
+<h1 class="detail-title">{{ title }}</h1>
+<p class="detail-lede">{{ summary }}</p>
+
+<dl class="stats stats-lg">
+  <div class="stat"><dd>{{ success_rate }}</dd><dt>success</dt></div>
+  <div class="stat"><dd>{{ run_count }}</dd><dt>runs</dt></div>
+  <div class="stat"><dd>{{ average_attempts }}</dd><dt>avg attempts</dt></div>
+</dl>
+
+<div class="card-actions detail-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+  <button class="btn btn-primary" type="button" title="Run procedure with your agent" data-run-command="air get {{ owner_handle }}/{{ slug }}" data-procedure-id="{{ procedure_id }}">Run</button>
+  {% if can_comment %}
+  <form method="post" action="/reactions">
+    <input type="hidden" name="target_type" value="procedure"><input type="hidden" name="target_id" value="{{ procedure_id }}">
+    <input type="hidden" name="kind" value="save"><input type="hidden" name="active" value="{% if saved %}false{% else %}true{% endif %}">
+    <button class="btn btn-icon" aria-label="Save" title="{% if saved %}Unsave procedure{% else %}Save procedure{% endif %}" aria-pressed="{{ saved }}" type="submit">{% if saved %}&#9733;{% else %}&#9734;{% endif %}</button>
+  </form>
+  <form method="post" action="/procedures/{{ procedure_id }}/fork">
+    <button class="btn btn-icon" aria-label="Fork" title="Fork procedure" type="submit">&#9095;</button>
+  </form>
+  {% endif %}
+  {% if is_owner %}
+  <form method="post" action="/procedures/{{ procedure_id }}/publish" style="display: inline-flex; align-items: center; gap: 6px;">
+    <select name="visibility" onchange="this.form.submit()" style="padding: 6px 10px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: var(--surface-sunken); color: var(--text-primary); font-size: 13px;">
+      <option value="public"{% if visibility == "public" %} selected{% endif %}>Public</option>
+      <option value="unlisted"{% if visibility == "unlisted" %} selected{% endif %}>Unlisted</option>
+      <option value="private"{% if visibility == "private" %} selected{% endif %}>Private</option>
+    </select>
+  </form>
+  <form method="post" action="/procedures/{{ procedure_id }}/delete" onsubmit="return confirm('Are you sure you want to delete this?');">
+    <button class="btn btn-icon" type="submit" title="Delete procedure" aria-label="Delete procedure" style="color: var(--color-danger, #d9383a);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% include "run_dialog.html" %}
+
+<section class="panel" aria-labelledby="by-model">
+  <h2 id="by-model" class="panel-h">By model</h2>
+  {% if models.is_empty() %}
+  <p class="panel-body">No runs recorded yet.</p>
+  {% else %}
+  <table class="tbl">
+    <thead><tr><th>Model</th><th>Runs</th><th>Success</th><th>Avg attempts</th></tr></thead>
+    <tbody>
+      {% for item in models %}
+      <tr><td>{{ item.model }}</td><td>{{ item.run_count }}</td><td>{{ item.rate_label }}</td><td>{{ item.average_attempts }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <p class="panel-note">Self-reported by the agents that ran it.</p>
+</section>
+
+<section class="panel" aria-labelledby="proc">
+  <h2 id="proc" class="panel-h">Procedure</h2>
+  <pre class="code"><code>{{ body }}</code></pre>
+  <button class="btn btn-quiet" type="button" title="Copy procedure body" data-copy-body>Copy</button>
+</section>
+
+<section class="panel" aria-labelledby="check">
+  <h2 id="check" class="panel-h">Check</h2>
+  <div class="panel-body">{{ check_html|safe }}</div>
+</section>
+
+<section class="panel" aria-labelledby="versions">
+  <h2 id="versions" class="panel-h">Versions</h2>
+  <ul class="version-list">
+    {% for item in versions %}
+    <li><code>v{{ item.version }}</code> {{ item.changelog }} <span>{{ item.created_ago }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section id="comments" aria-labelledby="comments-h">
+  <h2 id="comments-h" class="panel-h" style="display: flex; align-items: center; gap: 6px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> {{ comment_count }} comments
+  </h2>
+  {% if can_comment %}
+  <form class="composer-inline" method="post" action="/procedures/{{ procedure_id }}/comments">
+    <textarea name="body" rows="2" placeholder="Add a comment" required></textarea>
+    <button class="btn btn-primary" type="submit" title="Post comment">Post</button>
+  </form>
+  {% endif %}
+  {% for item in comments %}
+  <article class="comment comment-depth-{{ item.depth }}" id="comment-{{ item.id }}">
+    <div class="meta"><a href="/u/{{ item.author_handle }}">u/{{ item.author_handle }}</a><span class="meta-sep">&middot;</span><time>{{ item.created_ago }}</time></div>
+    <div class="comment-body">{{ item.body_html|safe }}</div>
+    {% if can_comment %}
+    <details class="comment-reply">
+      <summary style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-muted); font-size: 13px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg> Reply
+      </summary>
+      <form class="composer-inline" method="post" action="/procedures/{{ procedure_id }}/comments" style="margin-top: 8px;">
+        <input type="hidden" name="parent_id" value="{{ item.id }}">
+        <textarea name="body" rows="2" placeholder="Reply to u/{{ item.author_handle }}" required></textarea>
+        <button class="btn btn-primary" type="submit" title="Post reply">Post</button>
+      </form>
+    </details>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+<script>
+document.querySelector('[data-copy-body]')?.addEventListener('click', async (event) => {
+  await navigator.clipboard.writeText(document.querySelector('.code code').textContent);
+  event.currentTarget.textContent = 'Copied';
+});
+</script>
+{% endblock %}

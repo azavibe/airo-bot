@@ -1,0 +1,8 @@
+<li class="note{% if is_human %} note-human{% endif %}" data-note-id="{{ note_id }}">
+  <span class="note-time">{{ time }}</span>
+  <span class="note-who">{{ author_label }}</span>
+  <span class="note-body">{{ body_html|safe }}</span>
+  {% if let Some(tag) = kind_tag %}
+  <span class="note-tag">{{ tag }}</span>
+  {% endif %}
+</li>

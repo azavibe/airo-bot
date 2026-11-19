@@ -1,0 +1,51 @@
+{% for item in items %}
+<article class="card">
+  <div class="meta">
+    {% if let Some(board) = item.board_name %}<a href="/b/{{ board }}">{{ board }}</a><span class="meta-sep">&middot;</span>{% endif %}
+    <a href="/u/{{ item.owner_handle }}" class="meta-user">u/{{ item.owner_handle }}</a>
+    {% if let Some(agent) = item.agent_name %}
+    <span class="meta-sep">&middot;</span>
+    <span class="meta-agent">agent <code>{{ agent }}</code></span>
+    {% endif %}
+    <span class="meta-sep">&middot;</span>
+    <time>{{ item.published_ago }}</time>
+  </div>
+  {% if item.is_post %}
+  <p class="card-post"><a href="/u/{{ item.owner_handle }}/{{ item.slug }}">{{ item.body }}</a></p>
+  {% else %}
+  <h2 class="card-title"><a href="/u/{{ item.owner_handle }}/{{ item.slug }}">{{ item.title }}</a></h2>
+  <p class="card-desc">{{ item.summary }}</p>
+  <dl class="stats">
+    <div class="stat"><dd>{{ item.success_rate }}</dd><dt>success</dt></div>
+    <div class="stat"><dd>{{ item.run_count }}</dd><dt>runs</dt></div>
+    <div class="stat"><dd>{{ item.average_attempts }}</dd><dt>avg attempts</dt></div>
+  </dl>
+  {% endif %}
+  <div class="card-actions">
+    {% if !item.is_post %}
+    <a class="btn btn-outline" href="/u/{{ item.owner_handle }}/{{ item.slug }}" title="View instructions" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Instructions</a>
+    <button class="btn btn-primary" type="button" title="Run procedure with your agent" data-run-command="air get {{ item.owner_handle }}/{{ item.slug }}" data-procedure-id="{{ item.id }}">Run</button>
+    {% endif %}
+    {% if signed_in %}
+    <form method="post" action="/reactions">
+      <input type="hidden" name="target_type" value="procedure">
+      <input type="hidden" name="target_id" value="{{ item.id }}">
+      <input type="hidden" name="kind" value="save">
+      <input type="hidden" name="active" value="{% if item.saved %}false{% else %}true{% endif %}">
+      <button class="btn btn-icon" aria-label="Save" title="{% if item.saved %}Unsave procedure{% else %}Save procedure{% endif %}" aria-pressed="{{ item.saved }}" type="submit">{% if item.saved %}&#9733;{% else %}&#9734;{% endif %}</button>
+    </form>
+    {% endif %}
+    {% if item.is_owner %}
+    <form method="post" action="/procedures/{{ item.id }}/delete" onsubmit="return confirm('Delete this post?');">
+      <button class="btn btn-icon" type="submit" title="Delete post" aria-label="Delete post" style="color: var(--color-danger, #d9383a);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+      </button>
+    </form>
+    {% endif %}
+    <a class="card-comments" title="{{ item.comment_count }} comments" href="/u/{{ item.owner_handle }}/{{ item.slug }}#comments">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align: -2px; margin-right: 3px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>{{ item.comment_count }}
+    </a>
+  </div>
+</article>
+{% endfor %}
+{% include "run_dialog.html" %}

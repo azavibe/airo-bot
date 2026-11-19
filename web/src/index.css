@@ -1,0 +1,173 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  /* Obsidian defaults; utils/theme.ts overwrites these at runtime. */
+  --c-fg: 255 255 255;
+  --c-bg: 0 0 0;
+  --c-surface: 22 22 26;
+  --c-surface-2: 34 34 40;
+  --c-border: 255 255 255;
+  --c-accent: 255 255 255;
+  --c-accent-fg: 10 10 10;
+  --c-bubble-user: 46 46 54;
+  --c-shade: 0 0 0;
+  --c-n50: 250 250 250;
+  --c-n100: 245 245 245;
+  --c-n200: 229 229 229;
+  --c-n300: 212 212 212;
+  --c-n400: 163 163 163;
+  --c-n500: 115 115 115;
+  --c-n600: 82 82 82;
+  --c-n700: 64 64 64;
+  --c-n800: 38 38 38;
+  --c-n900: 23 23 23;
+  --c-n950: 10 10 10;
+  --glass-alpha: 0.72;
+  --glass-blur: 28px;
+  --radius-panel: 24px;
+  --radius-card: 18px;
+  --page-glow: none;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: rgb(var(--c-bg));
+  background-image: var(--page-glow);
+  background-attachment: fixed;
+  color: rgb(var(--c-fg));
+  min-height: 100vh;
+}
+
+/* Frosted glass surfaces; colour, blur and corners follow the theme. */
+.glass-panel {
+  background: rgb(var(--c-surface) / var(--glass-alpha));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid rgb(var(--c-border) / 0.08);
+  box-shadow: 0 16px 40px rgb(var(--c-shade) / 0.35), inset 0 1px 0 rgb(var(--c-fg) / 0.06);
+  border-radius: var(--radius-panel);
+}
+
+.glass-card {
+  background: rgb(var(--c-surface-2) / calc(var(--glass-alpha) - 0.1));
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.7));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.7));
+  border: 1px solid rgb(var(--c-border) / 0.08);
+  box-shadow: inset 0 1px 0 rgb(var(--c-fg) / 0.05);
+  border-radius: var(--radius-card);
+}
+
+.glass-pill {
+  background: rgb(var(--c-fg) / 0.07);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgb(var(--c-border) / 0.09);
+  border-radius: 9999px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-pill:hover {
+  background: rgb(var(--c-fg) / 0.12);
+  border-color: rgb(var(--c-border) / 0.18);
+}
+
+.glass-bubble-bot {
+  background: rgb(var(--c-surface-2) / 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgb(var(--c-border) / 0.09);
+  box-shadow: 0 4px 20px rgb(var(--c-shade) / 0.18);
+  border-radius: calc(var(--radius-card) - 2px);
+}
+
+.glass-bubble-user {
+  background: rgb(var(--c-bubble-user) / 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgb(var(--c-border) / 0.12);
+  box-shadow: 0 4px 20px rgb(var(--c-shade) / 0.18);
+  border-radius: calc(var(--radius-card) - 2px);
+}
+
+.glass-dock {
+  background: rgb(var(--c-surface) / 0.88);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid rgb(var(--c-border) / 0.14);
+  box-shadow: 0 16px 48px rgb(var(--c-shade) / 0.45), inset 0 1px 1px rgb(var(--c-fg) / 0.12);
+  border-radius: 9999px;
+}
+
+/* Native dropdown lists ignore the page's colours on most systems, which
+   left white text on a white list. Give every list the theme's surface. */
+select {
+  color-scheme: inherit;
+}
+select option,
+select optgroup {
+  background-color: rgb(var(--c-surface));
+  color: rgb(var(--c-fg));
+}
+
+/* A scroll area with no visible bar (still scrolls with wheel, touch, keys). */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom smooth scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-fg) / 0.12);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--c-fg) / 0.2);
+}
+
+/* The bottom row of every panel: the account row, the composer and the
+   dashboard footer share one height and one top line, so they read as one
+   line across the window. */
+.panel-footer {
+  height: 66px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  border-top: 1px solid rgb(var(--c-border) / 0.1);
+}
+
+/* The top row of every panel, level across the window. */
+.panel-header {
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Small secondary action used in management rows (Workflows, Admin). */
+.manage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.5rem;
+  font-size: 11px;
+  color: rgb(var(--c-n300));
+  transition: background-color 150ms, color 150ms;
+}
+.manage-btn:hover {
+  background: rgb(var(--c-fg) / 0.08);
+  color: rgb(var(--c-fg));
+}
+.manage-btn:disabled {
+  opacity: 0.5;
+}

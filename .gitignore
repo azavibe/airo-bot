@@ -1,0 +1,70 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Rust
+/target/
+src-tauri/target/
+target/
+
+# Python
+__pycache__/
+*.pyc
+
+# Build output
+dist/
+!web/dist/
+!web/dist/**
+# The ONNX runtime for local voice models (~21 MB) is emitted by every
+# build; transformers.js loads it from its CDN at runtime, so it never
+# needs to be in git (the Docker build still serves a copy).
+web/dist/assets/*.wasm
+build/
+
+out/
+*.tsbuildinfo
+
+# Coverage
+coverage/
+*.lcov
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+.air/
+.dev/
+*.tmp
+*.bak
+
+# Backups
+backups/
+
+# wrangler
+.wrangler/
+.dev.vars

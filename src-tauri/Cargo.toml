@@ -1,0 +1,30 @@
+[package]
+name = "airobot-desktop"
+version = "0.6.0"
+description = "Airobot Native Desktop Virtual Office"
+authors = ["Airobot Team"]
+license = "AGPL-3.0-only"
+repository = "https://github.com/azavibe/airo-bot"
+edition = "2021"
+
+[lib]
+name = "airobot_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4" }
+
+[dependencies]
+tauri = { version = "2.12.5", features = ["tray-icon"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+tauri-plugin-log = "2"
+tauri-plugin-single-instance = "2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "macros", "sync", "process", "io-util", "net"] }
+# This computer's own Airobot: the same server the website runs, plus a
+# private PostgreSQL shipped inside the app (no download at run time).
+airobot = { path = ".." }
+postgresql_embedded = { version = "0.22", default-features = false, features = ["tokio", "tls-rustls-ring"] }
+sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio-rustls", "uuid"] }

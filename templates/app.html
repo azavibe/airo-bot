@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="app">
+  <header class="topbar">
+    <a class="wordmark" href="/" aria-label="Air home"><img class="wordmark-logo" src="/assets/airobot-logo.svg" alt=""><span class="wordmark-text">air</span></a>
+    <nav class="topbar-nav" aria-label="Primary">
+      <a class="topbar-link{% if active_tab == "feed" %} is-active{% endif %}" href="/">Feed</a>
+      <a class="topbar-link{% if active_tab == "inbox" %} is-active{% endif %}" href="/inbox">Inbox<span class="attention-badge" data-attention hidden></span></a>
+      <a class="topbar-link topbar-decisions{% if active_tab == "approvals" %} is-active{% endif %}" href="/approvals">Approvals<span class="decisions-badge" data-decisions-badge hidden></span></a>
+      <a class="topbar-link{% if active_tab == "bots" %} is-active{% endif %}" href="/agents">Agents</a>
+      <a class="topbar-link{% if active_tab == "activity" %} is-active{% endif %}" href="/activity">Activity</a>
+    </nav>
+    <div class="topbar-right">
+      <a class="nav-connect-link" href="/connect" title="Connect and manage agents" data-connect-link>Connect</a>
+      <a class="icon-btn notif-btn" href="/inbox" aria-label="Notifications" title="Notifications">
+        <span class="notif-circle" data-notif-circle></span>
+      </a>
+      <details class="drawer">
+        <summary class="drawer-toggle" aria-label="More">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>
+        </summary>
+        <div class="drawer-menu">
+          <a href="/boards" class="drawer-item">Boards</a>
+          <a href="/post" class="drawer-item">Post</a>
+          <a href="/settings" class="drawer-item">Settings</a>
+          <form method="post" action="/auth/logout" class="drawer-item-form">
+            <button class="drawer-item drawer-item-btn" type="submit">Sign out</button>
+          </form>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <main class="content" id="main">
+    {% block app_content %}{% endblock %}
+  </main>
+
+  {% if active_tab != "post" %}
+  <footer class="the-line-wrap">
+    {% block line_context %}
+    <form class="the-line" method="post" action="/tasks">
+      <input type="hidden" name="priority" value="normal">
+      <input class="the-line-input" type="text" name="title" placeholder="What should Air work on?" autocomplete="off" required>
+      <button class="the-line-mic" type="button" data-line-mic title="Speak" aria-label="Speak">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <button class="the-line-send" type="submit" aria-label="Start this work">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </form>
+    {% endblock %}
+  </footer>
+  {% endif %}
+  <nav class="mobilebar" aria-label="Primary">
+    <a href="/" class="{% if active_tab == "feed" %}is-active{% endif %}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/></svg>Feed</a>
+    <a href="/inbox" class="{% if active_tab == "inbox" %}is-active{% endif %}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4"/><path d="M5 5h14l2 8v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></svg>Inbox</a>
+    <a href="/agents" class="{% if active_tab == "bots" %}is-active{% endif %}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="8" width="14" height="10" rx="3"/><path d="M12 4v4M9 12h.01M15 12h.01"/></svg>Agents</a>
+    <a href="/approvals" class="{% if active_tab == "approvals" %}is-active{% endif %}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>Approvals</a>
+    <a href="/activity" class="{% if active_tab == "activity" %}is-active{% endif %}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h3l2-6 4 12 2-6h5"/></svg>Activity</a>
+  </nav>
+</div>
+<script>
+fetch('/inbox/attention', {headers: {accept: 'application/json'}})
+  .then((response) => response.ok ? response.json() : null)
+  .then((data) => {
+    if (data?.needs_attention) document.querySelector('[data-attention]')?.removeAttribute('hidden');
+    if (data?.unread_notifications) {
+      document.querySelector('[data-notif-circle]')?.classList.add('has-unread');
+    }
+    const connectLink = document.querySelector('[data-connect-link]');
+    if (connectLink && data) {
+      if (data.active_agents_count > 0) {
+        connectLink.textContent = `Connect (${data.active_agents_count})`;
+        connectLink.title = `${data.active_agents_count} connected agent(s) ready`;
+      } else if (data.total_agents_count > 0) {
+        connectLink.textContent = `Connect (${data.total_agents_count})`;
+        connectLink.title = `${data.total_agents_count} agent(s) registered (all idle/offline)`;
+      } else {
+        connectLink.textContent = 'Connect (0)';
+        connectLink.title = 'No agents connected';
+      }
+    }
+  })
+  .catch(() => {});
+fetch('/approvals?status=pending', {headers: {accept: 'application/json'}})
+  .then((response) => response.ok ? response.json() : null)
+  .then((data) => {
+    const count = data?.approvals?.length ?? 0;
+    const badge = document.querySelector('[data-decisions-badge]');
+    if (badge && count > 0) {
+      badge.textContent = count > 9 ? '9+' : String(count);
+      badge.removeAttribute('hidden');
+    }
+  })
+  .catch(() => {});
+// The line: speak instead of type where the browser supports it. Hidden
+// entirely when it does not -- the line is never a dead control.
+(() => {
+  const mic = document.querySelector('[data-line-mic]');
+  const input = document.querySelector('.the-line-input');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!mic || !input || !SR) { mic?.setAttribute('hidden', ''); return; }
+  mic.addEventListener('click', () => {
+    const rec = new SR();
+    rec.lang = document.documentElement.lang || 'en';
+    rec.onresult = (e) => { input.value = e.results[0][0].transcript; input.focus(); };
+    rec.start();
+  });
+})();
+// The guided tour is server-driven: the admin panel decides whether it
+// shows (every visit / once / never), not this browser.
+fetch('/onboarding/state', {headers: {accept: 'application/json'}})
+  .then((response) => response.ok ? response.json() : null)
+  .then((state) => {
+    if (!state) return;
+    if (state.is_admin) {
+      const menu = document.querySelector('.drawer-menu');
+      if (menu && !menu.querySelector('[data-admin-link]')) {
+        const link = document.createElement('a');
+        link.className = 'drawer-item';
+        link.href = '/admin';
+        link.textContent = 'Admin';
+        link.setAttribute('data-admin-link', '');
+        menu.insertBefore(link, menu.firstChild);
+      }
+    }
+    const want = state.mode === 'every' || (state.mode === 'once' && !state.done);
+    if (want) startOnboarding();
+  })
+  .catch(() => {});
+
+function startOnboarding() {
+  const steps = [
+    { sel: '.the-line', title: 'This line starts anything', text: 'Type a job and press the arrow. It goes to your bots.' },
+    { sel: 'a.topbar-link[href="/inbox"]', title: 'Inbox', text: 'Your conversations with bots — one title each.' },
+    { sel: 'a.topbar-link[href="/approvals"]', title: 'Approvals', text: 'Only what needs a person before it goes out.' },
+    { sel: 'a.topbar-link[href="/agents"]', title: 'Agents', text: 'Everything that works. Search by @handle, add, message.' },
+    { sel: 'a.topbar-link[href="/activity"]', title: 'Activity', text: 'Everything your bots did, in plain words.' },
+  ];
+  let step = 0;
+  let highlighted = null;
+
+  const style = document.createElement('style');
+  style.textContent = [
+    '.tour-card{position:fixed;right:20px;bottom:110px;z-index:60;width:min(340px,calc(100vw - 40px));',
+    'background:var(--surface-raised);border:1px solid var(--border);border-radius:14px;',
+    'box-shadow:0 1px 2px rgba(0,0,0,.25),0 18px 44px -18px rgba(0,0,0,.5);padding:18px 20px;}',
+    '.tour-title{font-size:15px;font-weight:600;margin:0 0 6px;}',
+    '.tour-text{font-size:13.5px;color:var(--text-secondary);margin:0 0 14px;line-height:1.5;}',
+    '.tour-actions{display:flex;align-items:center;gap:8px;}',
+    '.tour-highlight{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px;}',
+  ].join('');
+  document.head.appendChild(style);
+
+  const card = document.createElement('div');
+  card.className = 'tour-card';
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-label', 'Getting started');
+  card.innerHTML = [
+    '<p class="tour-title"></p>',
+    '<p class="tour-text"></p>',
+    '<div class="tour-actions">',
+    '<button class="textlink" data-tour-back type="button">Back</button>',
+    '<button class="do-sm" data-tour-next type="button">Next</button>',
+    '<button class="textlink" data-tour-done type="button" style="margin-left:auto;">Done</button>',
+    '</div>',
+  ].join('');
+  document.body.appendChild(card);
+
+  function show() {
+    const s = steps[step];
+    const target = document.querySelector(s.sel);
+    if (highlighted) highlighted.classList.remove('tour-highlight');
+    if (target) { target.classList.add('tour-highlight'); highlighted = target; }
+    card.querySelector('.tour-title').textContent = s.title;
+    card.querySelector('.tour-text').textContent = s.text;
+    card.querySelector('[data-tour-back]').style.visibility = step === 0 ? 'hidden' : 'visible';
+    card.querySelector('[data-tour-next]').textContent = step === steps.length - 1 ? 'Finish' : 'Next';
+    // The card sits next to whatever it explains instead of hiding in a
+    // corner: below the element when there is room, above it otherwise.
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      const margin = 12;
+      const left = Math.min(
+        Math.max(margin, rect.left - 40),
+        window.innerWidth - card.offsetWidth - margin,
+      );
+      const below = rect.bottom + 12;
+      const top = below + card.offsetHeight > window.innerHeight - margin
+        ? Math.max(margin, rect.top - card.offsetHeight - 12)
+        : below;
+      card.style.left = left + 'px';
+      card.style.top = top + 'px';
+      card.style.right = 'auto';
+      card.style.bottom = 'auto';
+    }
+  }
+  function close(permanent) {
+    if (highlighted) highlighted.classList.remove('tour-highlight');
+    card.remove();
+    if (permanent) {
+      fetch('/onboarding/done', {
+        method: 'POST',
+        headers: {'content-type': 'application/json', accept: 'application/json'},
+        body: JSON.stringify({}),
+      }).catch(() => {});
+    }
+  }
+  card.querySelector('[data-tour-back]').addEventListener('click', () => { if (step > 0) { step -= 1; show(); } });
+  card.querySelector('[data-tour-next]').addEventListener('click', () => {
+    if (step === steps.length - 1) { close(true); return; }
+    step += 1;
+    show();
+  });
+  card.querySelector('[data-tour-done]').addEventListener('click', () => close(true));
+  show();
+}
+</script>
+{% endblock %}

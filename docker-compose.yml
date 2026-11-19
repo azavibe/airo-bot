@@ -1,0 +1,70 @@
+# Airobot with its own PostgreSQL: `docker compose up --build`.
+#
+# `postgres` runs only under the "local" profile, enabled by default via
+# COMPOSE_PROFILES=local in .env.example -- so plain `docker compose up`
+# works standalone, while an .env without COMPOSE_PROFILES (pointing
+# DATABASE_URL at an existing PostgreSQL server) never starts a second one.
+# `app.depends_on.postgres` is marked `required: false` so `up -d app`
+# without the profile doesn't fail trying to start it.
+name: airobot
+
+services:
+  postgres:
+    image: postgres:16
+    profiles: ["local"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-airobot}
+      POSTGRES_USER: ${POSTGRES_USER:-airobot_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - airobot_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-airobot_user} -d $${POSTGRES_DB:-airobot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: ${APP_IMAGE:-airobot-app:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    stop_grace_period: 45s
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-airobot_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-airobot}
+      # Fixed inside the container; choose the host port with APP_PORT.
+      PORT: "8080"
+      RUST_LOG: ${RUST_LOG:-info}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      APP_ENV: ${APP_ENV:-development}
+      AIR_DEV_LOGIN: ${AIR_DEV_LOGIN:-}
+      PROVIDER_KEY_SECRET: ${PROVIDER_KEY_SECRET:-}
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      STRIPE_CONNECT_CLIENT_ID: ${STRIPE_CONNECT_CLIENT_ID:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      SHOPIFY_CLIENT_ID: ${SHOPIFY_CLIENT_ID:-}
+      SHOPIFY_CLIENT_SECRET: ${SHOPIFY_CLIENT_SECRET:-}
+    # Loopback only: put a TLS reverse proxy (Caddy, nginx) in front of it
+    # to serve it publicly, and list that proxy in TRUSTED_PROXY_IPS.
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+
+volumes:
+  airobot_postgres_data:

@@ -1,0 +1,155 @@
+# Builds the Airobot desktop app (src-tauri) for Windows and macOS and
+# publishes the installers on a GitHub Release.
+#
+# Run it from the Actions tab ("Run workflow"), or push a release tag
+# v<version> matching src-tauri/tauri.conf.json's "version" (the same tag
+# also publishes the server image, see ci.yml). Re-running for the same
+# version adds or replaces that release's assets.
+#
+# The builds are not code-signed yet: macOS shows an "unidentified
+# developer" warning (right-click the app, then Open) and Windows
+# SmartScreen asks once. To sign, add the Apple and Windows signing
+# secrets described at https://v2.tauri.app/distribute/sign/ and pass them
+# in the tauri-action step's env.
+name: Desktop Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: "Airobot web app the desktop window opens (https)"
+        required: false
+        default: "https://airo-bot.com"
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Separate Mac builds so each installer carries only its own
+          # PostgreSQL (the local database shipped inside the app).
+          - name: macOS (Apple Silicon)
+            os: macos-latest
+            args: --target aarch64-apple-darwin
+            rust_targets: aarch64-apple-darwin
+            postgres_target: aarch64-apple-darwin
+          - name: macOS (Intel)
+            os: macos-latest
+            args: --target x86_64-apple-darwin
+            rust_targets: x86_64-apple-darwin
+            postgres_target: x86_64-apple-darwin
+          - name: Windows (x64)
+            os: windows-latest
+            args: ""
+            rust_targets: ""
+            postgres_target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    env:
+      AIROBOT_APP_URL: ${{ github.event.inputs.app_url || 'https://airo-bot.com' }}
+      POSTGRES_VERSION: "16.16.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable (pinned commit)
+        with:
+          toolchain: stable
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Check the app URL
+        shell: bash
+        run: |
+          case "$AIROBOT_APP_URL" in
+            https://*) ;;
+            *) echo "app_url must start with https://" >&2; exit 1 ;;
+          esac
+
+      # The window shows this computer's own Airobot (127.0.0.1) or the
+      # hosted site; only those may call the desktop's commands.
+      - name: Trust the app URL in the desktop capability
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "src-tauri/capabilities/remote.json";
+            const c = JSON.parse(fs.readFileSync(p, "utf8"));
+            const origin = new URL(process.env.AIROBOT_APP_URL).origin;
+            // The cloud site, plus the Airobot on this computer (local mode).
+            c.remote.urls = [origin + "/*", "http://127.0.0.1:*"];
+            fs.writeFileSync(p, JSON.stringify(c, null, 2) + "\n");
+            console.log("trusted:", c.remote.urls);
+          '
+
+      # The app's private database: an unpacked PostgreSQL for this
+      # platform, trimmed of headers, docs and static libraries.
+      - name: Bundle PostgreSQL ${{ env.POSTGRES_VERSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="postgresql-${POSTGRES_VERSION}-${{ matrix.postgres_target }}"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/pg.tar.gz" \
+            "https://github.com/theseus-rs/postgresql-binaries/releases/download/${POSTGRES_VERSION}/${name}.tar.gz"
+          # Relative names: GNU tar on Windows reads "D:\..." as a remote host.
+          (cd "$RUNNER_TEMP" && tar -xzf pg.tar.gz)
+          dest=src-tauri/resources/postgres
+          find "$dest" -mindepth 1 ! -name README.md -exec rm -rf {} +
+          cp -R "$RUNNER_TEMP/$name/." "$dest/"
+          rm -rf "$dest/include" "$dest/share/doc" "$dest/lib/pgxs"
+          find "$dest/lib" -name '*.a' -delete
+          du -sh "$dest"
+          test -e "$dest/bin/initdb" || test -e "$dest/bin/initdb.exe"
+
+      - name: Build the web bundle
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Airobot's own Google sign-in ("Desktop app" OAuth client), built
+          # into the app so people connect Gmail, Calendar and Sheets with
+          # one click. Google does not treat a desktop client's secret as
+          # confidential; it still lives in secrets, not in the repository.
+          # Unset: Google is set up in the app's Settings instead.
+          AIROBOT_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.AIROBOT_GOOGLE_DESKTOP_CLIENT_ID }}
+          AIROBOT_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.AIROBOT_GOOGLE_DESKTOP_CLIENT_SECRET }}
+        with:
+          projectPath: src-tauri
+          tauriScript: npx --yes @tauri-apps/cli@2.12.4
+          args: ${{ matrix.args }}
+          tagName: v__VERSION__
+          releaseName: Airobot v__VERSION__
+          releaseBody: |
+            Airobot on your own computer: no website, account or credits needed. Your office runs privately on this computer (with its own built-in database), and your bots answer chats and do tasks with the AI you already have: Claude Code (Claude Pro/Max), Codex (ChatGPT plans), OpenCode, Gemini CLI, or a free local Ollama model. Pick it in Connect Devices → AI on this computer. Airobot Cloud is optional (tray menu → Switch to Airobot Cloud).
+
+            - **Mac:** take the `aarch64` file for Apple Silicon (M1 and later) or `x64` for Intel.
+
+            - **macOS:** download the `.dmg`, drag Airobot to Applications. These builds are not signed yet: the first time, right-click Airobot → Open.
+            - **Windows:** run the `.msi` or `-setup.exe`. SmartScreen may ask once (More info → Run anyway).
+
+            Dictation and spoken replies are in Settings → Voice.
+          releaseDraft: false
+          prerelease: true

@@ -1,0 +1,83 @@
+{% extends "app.html" %}
+{% block title %}Tasks — {{ workspace.name }} — Air{% endblock %}
+{% block app_content %}
+<a class="backlink" href="/jobs" title="Back to Jobs">&larr; Back to Jobs</a>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+  <h1 class="page-h" style="margin: 0;">Tasks in {{ workspace.name }}</h1>
+</div>
+
+<div class="seg" role="tablist" aria-label="Task status filter" style="margin-bottom: 20px;">
+  <a class="seg-btn{% if filter_status == "all" %} is-on{% endif %}" href="/tasks?status=all" role="tab">All</a>
+  <a class="seg-btn{% if filter_status == "queued" %} is-on{% endif %}" href="/tasks?status=queued" role="tab">Queued</a>
+  <a class="seg-btn{% if filter_status == "assigned" || filter_status == "running" %} is-on{% endif %}" href="/tasks?status=assigned" role="tab">Active</a>
+  <a class="seg-btn{% if filter_status == "waiting_approval" %} is-on{% endif %}" href="/tasks?status=waiting_approval" role="tab">Waiting OK</a>
+  <a class="seg-btn{% if filter_status == "completed" %} is-on{% endif %}" href="/tasks?status=completed" role="tab">Done</a>
+</div>
+
+<section class="card" id="new" style="margin-bottom: 24px;">
+  <h2 class="card-title" style="margin-bottom: 12px;">Create New Task</h2>
+  <form method="post" action="/tasks">
+    <input type="hidden" name="workspace_id" value="{{ workspace.id }}">
+    <div style="margin-bottom: 12px;">
+      <label for="task-title" style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px;">Task Description</label>
+      <input id="task-title" class="search" type="text" name="title" placeholder="e.g. Code review for auth module or qualify restaurant lead" required style="margin-bottom: 0;">
+    </div>
+    <div style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
+      <div style="flex: 1 1 150px;">
+        <label for="task-priority" style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px;">Priority</label>
+        <select id="task-priority" name="priority" style="width: 100%; height: 38px; border-radius: var(--radius-ctl); border: 1px solid var(--border-strong); background: var(--surface-raised); color: var(--text-primary); padding: 0 10px; font-family: inherit;">
+          <option value="normal" selected>Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary" type="submit">Enqueue Task</button>
+  </form>
+</section>
+
+<section>
+  <h2 style="font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 12px;">
+    Task Queue ({{ tasks.len() }})
+  </h2>
+
+  {% if tasks.is_empty() %}
+  <div class="empty">
+    <p class="empty-h">No matching tasks</p>
+    <p class="empty-b">Tasks appear here once created.</p>
+  </div>
+  {% else %}
+  <ul class="thread-list">
+    {% for t in tasks %}
+    <li style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 12px 4px; gap: 12px;">
+      <div style="flex: 1 1 auto; min-width: 0;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+          <span style="display: inline-block; padding: 2px 8px; border-radius: var(--radius-pill); font-family: var(--font-mono); font-size: 11px; background: var(--surface-sunken); border: 1px solid var(--border);">
+            {{ t.status }}
+          </span>
+          {% if t.priority == "high" || t.priority == "urgent" %}
+          <span style="color: #ef4444; font-size: 11px; font-family: var(--font-mono);">[{{ t.priority }}]</span>
+          {% endif %}
+          <a href="/tasks/{{ t.id }}" style="font-size: 15px; font-weight: 500; color: var(--text-primary); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {{ t.title }}
+          </a>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); display: flex; gap: 10px; flex-wrap: wrap;">
+          <span>assigned: <strong>{{ t.bot_label }}</strong></span>
+          <span>created {{ t.created_ago }}</span>
+          {% if let Some(tid) = t.thread_id %}
+          <a href="/t/{{ tid }}" style="color: var(--accent); text-decoration: none;">&rarr; View conversation</a>
+          {% endif %}
+        </div>
+      </div>
+      <div style="flex-shrink: 0;">
+        <a class="btn btn-quiet btn-sm" href="/tasks/{{ t.id }}">View</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,52 @@
+<ol class="log" id="log" hx-get="/threads/{{ thread_id }}" hx-select="#log" hx-trigger="every 15s" hx-swap="outerHTML">
+  {% for row in note_rows %}
+  {{ row|safe }}
+  {% endfor %}
+</ol>
+<script>
+(() => {
+  if (!window._airThreadSwapInit) {
+    window._airThreadSwapInit = true;
+    document.addEventListener('htmx:beforeSwap', function(evt) {
+      if (evt.detail.target && evt.detail.target.id === 'log' && evt.detail.requestConfig && evt.detail.requestConfig.verb === 'post') {
+        const text = evt.detail.xhr ? evt.detail.xhr.responseText : '';
+        if (text) {
+          const temp = document.createElement('ol');
+          temp.innerHTML = text.trim();
+          const noteEl = temp.querySelector('[data-note-id]') || temp.firstElementChild;
+          if (noteEl && noteEl.dataset.noteId) {
+            const existing = document.querySelector(`[data-note-id="${noteEl.dataset.noteId}"]`);
+            if (existing) {
+              existing.outerHTML = noteEl.outerHTML;
+              evt.detail.shouldSwap = false;
+            }
+          }
+        }
+      }
+    });
+  }
+
+  if (!('EventSource' in window)) return;
+  if (window._airThreadSSE) {
+    try { window._airThreadSSE.close(); } catch (_) {}
+  }
+  const es = new EventSource('/threads/{{ thread_id }}/events');
+  window._airThreadSSE = es;
+  es.addEventListener('note', (e) => {
+    const log = document.getElementById('log');
+    if (log && e.data) {
+      const temp = document.createElement('ol');
+      temp.innerHTML = e.data.trim();
+      const newEl = temp.querySelector('[data-note-id]') || temp.firstElementChild;
+      if (newEl && newEl.dataset.noteId) {
+        const existing = log.querySelector(`[data-note-id="${newEl.dataset.noteId}"]`);
+        if (existing) {
+          existing.outerHTML = newEl.outerHTML;
+          return;
+        }
+      }
+      log.insertAdjacentHTML('afterbegin', e.data);
+    }
+  });
+})();
+</script>

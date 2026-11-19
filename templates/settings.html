@@ -1,0 +1,33 @@
+{% extends "app.html" %}
+{% block title %}Settings — Air{% endblock %}
+{% block app_content %}
+<div class="user-header" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+  <div>
+    <h1 class="page-h" style="margin-bottom: 4px;">{{ handle }}</h1>
+    <p class="page-lede" style="margin: 0; color: var(--color-muted, #888);">{{ email }}</p>
+  </div>
+  <form method="post" action="/auth/logout" style="flex-shrink: 0;">
+    <button class="btn btn-quiet btn-sm" type="submit" title="Log out of Air" style="color: var(--color-danger, #d9383a);">Log out</button>
+  </form>
+</div>
+
+<section class="panel" aria-labelledby="appearance-h" style="margin-top: 16px;">
+  <h2 id="appearance-h" class="panel-h">Appearance</h2>
+  <p class="page-lede">Customize how Air looks on this device.</p>
+  <form class="form" method="post" action="/settings/theme">
+    <label class="field">
+      <span class="field-label">Theme</span>
+      <select name="theme">
+        <option value="system"{% if theme == "system" %} selected{% endif %}>System</option>
+        <option value="light"{% if theme == "light" %} selected{% endif %}>Light</option>
+        <option value="dark"{% if theme == "dark" %} selected{% endif %}>Dark</option>
+      </select>
+    </label>
+    <button class="btn btn-primary" type="submit" title="Save theme preference" style="align-self: flex-start;">Save theme</button>
+  </form>
+</section>
+
+<p style="margin-top: 2rem; font-size: 0.85rem; color: var(--text-muted);">
+  Looking to manage Connected agents or OpenRouter? Visit the <a href="/connect?view=agents" style="color: var(--accent); font-weight: 500;">Connect Hub &rarr;</a>
+</p>
+{% endblock %}

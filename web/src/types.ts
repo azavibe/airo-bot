@@ -1,0 +1,207 @@
+export interface WorkspaceWallet {
+  workspace_id: string;
+  plan_tier: string;
+  credit_balance: number;
+  max_daily_credit_burn: number;
+  credits_burned_today: number;
+  dedicated_phone_number?: string;
+  updated_at: string;
+  /** Set when the next platform-paid AI call would be refused. */
+  limit_reached?: 'daily' | 'balance' | null;
+  upgrade_url?: string | null;
+  /** Answers with web access used today, and the daily allowance (0: off). */
+  web_runs_today?: number;
+  web_runs_limit?: number;
+}
+
+export interface Thread {
+  id: string;
+  title: string;
+  user_id: string;
+  workspace_id?: string | null;
+  /** `office`: the office's group chat; `room`: one bot's room. */
+  kind?: 'room' | 'office';
+  /** The bots that answer in this room. */
+  agent_ids?: string[];
+  state: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Note {
+  id: string;
+  thread_id: string;
+  body: string;
+  author_user_id?: string;
+  author_agent_id?: string;
+  author_name?: string;
+  author_kind: 'human' | 'agent';
+  created_at: string;
+  /** One-tap buttons a bot offers with this note. */
+  actions?: NoteAction[] | null;
+}
+
+/** `send`: sends `message` as your own message; `setup`: opens office
+ *  setup for this office; `open`: opens the screen named by `target`. */
+export interface NoteAction {
+  label: string;
+  kind: 'send' | 'setup' | 'open';
+  message?: string;
+  target?: string;
+}
+
+export interface AppSchema {
+  version: string;
+  layout: 'split_view' | 'table_view' | 'media_view';
+  header_metrics?: Array<{
+    id: string;
+    label: string;
+    query_record_type: string;
+    aggregation: 'count' | 'sum' | 'avg';
+    field?: string;
+  }>;
+  views: Array<{
+    id: string;
+    type: 'kanban' | 'datatable' | 'media_gallery';
+    title: string;
+    record_type: string;
+    group_by_field?: string;
+    columns?: any[];
+    card_fields?: string[];
+    media_field?: string;
+    caption_field?: string;
+    metrics_fields?: string[];
+  }>;
+  quick_actions?: Array<{
+    label: string;
+    trigger_workflow_slug: string;
+  }>;
+}
+
+export interface OfficeApp {
+  id: string;
+  workspace_id: string;
+  slug: string;
+  title: string;
+  icon: string;
+  category: string;
+  replaces_saas?: string;
+  ui_schema: AppSchema;
+  default_schema?: AppSchema;
+  last_valid_schema?: AppSchema;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceLesson {
+  id: string;
+  workspace_id: string;
+  rule: string;
+  source: string;
+  context: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentTaskPlan {
+  id: string;
+  title: string;
+  status: 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed';
+  fsm_state?: string;
+  steps: Array<{
+    order: number;
+    title: string;
+    status: 'completed' | 'running' | 'pending';
+  }>;
+}
+
+export interface OfficeRecord {
+  id: string;
+  workspace_id: string;
+  app_id: string;
+  record_type: string;
+  status: string;
+  data: Record<string, any>;
+  content_hash?: number;
+  created_by_agent_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Approval {
+  id: string;
+  task_id?: string;
+  action_summary: string;
+  reason: string;
+  estimated_credits: number;
+  status: 'pending' | 'approved' | 'rejected';
+  agent_name?: string;
+  created_at: string;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  handle?: string;
+  instructions?: string;
+  key_prefix: string;
+  last_seen_at?: string;
+  provider_type?: string;
+  provider_model?: string;
+  /** Desktop app: the AI tool on this computer this bot uses (null = default). */
+  ai_engine?: LocalEngineId | null;
+  /** Desktop app: the model inside that tool (null = the tool's default). */
+  ai_model?: string | null;
+  /** Where its answers come from (see the server's ActiveAgentItem). */
+  ai_source?: 'this_computer' | 'own_key' | 'account_key' | 'included' | 'none';
+  /** Website: the model it really answers with. */
+  effective_model?: string | null;
+}
+
+/** A separate place for rooms and bots (a workspace on the server). */
+export interface Office {
+  id: string;
+  name: string;
+  /** The first office: can be renamed, never deleted. */
+  primary: boolean;
+  room_count: number;
+  /** The Architect plans each morning and the bots start on it. */
+  daily_plan?: boolean;
+  /** Stopped: the office's bots start no new work. */
+  paused?: boolean;
+  website?: string | null;
+  focus?: string | null;
+}
+
+export type LocalEngineId = 'claude_code' | 'codex' | 'opencode' | 'gemini' | 'ollama';
+
+export type Visibility = 'private' | 'unlisted' | 'public';
+
+export interface Procedure {
+  id: string;
+  user_id?: string;
+  visibility?: Visibility;
+  slug: string;
+  title: string;
+  summary: string;
+  body: string;
+  check_description: string;
+  current_version: number;
+  run_count: number;
+  success_count: number;
+  updated_at: string;
+}
+
+export interface UserProfile {
+  authenticated: boolean;
+  id?: string;
+  handle?: string;
+  email?: string;
+  display_name?: string;
+  avatar_url?: string;
+  is_admin?: boolean;
+  is_agent?: boolean;
+  ui_theme?: Record<string, unknown> | null;
+  /** Airobot running inside the desktop app, on this computer only. */
+  local_mode?: boolean;
+}

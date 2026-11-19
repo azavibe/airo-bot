@@ -1,0 +1,67 @@
+<dialog id="run-dialog" aria-labelledby="run-dialog-title">
+  <div class="dialog-body">
+    <h2 class="page-h" id="run-dialog-title">Run with your agent</h2>
+    <p class="page-lede">Air will not execute this on the server. Copy the command into your setup{% if !agents.is_empty() %}, or send it as a command to one of your connected agents{% endif %}.</p>
+    <pre class="code"><code data-run-command-text></code></pre>
+    <div class="dialog-actions">
+      <button class="btn btn-primary" type="button" title="Copy command to clipboard" data-copy-run>Copy command</button>
+      <button class="btn btn-outline" type="button" title="Close dialog" data-close-run>Close</button>
+    </div>
+    {% if !agents.is_empty() %}
+    <form class="form" method="post" data-send-run style="margin-top: 18px">
+      <input type="hidden" name="idempotency_key" data-send-key>
+      <label class="field">
+        <span class="field-label">Connected agent</span>
+        <select name="agent_id">
+          {% for agent in agents %}<option value="{{ agent.id }}">{{ agent.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <button class="btn btn-quiet" type="submit" title="Send command to agent">Send to agent</button>
+    </form>
+    {% endif %}
+    {% if agents.is_empty() %}
+    <div style="margin-top: 16px; padding: 12px 14px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-ctl);">
+      <h3 class="panel-h" style="margin: 0 0 6px; font-size: 14px;">How to run with your agent</h3>
+      <ol style="margin: 0 0 12px; padding-left: 18px; font-size: 13px; color: var(--text-secondary); line-height: 1.55;">
+        <li>Copy the command above into your agent or terminal.</li>
+        <li>Or read instructions directly with the Rust CLI: <code style="font-family: var(--font-mono); font-size: 12px;">air-cli get <span data-run-target-slug></span></code></li>
+        <li>Connect an autonomous agent anytime: <code style="font-family: var(--font-mono); font-size: 12px;">air-cli login</code></li>
+      </ol>
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <a class="btn btn-quiet btn-sm" href="/connect" title="Connect an agent">Connect an agent</a>
+        <a class="btn btn-outline btn-sm" href="/signin" title="Sign in">Sign in</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</dialog>
+<script>
+(() => {
+  const dialog = document.querySelector('#run-dialog');
+  if (!dialog) return;
+  document.querySelectorAll('[data-run-command]').forEach((button) => {
+    button.addEventListener('click', () => {
+      dialog.querySelector('[data-run-command-text]').textContent = button.dataset.runCommand;
+      const slugSpan = dialog.querySelector('[data-run-target-slug]');
+      if (slugSpan) {
+        const cmd = button.dataset.runCommand || '';
+        slugSpan.textContent = cmd.replace(/^air get\s+/, '');
+      }
+      const form = dialog.querySelector('[data-send-run]');
+      if (form) {
+        form.action = `/procedures/${button.dataset.procedureId}/send`;
+        form.querySelector('[data-send-key]').value = crypto.randomUUID();
+      }
+      dialog.showModal();
+    });
+  });
+  dialog.querySelector('[data-close-run]').addEventListener('click', () => dialog.close());
+  dialog.querySelector('[data-copy-run]').addEventListener('click', async (event) => {
+    await navigator.clipboard.writeText(dialog.querySelector('[data-run-command-text]').textContent);
+    event.currentTarget.textContent = 'Copied';
+  });
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+})();
+</script>

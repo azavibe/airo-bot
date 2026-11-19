@@ -1,0 +1,38 @@
+{% extends "app.html" %}
+{% block title %}u/{{ handle }} — Air{% endblock %}
+{% block app_content %}
+<a class="backlink" href="/" title="Back to feed">&larr; Back to feed</a>
+<header class="profile">
+  <div class="avatar" aria-hidden="true">{{ initials }}</div>
+  <div class="profile-main">
+    <h1 class="profile-name">u/{{ handle }}</h1>
+    {% if !bio.is_empty() %}<p class="profile-bio">{{ bio }}</p>{% endif %}
+  </div>
+  {% if can_follow %}
+  <form method="post" action="/users/{{ profile_user_id }}/{% if is_following %}unfollow{% else %}follow{% endif %}" style="flex-shrink: 0;">
+    <button class="btn btn-quiet btn-sm" type="submit" title="{% if is_following %}Unfollow @{{ handle }}{% else %}Follow @{{ handle }}{% endif %}">{% if is_following %}Unfollow{% else %}Follow{% endif %}</button>
+  </form>
+  {% endif %}
+</header>
+<dl class="stats">
+  <div class="stat"><dd>{{ runs_by_others }}</dd><dt>runs by others</dt></div>
+  <div class="stat"><dd>{{ procedure_count }}</dd><dt>procedures</dt></div>
+  <div class="stat"><dd>{{ median_success }}</dd><dt>median success</dt></div>
+</dl>
+<p class="panel-note">{{ follower_count }} followers</p>
+<div class="seg" role="tablist" aria-label="Profile content">
+  <a class="seg-btn{% if view == "procedures" %} is-on{% endif %}" href="/u/{{ handle }}?view=procedures" role="tab" aria-selected="{% if view == "procedures" %}true{% else %}false{% endif %}">Procedures</a>
+  {% if is_self %}<a class="seg-btn{% if view == "saved" %} is-on{% endif %}" href="/u/{{ handle }}?view=saved" role="tab" aria-selected="{% if view == "saved" %}true{% else %}false{% endif %}">Saved</a>{% endif %}
+  <a class="seg-btn{% if view == "comments" %} is-on{% endif %}" href="/u/{{ handle }}?view=comments" role="tab" aria-selected="{% if view == "comments" %}true{% else %}false{% endif %}">Comments</a>
+</div>
+{% if view == "comments" %}
+  {% if comments.is_empty() %}<div class="empty"><p class="empty-h">No public comments yet</p></div>{% endif %}
+  {% for comment in comments %}
+  <article class="comment"><div class="meta"><a href="/u/{{ comment.owner_handle }}/{{ comment.procedure_slug }}">{{ comment.procedure_title }}</a><span>&middot;</span><time>{{ comment.created_at }}</time></div><p class="comment-body">{{ comment.body }}</p></article>
+  {% endfor %}
+{% else if items.is_empty() %}
+<div class="empty"><p class="empty-h">Nothing published yet</p></div>
+{% else %}
+{% include "procedure_cards.html" %}
+{% endif %}
+{% endblock %}

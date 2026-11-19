@@ -1,0 +1,51 @@
+{% extends "app.html" %}
+{% block title %}Activity Trail — Air{% endblock %}
+{% block app_content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+  <div>
+    <h1 class="page-h" style="margin: 0;">Activity</h1>
+    <p class="thread-meta" style="margin: 2px 0 0;">What your bots did, in plain words</p>
+  </div>
+</div>
+
+<div class="seg" role="tablist" aria-label="Airo navigation" style="margin-bottom: 20px;">
+  <a class="seg-btn" href="/jobs" role="tab">Overview</a>
+  <a class="seg-btn" href="/tasks" role="tab">Tasks</a>
+  <a class="seg-btn" href="/approvals" role="tab">Approvals</a>
+  <a class="seg-btn" href="/bots" role="tab">Bots</a>
+  <a class="seg-btn is-on" href="/activity" role="tab">Activity</a>
+</div>
+
+{% if events.is_empty() %}
+<div class="empty">
+  <p class="empty-h">No activity recorded yet</p>
+  <p class="empty-b">Events appear here as tasks, bots, and approvals are executed.</p>
+</div>
+{% else %}
+<ul class="thread-list">
+  {% for ev in events %}
+  <li style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 12px 4px; gap: 12px;">
+    <div style="min-width: 0; flex: 1;">
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span style="font-size: 11px; font-family: var(--font-mono); padding: 1px 6px; border-radius: var(--radius-pill); background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-secondary);">
+          {{ ev.actor_label }}
+        </span>
+        <span style="font-size: 14px; font-weight: 500; color: var(--text-primary);">
+          {{ ev.action_text }}
+        </span>
+        {% if !ev.target_label.is_empty() %}
+        <span style="font-size: 12px; font-family: var(--font-mono); color: var(--text-muted);">
+          &rarr; {{ ev.target_label }}
+        </span>
+        {% endif %}
+      </div>
+      <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+        <span>{{ ev.created_ago }}</span> &middot;
+        <span>result: <strong>{{ ev.result }}</strong></span>
+      </div>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

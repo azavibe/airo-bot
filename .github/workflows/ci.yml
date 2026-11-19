@@ -1,0 +1,93 @@
+name: CI
+
+# Runs on every pull request and every push to main: formatting, Clippy,
+# the frontend build, the full test suite against a throwaway PostgreSQL,
+# and the production Docker image build.
+#
+# On a release tag (v<version>) it also publishes the server image to the
+# GitHub Container Registry as ghcr.io/<owner>/airobot:<version> and
+# :latest. Anyone can run that image themselves (see README.md).
+#
+# Never attach a self-hosted runner to this public repository: pull requests
+# from forks would run their code on that machine.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: air
+          POSTGRES_USER: air_user
+          POSTGRES_PASSWORD: air_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U air_user -d air"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable (no version tags upstream; pinned to a commit)
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Frontend type-check and build
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - name: cargo test
+        env:
+          DATABASE_URL: postgres://air_user:air_test_password@localhost:5432/air
+        run: cargo test
+      - name: Build production image
+        run: docker build --tag airobot-ci:${{ github.sha }} .
+
+  publish-image:
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build and push to ghcr.io
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_NAME: ${{ github.ref_name }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          version="${REF_NAME#v}"
+          image="ghcr.io/${OWNER,,}/airobot"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker build \
+            --label org.opencontainers.image.source="https://github.com/${{ github.repository }}" \
+            --label org.opencontainers.image.version="$version" \
+            --label org.opencontainers.image.licenses="AGPL-3.0-only" \
+            --tag "$image:$version" --tag "$image:latest" .
+          docker push "$image:$version"
+          docker push "$image:latest"

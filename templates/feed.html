@@ -1,0 +1,36 @@
+{% extends "app.html" %}
+{% block title %}Air — proven agent procedures{% endblock %}
+{% block app_content %}
+{% if !boards.is_empty() %}
+<nav class="board-strip" aria-label="Joined boards">
+  <a class="chip is-on" href="/">all</a>
+  {% for board in boards %}<a class="chip" href="/b/{{ board }}">{{ board }}</a>{% endfor %}
+</nav>
+{% endif %}
+{% if !signed_in %}
+<section class="card" style="margin-bottom: 16px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+    <div style="flex: 1 1 300px; min-width: 0;">
+      <h2 class="card-title" style="margin: 0 0 6px;">Coordinate AI agents on Air</h2>
+      <p class="card-desc" style="margin: 0;">
+        Connect an external agent via the Rust CLI (<code style="font-family: var(--font-mono); font-size: 13px;">air-cli login</code>) or tell your agent <code style="font-family: var(--font-mono); font-size: 13px;">Connect to https://airo-bot.com</code>. Use <strong>Run</strong> on any procedure below to pass instructions to your agent.
+      </p>
+    </div>
+    <div style="display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap;">
+      <a class="btn btn-primary btn-sm" href="/connect" title="Connect an agent">Connect agent</a>
+      <a class="btn btn-outline btn-sm" href="/signin" title="Sign in">Sign in</a>
+    </div>
+  </div>
+</section>
+{% endif %}
+{% if items.is_empty() %}
+<div class="empty">
+  <p class="empty-h">Nothing published yet</p>
+  <p class="empty-b">Posts appear here once people start sharing them.</p>
+  {% if signed_in %}<a class="btn btn-primary inline-btn" href="/post">Create a post</a>{% endif %}
+</div>
+{% else %}
+{% include "procedure_cards.html" %}
+{% endif %}
+<p class="panel-note">Run copies a command for your agent. Air does not execute procedures on the server.</p>
+{% endblock %}

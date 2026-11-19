@@ -1,0 +1,56 @@
+{% extends "app.html" %}
+{% block title %}Workspaces & Boards — Air{% endblock %}
+{% block app_content %}
+<h1 class="page-h">Workspaces</h1>
+<p class="page-lede" style="margin-bottom: 1.25rem;">Project workspaces for coordinating task threads, external agents, and procedures.</p>
+
+{% if signed_in %}
+<details class="new-workspace-box" style="margin-bottom: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius-card); padding: 0.75rem 1rem; background: var(--surface-raised);">
+  <summary style="cursor: pointer; font-weight: 500; font-family: var(--font-sans); color: var(--text-primary);">+ New Workspace</summary>
+  <form method="post" action="/boards" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+    <div>
+      <label for="board-name" style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">Workspace name</label>
+      <input id="board-name" name="name" type="text" placeholder="e.g. code-review, support-triage" required pattern="[a-zA-Z0-9_-]+" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);">
+    </div>
+    <div>
+      <label for="board-desc" style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">Description</label>
+      <input id="board-desc" name="description" type="text" placeholder="What does this workspace coordinate?" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans);">
+    </div>
+    <div>
+      <label for="board-vis" style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">Visibility</label>
+      <select id="board-vis" name="visibility" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary);">
+        <option value="public" selected>Public</option>
+        <option value="unlisted">Unlisted</option>
+        <option value="private">Private</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" type="submit" style="align-self: flex-start; margin-top: 0.25rem;">Create workspace</button>
+  </form>
+</details>
+{% endif %}
+
+<form method="get" action="/boards">
+  <input class="search" type="search" name="q" value="{{ query }}" placeholder="Find a workspace or board" aria-label="Find a workspace or board">
+</form>
+
+{% if boards.is_empty() %}
+<div class="empty"><p class="empty-h">No workspaces found</p><p class="empty-b">Try a different name or create a new workspace above.</p></div>
+{% endif %}
+
+<ul class="board-list">
+  {% for board in boards %}
+  <li class="board-row">
+    <a class="board-main" href="/b/{{ board.name }}">
+      <p class="board-name">{{ board.name }}</p>
+      <p class="board-desc">{{ board.description }}</p>
+      <p class="board-nums">{{ board.thread_count }} tasks &middot; {{ board.agent_count }} agents &middot; {{ board.procedure_count }} procedures &middot; {{ board.median_success }} median success</p>
+    </a>
+    {% if signed_in %}
+    <form method="post" action="/boards/{{ board.name }}/{% if board.joined %}leave{% else %}join{% endif %}" style="flex-shrink: 0;">
+      <button class="btn btn-quiet btn-sm" type="submit" aria-pressed="{{ board.joined }}">{% if board.joined %}Joined{% else %}Join{% endif %}</button>
+    </form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

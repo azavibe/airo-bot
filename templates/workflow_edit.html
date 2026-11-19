@@ -1,0 +1,79 @@
+{% extends "app.html" %}
+{% block title %}Edit {{ workflow.title }} — Air{% endblock %}
+{% block app_content %}
+<a class="backlink" href="/workflows/{{ workflow.id }}" title="Back to workflow">&larr; Back to {{ workflow.title }}</a>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+  <div style="flex: 1 1 240px; min-width: 0;">
+    <h1 class="page-h" style="margin-bottom: 0.25rem; word-break: break-word;">Edit Workflow</h1>
+    <p class="page-lede" style="margin: 0; word-break: break-word;">Update workflow playbook instructions, visibility, and agent assignments{% if let Some(bname) = board_name %} in workspace <strong>{{ bname }}</strong>{% endif %}.</p>
+  </div>
+  <form method="post" action="/workflows/{{ workflow.id }}/delete" onsubmit="return confirm('Are you sure you want to permanently delete this workflow?');" style="flex-shrink: 0;">
+    <button class="btn btn-danger btn-sm" type="submit" title="Delete workflow">Delete Workflow</button>
+  </form>
+</div>
+
+<form method="post" action="/workflows/{{ workflow.id }}/edit" class="workflow-edit-form" style="display: flex; flex-direction: column; gap: 1.25rem; max-width: 680px; width: 100%; box-sizing: border-box;">
+  <div>
+    <label for="wf-title" style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem;">Workflow title</label>
+    <input id="wf-title" name="title" type="text" value="{{ workflow.title }}" required style="width: 100%; padding: 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans);">
+  </div>
+
+  <div>
+    <label for="wf-summary" style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem;">Summary</label>
+    <input id="wf-summary" name="summary" type="text" value="{{ workflow.summary }}" required style="width: 100%; padding: 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans);">
+  </div>
+
+  <div>
+    <label for="wf-body" style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem;">Overall instructions &amp; context</label>
+    <textarea id="wf-body" name="body" rows="4" required style="width: 100%; padding: 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);">{{ workflow.body }}</textarea>
+  </div>
+
+  <div>
+    <label for="wf-check" style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem;">Completion check</label>
+    <input id="wf-check" name="check_description" type="text" value="{{ workflow.check_description }}" required style="width: 100%; padding: 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans);">
+  </div>
+
+  <div>
+    <label for="wf-visibility" style="display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.25rem;">Visibility</label>
+    <select id="wf-visibility" name="visibility" style="width: 100%; padding: 0.55rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary);">
+      <option value="private"{% if workflow.visibility == "private" %} selected{% endif %}>Private (workspace only)</option>
+      <option value="unlisted"{% if workflow.visibility == "unlisted" %} selected{% endif %}>Unlisted</option>
+      <option value="public"{% if workflow.visibility == "public" %} selected{% endif %}>Public</option>
+    </select>
+  </div>
+
+  <div style="border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 0.5rem;">
+    <h2 style="font-size: 1.1rem; margin-bottom: 0.75rem; color: var(--text-primary);">Ordered Steps</h2>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">Update step titles, instructions, and agent assignments.</p>
+
+    {% for step in steps %}
+    <div class="step-card" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1rem; margin-bottom: 1rem; background: var(--surface-raised);">
+      <h3 style="font-size: 0.95rem; font-family: var(--font-mono); margin: 0 0 0.5rem 0; color: var(--text-primary);">Step {{ step.step_order }}</h3>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Step title</label>
+        <input name="step{{ step.step_order }}_title" type="text" value="{{ step.title }}" required style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary);">
+      </div>
+      <div style="margin-bottom: 0.5rem;">
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Instructions for agent</label>
+        <textarea name="step{{ step.step_order }}_instructions" rows="2" required style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);">{{ step.instructions }}</textarea>
+      </div>
+      <div>
+        <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.2rem;">Assigned connected agent</label>
+        <select name="step{{ step.step_order }}_agent_id" style="width: 100%; padding: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);">
+          <option value="">Unassigned</option>
+          {% for agent in agents %}
+          <option value="{{ agent.id }}"{% if step.is_assigned_to(agent.id) %} selected{% endif %}>{{ agent.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem;">
+    <button class="btn btn-primary" type="submit">Save Changes</button>
+    <a class="btn btn-quiet" href="/workflows/{{ workflow.id }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Check your email — Air{% endblock %}
+{% block content %}
+<div class="auth">
+  <img class="auth-logo" src="/assets/airobot-logo.svg" alt="Air">
+  <h1 class="auth-h">Check your email</h1>
+  <p class="auth-note">Open the link in your email to sign in. It works once and expires in 3 hours.</p>
+  <p class="auth-note">Your account opens automatically after you follow the link. New accounts choose a handle first.</p>
+  <p class="auth-note"><a href="/signin">Use another email or request a new link</a></p>
+  <p class="auth-note"><a href="/inbox">Continue to your account</a></p>
+</div>
+{% endblock %}

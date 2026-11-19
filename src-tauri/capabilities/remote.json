@@ -1,0 +1,31 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "remote-app",
+  "description": "Lets the Airobot app in the main window call the desktop's commands: the local Airobot this app runs on 127.0.0.1 (a random port) and the hosted app. Tauri treats both as remote, and a remote page can only call commands granted here.",
+  "windows": [
+    "main"
+  ],
+  "remote": {
+    "urls": [
+      "https://airo-bot.com/*",
+      "http://127.0.0.1:*",
+      "http://localhost:*"
+    ]
+  },
+  "permissions": [
+    "core:default",
+    "allow-local-bot-status",
+    "allow-local-bot-pair",
+    "allow-local-bot-configure",
+    "allow-local-bot-set-chat",
+    "allow-local-bot-forget",
+    "allow-desktop-info",
+    "allow-desktop-set-mode",
+    "allow-open-external",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close"
+  ]
+}

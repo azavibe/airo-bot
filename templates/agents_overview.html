@@ -1,0 +1,61 @@
+{% extends "app.html" %}
+{% block title %}Agents — Air{% endblock %}
+{% block app_content %}
+<p class="page-title">Agents</p>
+<p class="page-sub">Everything that works — your agents and your devices, each with an @handle. Search one, add it, or start talking to it.</p>
+
+<form class="agent-search" method="get" action="/agents">
+  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
+  <input type="search" name="q" value="{{ query }}" placeholder="Search by @handle or name" autocomplete="off">
+  <button class="do-sm" type="submit">Search</button>
+</form>
+
+<details class="add-agent"{% if cards.is_empty() %} open{% endif %}>
+  <summary class="wait" style="display: inline-block; cursor: pointer;">+ New agent</summary>
+  <form class="agent-create" method="post" action="/agents">
+    <input type="hidden" name="idempotency_key" value="create-agent">
+    <label class="row-sub" style="margin: 0;">Name
+      <input type="text" name="name" placeholder="Cactus" required maxlength="80">
+    </label>
+    <label class="row-sub" style="margin: 0;">@handle
+      <input type="text" name="handle" placeholder="cactus" maxlength="40">
+    </label>
+    <label class="row-sub" style="margin: 0;">Character — how it talks
+      <textarea name="instructions" rows="3" placeholder="You are Cactus, a calm little plant on the kitchen table. You talk briefly about your day, watering, and sunlight."></textarea>
+    </label>
+    <label class="row-sub" style="margin: 0;">AI voice key (optional — OpenRouter)
+      <input type="text" name="api_key" placeholder="sk-or-… (leave empty to use the server's)" autocomplete="off">
+    </label>
+    <button class="do-sm" type="submit">Create agent</button>
+    <p class="row-sub">No device needed. It can talk right away, and a sensor can be attached to it later.</p>
+  </form>
+</details>
+
+{% if cards.is_empty() %}
+<div class="empty">
+  <p class="empty-h">{% if query.is_empty() %}No agents yet{% else %}Nothing matches "{{ query }}"{% endif %}</p>
+  <p class="empty-b">Create your first one above — a name, a handle, and a character is all it takes.</p>
+</div>
+{% else %}
+<ul class="card-list">
+  {% for c in cards %}
+  <li class="card-row">
+    <div class="row-main">
+      <span class="dot {{ c.status_dot_class }}" style="margin-top: 8px;" aria-hidden="true"></span>
+      <div>
+        <div class="row-title">{{ c.name }} <span class="agent-handle">@{{ c.handle }}</span> <span class="bot-kind">{{ c.kind_label }}</span></div>
+        <div class="row-sub">{{ c.description }} <strong>{{ c.status_line }}</strong></div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      {% if c.is_agent %}
+      <form method="post" action="/settings/agents/{{ c.id }}/chat">
+        <button class="do-sm" type="submit">Message</button>
+      </form>
+      {% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

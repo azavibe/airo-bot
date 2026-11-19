@@ -1,0 +1,253 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Office, Thread, UserProfile } from '../types';
+import { AppearancePanel } from './AppearancePanel';
+import { Theme } from '../utils/theme';
+import { VoicePanel } from './VoicePanel';
+import { VoiceSettings } from '../utils/voice';
+import { ConnectionsView } from './ConnectionsView';
+import { AdminView } from './AdminView';
+
+export type SettingsSection = 'account' | 'appearance' | 'voice' | 'connections' | 'admin';
+
+/** The address of each settings section (the first is plain /settings). */
+export const SETTINGS_PATHS: Record<SettingsSection, string> = {
+  account: '/settings',
+  appearance: '/settings/appearance',
+  voice: '/settings/voice',
+  connections: '/settings/connections',
+  admin: '/settings/admin',
+};
+
+export const settingsSectionFromPath = (path: string): SettingsSection => {
+  if (path.startsWith('/connections') || path.startsWith('/settings/connections')) return 'connections';
+  if (path === '/admin' || path.startsWith('/admin/') || path.startsWith('/settings/admin')) return 'admin';
+  if (path.startsWith('/settings/appearance')) return 'appearance';
+  if (path.startsWith('/settings/voice')) return 'voice';
+  return 'account';
+};
+
+interface SettingsViewProps {
+  section: SettingsSection;
+  onChangeSection: (s: SettingsSection) => void;
+  userProfile: UserProfile | null;
+  onRefreshProfile: () => Promise<void>;
+  theme: Theme;
+  onThemeSaved: (theme: Theme) => void;
+  voiceSettings: VoiceSettings;
+  onVoiceSettingsChange: (s: VoiceSettings) => void;
+  offices: Office[];
+  threads: Thread[];
+  initialOfficeId?: string;
+  isGuest: boolean;
+  onRequireAuth: () => void;
+  onNotice: (kind: 'ok' | 'error', text: string) => void;
+  onOpenDevices: () => void;
+  bottomDock?: React.ReactNode;
+}
+
+const AccountPanel: React.FC<{ userProfile: UserProfile | null; onRefreshProfile: () => Promise<void> }> = ({
+  userProfile,
+  onRefreshProfile,
+}) => {
+  const isSignedIn = !!userProfile?.authenticated;
+  const [openRouterKey, setOpenRouterKey] = useState('');
+  const [model, setModel] = useState('anthropic/claude-3.5-sonnet');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSaveOpenRouter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!openRouterKey.trim()) return;
+    setIsSaving(true);
+    setSaveSuccess(false);
+    setSaveError(null);
+    try {
+      const res = await fetch('/connect/openrouter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+        body: new URLSearchParams({ api_key: openRouterKey, model }),
+      });
+      if (res.ok) {
+        setSaveSuccess(true);
+        setOpenRouterKey('');
+        await onRefreshProfile();
+      } else {
+        const err = await res.json().catch(() => null);
+        setSaveError(err?.error || 'The key was not saved. Check it and try again.');
+      }
+    } catch {
+      setSaveError('Could not reach the server. Check your connection.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setIsSigningOut(true);
+    try {
+      await fetch('/auth/logout', { method: 'POST', headers: { Accept: 'application/json' } });
+    } catch {}
+    window.location.href = '/';
+  };
+
+  const displayHandle = userProfile?.handle || (userProfile?.email ? userProfile.email.split('@')[0] : 'you');
+
+  return (
+    <div className="max-w-xl space-y-5">
+      <div className="glass-card p-4 border-white/10 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-sm font-bold text-white uppercase flex-shrink-0">
+            {displayHandle.charAt(0)}
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-white truncate">@{displayHandle}</div>
+            {userProfile?.email && <div className="text-xs text-neutral-400 truncate">{userProfile.email}</div>}
+          </div>
+        </div>
+        <span className="text-[11px] text-neutral-300 bg-white/5 px-2.5 py-1 rounded-full border border-white/10">
+          {userProfile?.is_admin ? 'Admin' : 'Member'}
+        </span>
+      </div>
+
+      {!userProfile?.local_mode && (
+        <form onSubmit={handleSaveOpenRouter} className="glass-card p-4 space-y-3.5 border-white/10">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-white">AI model (OpenRouter)</h3>
+            <span className="text-[10px] text-neutral-500">Stored encrypted</span>
+          </div>
+          <label className="block space-y-1.5">
+            <span className="text-[11px] text-neutral-400">OpenRouter API key</span>
+            <input
+              type="password"
+              autoComplete="off"
+              value={openRouterKey}
+              onChange={(e) => setOpenRouterKey(e.target.value)}
+              placeholder="sk-or-v1-…"
+              className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs outline-none focus:border-white/30 font-mono"
+            />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-[11px] text-neutral-400">Default model</span>
+            <input
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs outline-none focus:border-white/30 font-mono"
+            />
+          </label>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] text-neutral-400">
+              {saveError ? saveError : saveSuccess ? 'Key saved.' : 'Used by all your bots'}
+            </span>
+            <button
+              type="submit"
+              disabled={isSaving || !openRouterKey.trim()}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-accent text-accent-fg hover:bg-accent/90 transition-all disabled:opacity-40"
+            >
+              {isSaving ? 'Saving…' : 'Save key'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {isSignedIn && (
+        <button
+          onClick={handleLogout}
+          disabled={isSigningOut}
+          className="px-4 py-2 rounded-xl text-xs font-medium border border-red-400/40 text-red-400 hover:bg-red-400/10 transition-colors"
+        >
+          {isSigningOut ? 'Signing out…' : 'Sign out'}
+        </button>
+      )}
+    </div>
+  );
+};
+
+/** Settings as a page like the others: account, appearance, voice,
+ *  connections (with devices), and admin for admins. */
+export const SettingsView: React.FC<SettingsViewProps> = (props) => {
+  const { section, onChangeSection, userProfile, isGuest } = props;
+  const revertPreview = useRef<() => void>(() => {});
+  const registerRevert = useCallback((fn: () => void) => {
+    revertPreview.current = fn;
+  }, []);
+  // An unsaved theme preview is dropped when leaving Appearance.
+  useEffect(() => {
+    if (section !== 'appearance') revertPreview.current();
+  }, [section]);
+  useEffect(() => () => revertPreview.current(), []);
+
+  const canManageApps = !!userProfile?.local_mode || !!userProfile?.is_admin;
+  const sections: [SettingsSection, string][] = [
+    ...(isGuest ? [] : ([['account', 'Account']] as [SettingsSection, string][])),
+    ['appearance', 'Appearance'],
+    ['voice', 'Voice'],
+    ...(isGuest ? [] : ([['connections', 'Connections']] as [SettingsSection, string][])),
+    ...(userProfile?.is_admin ? ([['admin', 'Admin']] as [SettingsSection, string][]) : []),
+  ];
+  const shown = sections.some(([id]) => id === section) ? section : sections[0][0];
+
+  return (
+    <div className="w-full h-full flex flex-col justify-between overflow-hidden">
+      <div className="flex-shrink-0 px-6 pt-4 pb-3 border-b border-white/[0.08] bg-black/20 backdrop-blur-md space-y-3">
+        <div>
+          <h1 className="text-xl font-bold text-white tracking-tight">Settings</h1>
+          <p className="text-xs text-neutral-400 mt-0.5">Your account, how the app looks and sounds, and the tools it connects to.</p>
+        </div>
+        <div className="flex gap-1 overflow-x-auto" role="tablist">
+          {sections.map(([id, label]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={shown === id}
+              onClick={() => onChangeSection(id)}
+              className={`px-3.5 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
+                shown === id ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/[0.05]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={`flex-1 min-h-0 ${shown === 'admin' ? '' : 'overflow-y-auto p-6'}`}>
+        {shown === 'account' && <AccountPanel userProfile={userProfile} onRefreshProfile={props.onRefreshProfile} />}
+        {shown === 'appearance' && (
+          <div className="max-w-2xl">
+            <AppearancePanel
+              saved={props.theme}
+              canSaveToAccount={!!userProfile?.authenticated}
+              onSaved={props.onThemeSaved}
+              registerRevert={registerRevert}
+            />
+          </div>
+        )}
+        {shown === 'voice' && (
+          <div className="max-w-2xl">
+            <VoicePanel settings={props.voiceSettings} onChange={props.onVoiceSettingsChange} />
+          </div>
+        )}
+        {shown === 'connections' && (
+          <ConnectionsView
+            offices={props.offices}
+            threads={props.threads}
+            initialOfficeId={props.initialOfficeId}
+            isGuest={isGuest}
+            onRequireAuth={props.onRequireAuth}
+            onNotice={props.onNotice}
+            onOpenDevices={props.onOpenDevices}
+            canManageApps={canManageApps}
+          />
+        )}
+        {shown === 'admin' && <AdminView embedded />}
+      </div>
+
+      {props.bottomDock && (
+        <div className="panel-footer !h-auto min-h-[66px] px-3 py-2.5 justify-center">{props.bottomDock}</div>
+      )}
+    </div>
+  );
+};

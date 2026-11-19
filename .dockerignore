@@ -1,0 +1,12 @@
+/target
+.git
+.github
+docs
+backups
+.env
+.env.*
+!.env.example
+*.md
+web/node_modules
+web/dist
+src-tauri/target

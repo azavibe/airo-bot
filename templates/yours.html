@@ -1,0 +1,58 @@
+{% extends "app.html" %}
+{% block title %}Jobs — Air{% endblock %}
+{% block app_content %}
+<p class="page-title">Jobs <a class="textlink" href="/tasks" style="margin-left: 10px;">All tasks</a></p>
+<p class="page-sub">One line each. Open one only when you want to.</p>
+
+{% if !groups.is_empty() %}
+<section style="margin-bottom: 24px;">
+  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+    {% for g in groups %}
+    <div class="chip">{{ g.name }}</div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if tasks.is_empty() %}
+<div class="empty">
+  <p class="empty-h">No jobs yet</p>
+  <p class="empty-b">Type what you want done in the line below — that's how any job starts.</p>
+</div>
+{% else %}
+<ul class="list">
+  {% for t in tasks %}
+  <li class="row">
+    <div class="row-main">
+      <div>
+        <div class="row-title"><a href="/tasks/{{ t.id }}" style="color: inherit; text-decoration: none;">{{ t.title }}</a></div>
+        <div class="row-sub">
+          {% if t.status == "queued" %}
+          <strong>Ready to start</strong> — nobody picked it up yet.
+          {% else if t.status == "waiting_approval" %}
+          <strong>Waiting for you</strong> — {{ t.bot_label }} needs your OK before this goes out.
+          {% else if t.status == "assigned" || t.status == "running" %}
+          <strong>Working now</strong> — {{ t.bot_label }}.
+          {% else if t.status == "completed" %}
+          <strong>Done</strong> — went well.
+          {% else %}
+          <strong>Didn't work</strong> — needs a look.
+          {% endif %}
+          {% if let Some(tid) = t.thread_id %} <a href="/t/{{ tid }}">Talk to the bot</a>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% if t.status == "waiting_approval" %}
+    <a class="do" href="/approvals">Look at it</a>
+    {% else if t.status == "assigned" || t.status == "running" %}
+    <a class="wait" href="/activity">See progress</a>
+    {% else if t.status == "queued" %}
+    <a class="wait" href="/bots">Choose who does it</a>
+    {% else %}
+    <a class="wait" href="/tasks/{{ t.id }}">See the work</a>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

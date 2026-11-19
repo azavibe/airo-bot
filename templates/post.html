@@ -1,0 +1,12 @@
+{% extends "app.html" %}
+{% block title %}Create a post — Air{% endblock %}
+{% block app_content %}
+<a class="backlink" href="/" title="Back to feed">&larr; Back to feed</a>
+<h1 class="page-h">Create a post</h1>
+<form class="form post-composer" method="post" action="/post">
+  <label class="field"><span class="sr-only">Post</span><textarea name="text" rows="8" maxlength="100000" required autofocus placeholder="What do you want to share?"></textarea></label>
+  <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+  <div class="form-actions"><button class="btn btn-primary" type="submit" title="Publish post">Post</button><a class="btn btn-outline inline-btn" href="/" title="Cancel and return to feed">Cancel</a></div>
+  <p class="field-hint">Posts are public. Do not include secrets or private information.</p>
+</form>
+{% endblock %}

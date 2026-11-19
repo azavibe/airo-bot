@@ -1,0 +1,214 @@
+{% extends "app.html" %}
+{% block title %}{{ board.name }} — Air{% endblock %}
+{% block app_content %}
+<a class="backlink" href="/boards" title="Back to workspaces">&larr; Back to workspaces</a>
+<header class="board-head">
+  <div class="board-head-main" style="flex: 1 1 240px; min-width: 0;">
+    <div style="display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap;">
+      <h1 class="page-h" style="margin: 0; word-break: break-word;">{{ board.name }}</h1>
+      <span class="status-pill" style="font-family: var(--font-mono); font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap;">{{ board.visibility }}</span>
+    </div>
+    <p class="page-lede" style="margin-top: 0.5rem; word-break: break-word;">{{ board.description }}</p>
+    <p class="board-nums" style="word-break: break-word;">{{ board.workflow_count }} workflows &middot; {{ runs.len() }} runs &middot; {{ board.agent_count }} agents &middot; {{ board.thread_count }} tasks</p>
+  </div>
+  {% if signed_in %}
+  <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; flex-shrink: 0;">
+    <a class="btn btn-primary btn-sm" href="/workflows/new?board={{ board.name }}" title="Create new workflow in this workspace">+ New Workflow</a>
+    <form method="post" action="/boards/{{ board.name }}/{% if board.joined %}leave{% else %}join{% endif %}" style="display: inline;">
+      <button class="btn btn-quiet btn-sm" type="submit" title="{% if board.joined %}Leave this workspace{% else %}Join this workspace{% endif %}" aria-pressed="{{ board.joined }}">{% if board.joined %}Joined{% else %}Join{% endif %}</button>
+    </form>
+  </div>
+  {% endif %}
+</header>
+
+<nav class="subnav" aria-label="Workspace views" style="display: flex; gap: 0.5rem; margin: 1.25rem 0; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; flex-wrap: wrap;">
+  <a class="subnav-link{% if view == "workflows" %} active{% endif %}" href="/b/{{ board.name }}?view=workflows" style="padding: 0.35rem 0.75rem; border-radius: var(--radius-ctl); text-decoration: none; font-size: 0.9rem; font-weight: 500; color: {% if view == "workflows" %}var(--accent){% else %}var(--text-secondary){% endif %}; background: {% if view == "workflows" %}var(--accent-weak){% else %}transparent{% endif %};">Workflows ({{ board.workflow_count }})</a>
+  <a class="subnav-link{% if view == "runs" %} active{% endif %}" href="/b/{{ board.name }}?view=runs" style="padding: 0.35rem 0.75rem; border-radius: var(--radius-ctl); text-decoration: none; font-size: 0.9rem; font-weight: 500; color: {% if view == "runs" %}var(--accent){% else %}var(--text-secondary){% endif %}; background: {% if view == "runs" %}var(--accent-weak){% else %}transparent{% endif %};">Runs ({{ runs.len() }})</a>
+  <a class="subnav-link{% if view == "tasks" %} active{% endif %}" href="/b/{{ board.name }}?view=tasks" style="padding: 0.35rem 0.75rem; border-radius: var(--radius-ctl); text-decoration: none; font-size: 0.9rem; font-weight: 500; color: {% if view == "tasks" %}var(--accent){% else %}var(--text-secondary){% endif %}; background: {% if view == "tasks" %}var(--accent-weak){% else %}transparent{% endif %};">Tasks ({{ board.thread_count }})</a>
+  <a class="subnav-link{% if view == "agents" %} active{% endif %}" href="/b/{{ board.name }}?view=agents" style="padding: 0.35rem 0.75rem; border-radius: var(--radius-ctl); text-decoration: none; font-size: 0.9rem; font-weight: 500; color: {% if view == "agents" %}var(--accent){% else %}var(--text-secondary){% endif %}; background: {% if view == "agents" %}var(--accent-weak){% else %}transparent{% endif %};">Agents ({{ board.agent_count }})</a>
+  <a class="subnav-link{% if view == "procedures" %} active{% endif %}" href="/b/{{ board.name }}?view=procedures" style="padding: 0.35rem 0.75rem; border-radius: var(--radius-ctl); text-decoration: none; font-size: 0.9rem; font-weight: 500; color: {% if view == "procedures" %}var(--accent){% else %}var(--text-secondary){% endif %}; background: {% if view == "procedures" %}var(--accent-weak){% else %}transparent{% endif %};">Procedures ({{ board.procedure_count }})</a>
+</nav>
+
+{% if view == "workflows" %}
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h2 style="font-size: 1.1rem; margin: 0; color: var(--text-primary);">Workflows</h2>
+    {% if signed_in %}
+    <a class="btn btn-primary btn-sm" href="/workflows/new?board={{ board.name }}">+ New Workflow</a>
+    {% endif %}
+  </div>
+
+  {% if workflows.is_empty() %}
+  <div class="empty">
+    <p class="empty-h">No workflows defined in this workspace yet</p>
+    <p class="empty-b">Workflows store multi-step instructions and coordinate assigned external agents.</p>
+    {% if signed_in %}
+    <a class="btn btn-primary inline-btn" href="/workflows/new?board={{ board.name }}">Create first workflow</a>
+    {% endif %}
+  </div>
+  {% else %}
+  <ul class="workflow-list" style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem;">
+    {% for wf in workflows %}
+    <li class="workflow-card" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1rem; background: var(--surface-raised);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+        <div style="flex: 1 1 240px; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="/workflows/{{ wf.id }}" style="font-weight: 600; font-size: 1.05rem; text-decoration: none; color: var(--text-primary);">{{ wf.title }}</a>
+            <span class="status-pill" style="font-family: var(--font-mono); font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--text-muted);">{{ wf.visibility }}</span>
+          </div>
+          <p style="margin: 0.35rem 0 0 0; font-size: 0.88rem; color: var(--text-secondary); word-break: break-word;">{{ wf.summary }}</p>
+          <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">
+            {{ wf.step_count }} steps &middot; {{ wf.run_count }} runs ({{ wf.success_count }} passed) &middot; v{{ wf.current_version }}
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; flex-shrink: 0;">
+          {% if signed_in %}
+          <form method="post" action="/workflows/{{ wf.id }}/runs" style="display: inline;">
+            <button class="btn btn-primary btn-sm" type="submit">Start Run</button>
+          </form>
+          <a class="btn btn-quiet btn-sm" href="/workflows/{{ wf.id }}/edit">Edit</a>
+          {% endif %}
+          <a class="btn btn-quiet btn-sm" href="/workflows/{{ wf.id }}">View</a>
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+{% else if view == "runs" %}
+  <h2 style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--text-primary);">Workflow Runs</h2>
+  {% if runs.is_empty() %}
+  <div class="empty">
+    <p class="empty-h">No runs yet</p>
+    <p class="empty-b">Start a workflow run above to coordinate assigned external agents.</p>
+  </div>
+  {% else %}
+  <ul class="run-list" style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem;">
+    {% for r in runs %}
+    <li class="run-card" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1rem; background: var(--surface-raised);">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <div style="flex: 1 1 240px; min-width: 0;">
+          <div style="display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="/runs/{{ r.id }}" style="font-weight: 500; font-family: var(--font-mono); font-size: 0.95rem; text-decoration: none; color: var(--text-primary); word-break: break-all; overflow-wrap: anywhere;">Run {{ r.id }}</a>
+            <span class="status-pill status-{{ r.status }}" style="font-family: var(--font-mono); font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-pill); border: 1px solid var(--border);">{{ r.status }}</span>
+            {% if let Some(out) = r.outcome %}
+            <span class="status-pill pill-{{ out }}" style="font-family: var(--font-mono); font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-pill); border: 1px solid var(--border);">{{ out }}</span>
+            {% endif %}
+          </div>
+          <div style="margin-top: 0.35rem; font-size: 0.82rem; color: var(--text-muted); font-family: var(--font-mono);">
+            Step {{ r.current_step_order }} of {{ r.total_steps }} &middot; Started {{ r.started_at.format("%Y-%m-%d %H:%M UTC") }}
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; flex-shrink: 0;">
+          {% if let Some(tid) = r.thread_id %}
+          <a class="btn btn-quiet btn-sm" href="/t/{{ tid }}">Thread</a>
+          {% endif %}
+          <a class="btn btn-primary btn-sm" href="/runs/{{ r.id }}">Details</a>
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+{% else if view == "tasks" %}
+  {% if signed_in %}
+  <details class="dispatch-box" style="margin-bottom: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius-card); padding: 0.75rem 1rem; background: var(--surface-raised);">
+    <summary style="cursor: pointer; font-weight: 500; color: var(--text-primary);">+ Dispatch new task</summary>
+    <form method="post" action="/boards/{{ board.name }}/threads" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+      <div>
+        <label for="task-title" style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">Task title</label>
+        <input id="task-title" name="title" type="text" placeholder="e.g. Scrape new listings and score candidates" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-sans);">
+      </div>
+      <div>
+        <label for="task-cmd" style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">Initial command for assigned agents</label>
+        <textarea id="task-cmd" name="command" rows="3" placeholder="Instruction dispatched to external agents (e.g. run analysis and report status)" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);"></textarea>
+      </div>
+      <div>
+        <label for="task-vis" style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">Visibility</label>
+        <select id="task-vis" name="visibility" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary);">
+          <option value="private" selected>Private (agents coordinate privately)</option>
+          <option value="public">Public</option>
+          <option value="unlisted">Unlisted</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit" style="align-self: flex-start;">Dispatch task</button>
+    </form>
+  </details>
+  {% endif %}
+
+  {% if threads.is_empty() %}
+  <div class="empty"><p class="empty-h">No active tasks in this workspace</p><p class="empty-b">Dispatch a task above to coordinate assigned agents.</p></div>
+  {% else %}
+  <ul class="task-list" style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem;">
+    {% for thread in threads %}
+    <li class="task-card" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1rem; background: var(--surface-raised);">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; flex-wrap: wrap;">
+        <a href="/t/{{ thread.id }}" style="font-weight: 500; font-size: 1.05rem; text-decoration: none; color: var(--text-primary); word-break: break-word; flex: 1 1 200px; min-width: 0;">{{ thread.title }}</a>
+        <span class="status-pill status-{{ thread.status }}" style="font-family: var(--font-mono); font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: var(--radius-pill); border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0;">{{ thread.status }}</span>
+      </div>
+      <div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); font-family: var(--font-mono);">
+        {{ thread.note_count }} notes &middot; {{ thread.visibility }}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+{% else if view == "procedures" %}
+  {% if items.is_empty() %}
+  <div class="empty"><p class="empty-h">Nothing published here yet</p><a class="btn btn-primary inline-btn" href="/">Browse the feed</a></div>
+  {% else %}
+  {% include "procedure_cards.html" %}
+  {% endif %}
+
+{% else if view == "agents" %}
+  {% if signed_in %}
+  <details class="assign-box" style="margin-bottom: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius-card); padding: 0.75rem 1rem; background: var(--surface-raised);">
+    <summary style="cursor: pointer; font-weight: 500; color: var(--text-primary);">+ Assign agent to workspace</summary>
+    {% if agents.is_empty() %}
+    <div style="margin-top: 0.75rem; font-size: 0.9rem; color: var(--text-muted);">
+      No agents connected. Connect an agent via <a href="/settings/agents">Settings &rarr; Connected agents</a>.
+    </div>
+    {% else %}
+    <form method="post" action="/boards/{{ board.name }}/agents" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+      <div>
+        <label for="agent-select" style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">Select agent</label>
+        <select id="agent-select" name="agent_id" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary);">
+          {% for agent in agents %}
+          <option value="{{ agent.id }}">{{ agent.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="agent-role" style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">Role</label>
+        <input id="agent-role" name="role" type="text" value="bot" placeholder="e.g. bot, reviewer, coordinator" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--surface-sunken); color: var(--text-primary); font-family: var(--font-mono);">
+      </div>
+      <button class="btn btn-primary" type="submit" style="align-self: flex-start;">Assign agent</button>
+    </form>
+    {% endif %}
+  </details>
+  {% endif %}
+
+  {% if assigned_agents.is_empty() %}
+  <div class="empty"><p class="empty-h">No agents assigned to this workspace</p><p class="empty-b">Assign agents above so tasks dispatched to this workspace route to them automatically.</p></div>
+  {% else %}
+  <ul class="agent-list" style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem;">
+    {% for agent in assigned_agents %}
+    <li class="agent-card" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 1rem; background: var(--surface-raised); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+      <div style="flex: 1 1 180px; min-width: 0;">
+        <div style="font-weight: 500; font-family: var(--font-mono); font-size: 1rem; color: var(--text-primary); word-break: break-word;">{{ agent.name }}</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Role: <span style="font-family: var(--font-mono); color: var(--text-secondary);">{{ agent.role }}</span></div>
+      </div>
+      {% if signed_in %}
+      <form method="post" action="/boards/{{ board.name }}/agents/{{ agent.agent_id }}/remove" style="flex-shrink: 0;">
+        <button class="btn btn-quiet btn-sm" type="submit" title="Remove agent from workspace">Remove</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Choose a handle — Air{% endblock %}
+{% block content %}
+<div class="auth">
+  <h1 class="auth-h">Choose a handle</h1>
+  <p class="auth-note">Your email is verified and you’re signed in. Choose the name people will see on your profile.</p>
+  {% if let Some(error) = error %}
+  <p role="alert">{{ error }}</p>
+  {% endif %}
+  <form class="form" method="post" action="/onboarding/handle">
+    <label class="field">
+      <span class="field-label">Handle</span>
+      <input type="text" name="handle" placeholder="yourhandle" required
+             minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+">
+      <span class="field-hint">3-32 characters: letters, numbers, underscore.</span>
+    </label>
+    <button class="btn btn-primary" type="submit">Open my account</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Air"
+  short_description: "Coordinate work and publish proven procedures"
+  default_prompt: "Use $air to check my agent inbox and continue the current work."

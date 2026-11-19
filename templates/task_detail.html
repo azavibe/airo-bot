@@ -1,0 +1,74 @@
+{% extends "app.html" %}
+{% block title %}{{ task.title }} — Task — Air{% endblock %}
+{% block app_content %}
+<a class="backlink" href="/tasks" title="Back to tasks">&larr; Back to Tasks</a>
+
+<div class="card" style="margin-bottom: 24px;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+    <div style="flex: 1 1 300px; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <span style="display: inline-block; padding: 2px 8px; border-radius: var(--radius-pill); font-family: var(--font-mono); font-size: 11px; background: var(--surface-sunken); border: 1px solid var(--border);">
+          {{ task.status }}
+        </span>
+        <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);">Priority: {{ task.priority }}</span>
+      </div>
+      <h1 class="page-h" style="margin: 0 0 8px; word-break: break-word;">{{ task.title }}</h1>
+      <p class="thread-meta" style="margin: 0;">
+        Workspace: {{ workspace.name }} &middot;
+        Bot: {% if let Some(w) = assigned_bot %}<strong>{{ w }}</strong>{% else %}Unassigned{% endif %} &middot;
+        Created {{ task.created_at.format("%Y-%m-%d %H:%M UTC") }}
+      </p>
+    </div>
+  </div>
+
+  {% if let Some(appr) = approval %}
+  {% if appr.status == "pending" %}
+  <div style="margin-top: 16px; padding: 14px; background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: var(--radius-card);">
+    <h3 style="margin: 0 0 6px; font-size: 15px; color: #b45309;">Needs your OK</h3>
+    <p style="margin: 0 0 10px; font-size: 14px;">{{ appr.requested_action }}</p>
+    <div style="display: flex; gap: 8px;">
+      <form method="post" action="/approvals/{{ appr.id }}/decide">
+        <input type="hidden" name="decision" value="approve">
+        <button class="btn btn-primary btn-sm" type="submit" style="background: #10b981; border-color: #10b981;">Approve</button>
+      </form>
+      <form method="post" action="/approvals/{{ appr.id }}/decide">
+        <input type="hidden" name="decision" value="reject">
+        <button class="btn btn-danger btn-sm" type="submit">Reject</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+
+{% if let Some(tid) = task.thread_id %}
+<section style="margin-bottom: 24px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+    <h2 style="font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0;">
+      Execution Conversation
+    </h2>
+    <a class="btn btn-outline btn-sm" href="/t/{{ tid }}">Open Dedicated Thread</a>
+  </div>
+
+  {% if notes.is_empty() %}
+  <p class="card-desc" style="font-style: italic;">No progress notes recorded yet.</p>
+  {% else %}
+  <ol class="log" style="margin-bottom: 16px;">
+    {% for n in notes %}
+    <li class="note" style="padding: 10px 0;">
+      <span class="note-time">{{ n.created_at.format("%H:%M") }}</span>
+      <span class="note-who">{% if n.author_agent_id.is_some() %}agent{% else %}user{% endif %}</span>
+      <span class="note-body" style="word-break: break-word;">{{ n.body }}</span>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+
+  <form class="composer-thread" method="post" action="/threads/{{ tid }}/notes">
+    <input type="hidden" name="kind" value="command">
+    <textarea name="body" rows="2" placeholder="Send an instruction to the bot..." required style="flex: 1; resize: vertical; padding: 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); background: var(--surface-raised); color: var(--text-primary);"></textarea>
+    <button class="btn btn-primary" type="submit">Send</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

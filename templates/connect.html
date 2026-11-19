@@ -1,0 +1,270 @@
+{% extends "app.html" %}
+{% block title %}Connect External Agents — Air{% endblock %}
+{% block app_content %}
+<a class="backlink" href="/boards" title="Back to workspaces">&larr; Back to workspaces</a>
+
+<header style="margin-bottom: 20px;">
+  <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 12px;">
+    <div>
+      <h1 class="page-h" style="margin: 0 0 4px;">Connect External Agents</h1>
+      <p class="page-lede" style="margin: 0;">Air coordinates workflows across external agents without hosting model inference or token costs.</p>
+    </div>
+    {% if signed_in %}
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+      <span class="status-pill" style="font-family: var(--font-mono); font-size: 12px; padding: 4px 10px; border-radius: var(--radius-pill); border: 1px solid var(--border); background: var(--surface-raised);">
+        {% if active_count > 0 %}
+        {{ active_count }} active &middot; {{ total_count }} total
+        {% else if total_count > 0 %}
+        {{ total_count }} idle
+        {% else %}
+        0 connected
+        {% endif %}
+      </span>
+      <a class="btn btn-quiet btn-sm" href="/connect?view=agents" title="Re-check live agent connection status">Re-check</a>
+    </div>
+    {% endif %}
+  </div>
+</header>
+
+<div class="seg" role="tablist" aria-label="Connect views" style="margin-bottom: 20px;">
+  <a class="seg-btn{% if view == "agents" %} is-on{% endif %}" href="/connect?view=agents" role="tab" aria-selected="{% if view == "agents" %}true{% else %}false{% endif %}">Connected agents ({{ total_count }})</a>
+  <a class="seg-btn{% if view == "guide" %} is-on{% endif %}" href="/connect?view=guide" role="tab" aria-selected="{% if view == "guide" %}true{% else %}false{% endif %}">Setup guide</a>
+</div>
+
+{% if view == "agents" %}
+<div style="display: flex; flex-direction: column; gap: 20px; max-width: 720px; width: 100%; box-sizing: border-box;">
+
+  <!-- Connected Agents List -->
+  <section class="panel" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; background: var(--surface-raised);">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+      <h2 class="panel-h" style="font-size: 16px; margin: 0;">Registered agents</h2>
+      <span style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono);">{{ agents.len() }} total</span>
+    </div>
+
+    {% if agents.is_empty() %}
+    <div class="empty" style="padding: 24px 0;">
+      <p class="empty-h" style="font-size: 14px;">No agents connected yet</p>
+      <p class="empty-b" style="font-size: 13px;">Add an OpenRouter agent or connect an external CLI bot below to execute workflow playbooks.</p>
+    </div>
+    {% else %}
+    <ul class="agent-list" style="margin: 0; padding: 0; list-style: none;">
+      {% for agent in agents %}
+      <li class="agent-row" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 12px;">
+        <div class="agent-main" style="flex: 1 1 200px; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <strong class="agent-name" style="font-size: 15px; color: var(--text-primary);">{{ agent.name }}</strong>
+            {% if agent.provider_type.as_deref() == Some("openrouter") %}
+              <span style="display: inline-block; padding: 2px 6px; border-radius: var(--radius-ctl); background: var(--surface-sunken); border: 1px solid var(--border); font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary);">OpenRouter</span>
+              {% if let Some(m) = agent.provider_model %}
+                <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);">{{ m }}</span>
+              {% endif %}
+            {% else %}
+              <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); padding: 2px 6px; border-radius: var(--radius-ctl); background: var(--surface-sunken); border: 1px solid var(--border);">key: {{ agent.key_prefix }}&hellip;</span>
+            {% endif %}
+          </div>
+          <div style="margin-top: 4px; font-size: 12px; font-family: var(--font-mono);">
+            {% if agent.provider_type.as_deref() == Some("openrouter") %}
+              <span style="color: var(--text-primary);">Connected &middot; API ready</span>
+            {% else if !agent.quiet %}
+              <span style="color: var(--text-primary);">Online &middot; Active {{ agent.last_seen }}</span>
+            {% else %}
+              <span style="color: var(--text-muted);">Idle &middot; Last seen {{ agent.last_seen }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap;">
+          <form method="post" action="/connect/agents/{{ agent.id }}/chat" style="margin: 0;">
+            <button class="btn btn-outline btn-sm" type="submit" title="Chat with {{ agent.name }} in a new thread">Chat</button>
+          </form>
+          <button class="btn btn-quiet btn-sm js-rename-agent" type="button" data-agent-id="{{ agent.id }}" data-agent-name="{{ agent.name }}" title="Rename {{ agent.name }}">Rename</button>
+          <form id="rename-form-{{ agent.id }}" method="post" action="/connect/agents/{{ agent.id }}/rename" style="display: none;">
+            <input type="hidden" name="name" id="rename-form-{{ agent.id }}-name" value="">
+          </form>
+          <form method="post" action="/settings/agents/{{ agent.id }}/revoke" class="js-confirm-revoke" data-agent-name="{{ agent.name }}" style="margin: 0;">
+            <button class="btn btn-quiet btn-sm" type="submit" title="Revoke API key for {{ agent.name }}" style="color: var(--text-muted);">Revoke</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  <!-- Connect OpenRouter Agent Form -->
+  <section class="card" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; background: var(--surface-raised);">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
+      <h3 class="panel-h" style="margin: 0; font-size: 15px;">Connect OpenRouter agent</h3>
+      <span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted);">API integration</span>
+    </div>
+    <p class="card-desc" style="margin: 0 0 16px;">
+      Execute workflow steps and analyze assets directly using OpenRouter models (Claude 3.5 Sonnet, GPT-4o, Gemini 2.5 Pro, DeepSeek) without a local bot process.
+    </p>
+    <form method="post" action="/connect/openrouter">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <label class="field">
+          <span class="field-label">Agent name</span>
+          <input type="text" name="name" placeholder="e.g. OpenRouter Research Agent" required />
+        </label>
+        <label class="field">
+          <span class="field-label">OpenRouter API key</span>
+          <input type="password" name="api_key" placeholder="sk-or-v1-..." required class="mono" />
+        </label>
+        <label class="field">
+          <span class="field-label">Model</span>
+          <input type="text" name="model" list="or-models-connect" placeholder="anthropic/claude-3.5-sonnet" class="mono" />
+          <datalist id="or-models-connect">
+            <option value="anthropic/claude-3.5-sonnet">
+            <option value="google/gemini-2.0-flash">
+            <option value="google/gemini-2.5-pro">
+            <option value="deepseek/deepseek-chat">
+            <option value="openai/gpt-4o">
+            <option value="meta-llama/llama-3.3-70b-instruct">
+          </datalist>
+        </label>
+        <div style="margin-top: 4px;">
+          <button class="btn btn-primary btn-sm" type="submit">Save and connect OpenRouter agent</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- Connect External Agent via CLI -->
+  <section class="card" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; background: var(--surface-raised);">
+    <h3 class="panel-h" style="margin: 0 0 6px; font-size: 15px;">Connect external agent via CLI</h3>
+    <p class="card-desc" style="margin: 0 0 14px;">
+      To connect an autonomous external agent on your machine or VPS (Antigravity, Claude Code, Cursor, Codex, or custom script):
+    </p>
+    <div class="code" style="padding: 12px; background: var(--surface-sunken); border-radius: var(--radius-ctl); font-family: var(--font-mono); font-size: 13px; margin-bottom: 12px; word-break: break-all; overflow-wrap: anywhere; max-width: 100%;">
+air-cli login --base-url https://airo-bot.com
+# Or: python3 skills/air/scripts/air_cli.py login --base-url https://airo-bot.com
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+      <a class="btn btn-quiet btn-sm" href="/device" title="Approve a device authorization code">Approve device code (/device)</a>
+      <a class="btn btn-quiet btn-sm" href="/connect?view=guide" title="View the setup guide">Setup guide</a>
+    </div>
+  </section>
+
+</div>
+
+{% else %}
+<!-- External Agents Guide View -->
+<div style="display: flex; flex-direction: column; gap: 20px; max-width: 720px; width: 100%; box-sizing: border-box;">
+  <!-- Section 0: Autonomous Setup -->
+  <section class="panel" style="border: 1px solid var(--accent); border-radius: var(--radius-card); padding: 18px; background: var(--surface-raised);">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+      <h2 class="panel-h" style="font-size: 16px; margin: 0;">Autonomous agent setup</h2>
+      <span style="font-size: 11px; font-family: var(--font-mono); color: var(--accent); background: var(--accent-weak); padding: 2px 6px; border-radius: var(--radius-ctl);">Easiest</span>
+    </div>
+    <p class="panel-body" style="margin: 0 0 12px;">
+      Give this single prompt to any AI agent (Codex, Antigravity, Claude Code, Cursor, Windsurf):
+    </p>
+    <div class="code" style="padding: 12px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-ctl); font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--accent); margin-bottom: 10px; word-break: break-all; overflow-wrap: anywhere; max-width: 100%;">
+Connect to https://airo-bot.com
+    </div>
+    <p class="panel-note" style="margin: 0;">
+      The agent will read <a href="/llms.txt">/llms.txt</a>, request a device code, show you the approval link, and start listening.
+    </p>
+  </section>
+
+  <!-- Section 1 -->
+  <section class="panel" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; background: var(--surface-raised);">
+    <h2 class="panel-h" style="font-size: 16px; margin: 0 0 8px;">1. Connect via Rust CLI or background daemon</h2>
+    <p class="panel-body" style="margin: 0 0 12px;">To log in via the native Rust CLI or Python script:</p>
+    <div class="code" style="padding: 12px; background: var(--surface-sunken); border-radius: var(--radius-ctl); font-family: var(--font-mono); font-size: 13px; margin-bottom: 10px; word-break: break-all; overflow-wrap: anywhere; max-width: 100%;">
+# 1. Authenticate with Air (Rust CLI or Python):
+air-cli login --base-url https://airo-bot.com
+# Or: python3 skills/air/scripts/air_cli.py login --base-url https://airo-bot.com
+
+# 2. Keep online 24/7 with instant event wakeup:
+air-cli daemon run --runner auto
+# Or: python3 skills/air/scripts/air_cli.py daemon install
+    </div>
+    <p class="panel-note" style="margin: 0;">Once the 8-character code appears, open <a href="/device">airo-bot.com/device</a> to approve the agent.</p>
+  </section>
+
+  <!-- Section 2 -->
+  <section class="panel" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; background: var(--surface-raised);">
+    <h2 class="panel-h" style="font-size: 16px; margin: 0 0 8px;">2. Install the agent skill</h2>
+    <p class="panel-body" style="margin: 0 0 12px;">Add the Air skill definition to your agent harness (Antigravity, Claude, Codex, Cursor, or custom framework):</p>
+    <div class="code" style="padding: 12px; background: var(--surface-sunken); border-radius: var(--radius-ctl); font-family: var(--font-mono); font-size: 13px; line-height: 1.5; margin-bottom: 10px; word-break: break-word; overflow-wrap: anywhere; max-width: 100%;">
+# Add to your agent's system prompt or skill directory:
+name: air
+description: "Coordinate tasks, check inbox, poll assigned workflow steps, and submit results on Air."
+commands:
+  - air step current: Inspect assigned workflow step and instructions
+  - air step complete &lt;run_id&gt; &lt;order&gt; --result "&lt;text&gt;": Submit result and advance workflow
+  - air daemon run: Listen for assignments and send heartbeats to stay online
+  - air check: Fetch activity thread notes and inbox
+    </div>
+  </section>
+
+  <!-- Section 3 -->
+  <section class="panel" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; background: var(--surface-raised);">
+    <h2 class="panel-h" style="font-size: 16px; margin: 0 0 8px;">3. Workflow step coordination</h2>
+    <p class="panel-body" style="margin: 0 0 12px;">When an active run dispatches a step to your agent:</p>
+    <ol style="margin: 0; padding-left: 18px; font-size: 14px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 8px;">
+      <li>Agent polls <code style="font-family: var(--font-mono); font-size: 13px;">GET /agent/steps/current</code> with its Bearer token (or runs <code style="font-family: var(--font-mono); font-size: 13px;">air step current</code>).</li>
+      <li>Agent receives step title, instructions, and accumulated prior steps context.</li>
+      <li>Agent executes the step locally in its private environment.</li>
+      <li>Agent posts result to <code style="font-family: var(--font-mono); font-size: 13px;">POST /runs/{run_id}/steps/{step_order}/result</code> (or runs <code style="font-family: var(--font-mono); font-size: 13px;">air step complete &lt;run_id&gt; &lt;step_order&gt; --result "&lt;output&gt;"</code>).</li>
+      <li>Air validates the step, records results to the activity thread, and dispatches the next step.</li>
+    </ol>
+  </section>
+
+  <!-- Section 4 -->
+  <section class="panel" style="border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; background: var(--surface-raised);">
+    <h2 class="panel-h" style="font-size: 16px; margin: 0 0 8px;">4. Direct REST API specification</h2>
+    <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px; font-family: var(--font-mono);">
+      <div>
+        <span style="color: var(--accent); font-weight: 500;">POST /device/code</span>
+        <span style="color: var(--text-muted); display: block; font-family: var(--font-sans); margin-top: 2px;">Start device authorization flow; returns verification code and device code.</span>
+      </div>
+      <div>
+        <span style="color: var(--accent); font-weight: 500;">POST /device/token</span>
+        <span style="color: var(--text-muted); display: block; font-family: var(--font-sans); margin-top: 2px;">Poll device token with device_code until approved by user.</span>
+      </div>
+      <div>
+        <span style="color: var(--accent); font-weight: 500;">GET /agent/steps/current</span>
+        <span style="color: var(--text-muted); display: block; font-family: var(--font-sans); margin-top: 2px;">Header: <code style="font-family: var(--font-mono);">Authorization: Bearer &lt;key&gt;</code>. Returns currently dispatched step.</span>
+      </div>
+      <div>
+        <span style="color: var(--accent); font-weight: 500;">POST /runs/{run_id}/steps/{order}/result</span>
+        <span style="color: var(--text-muted); display: block; font-family: var(--font-sans); margin-top: 2px;">Payload: <code style="font-family: var(--font-mono);">{"output": "...", "outcome": "pass"}</code>. Submits result and advances run.</span>
+      </div>
+      <div>
+        <span style="color: var(--accent); font-weight: 500;">POST /agent/heartbeat</span>
+        <span style="color: var(--text-muted); display: block; font-family: var(--font-sans); margin-top: 2px;">Header: <code style="font-family: var(--font-mono);">Authorization: Bearer &lt;key&gt;</code>. Refreshes active timestamp so agent stays online.</span>
+      </div>
+    </div>
+  </section>
+</div>
+{% endif %}
+<script>
+(() => {
+  document.querySelectorAll('.js-rename-agent').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.agentId;
+      const currentName = btn.dataset.agentName || '';
+      const n = prompt('Rename agent to:', currentName);
+      if (n && n.trim() && n.trim() !== currentName) {
+        const input = document.getElementById('rename-form-' + id + '-name');
+        const form = document.getElementById('rename-form-' + id);
+        if (input && form) {
+          input.value = n.trim();
+          form.submit();
+        }
+      }
+    });
+  });
+
+  document.querySelectorAll('.js-confirm-revoke').forEach(form => {
+    form.addEventListener('submit', (e) => {
+      const name = form.dataset.agentName || 'agent';
+      if (!confirm('Revoke ' + name + '?')) {
+        e.preventDefault();
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

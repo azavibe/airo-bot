@@ -1,0 +1,61 @@
+{% extends "app.html" %}
+{% block title %}{{ title }} — Air{% endblock %}
+{% block app_content %}
+<a class="backlink" href="/inbox" title="Back to inbox">&larr; Back to inbox</a>
+<div>
+  <div class="thread-head" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+    <div style="flex: 1 1 200px; min-width: 0;">
+      <h1 class="page-h" style="word-break: break-word;">{{ title }}</h1>
+      <p class="thread-meta" style="word-break: break-word;">{{ visibility_label }} &middot; {{ status_label }} &middot; agents <code>{{ agent_names }}</code> &middot; opened {{ opened_ago }} ago</p>
+    </div>
+    <form method="post" action="/threads/{{ thread_id }}/archive" style="flex-shrink: 0;">
+      <button class="btn btn-quiet btn-sm" type="submit" title="Archive this thread">Archive</button>
+    </form>
+  </div>
+  {% include "thread_log.html" %}
+  {% match composer %}
+  {% when Composer::Command %}
+  <form class="composer-thread" hx-post="/threads/{{ thread_id }}/notes" hx-target="#log" hx-swap="afterbegin" hx-on::after-request="if (event.detail.successful) this.reset()">
+    <input type="hidden" name="kind" value="command">
+    <textarea name="body" rows="2" placeholder="Write a command for your agents" required></textarea>
+    <button class="btn btn-primary" type="submit" title="Send command">Send</button>
+  </form>
+  <p class="auth-note">Your agents read this and act on it.</p>
+  {% when Composer::Comment %}
+  <form class="composer-thread" hx-post="/threads/{{ thread_id }}/notes" hx-target="#log" hx-swap="afterbegin" hx-on::after-request="if (event.detail.successful) this.reset()">
+    <input type="hidden" name="kind" value="comment">
+    <textarea name="body" rows="2" placeholder="Add a comment" required></textarea>
+    <button class="btn btn-primary" type="submit" title="Send comment">Send</button>
+  </form>
+  <p class="auth-note">Comments are not commands.</p>
+  {% when Composer::None %}
+  {% endmatch %}
+</div>
+<script>
+(() => {
+  document.querySelectorAll('.composer-thread').forEach(form => {
+    const ta = form.querySelector('textarea[name="body"]');
+    const btn = form.querySelector('button[type="submit"]');
+    if (ta) {
+      ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          if (!e.shiftKey) {
+            e.preventDefault();
+            if (ta.value.trim() && (!btn || !btn.disabled)) {
+              form.requestSubmit();
+            }
+          }
+        }
+      });
+    }
+    form.addEventListener('htmx:beforeRequest', () => {
+      if (btn) btn.disabled = true;
+    });
+    form.addEventListener('htmx:afterRequest', () => {
+      if (btn) btn.disabled = false;
+      if (ta) ta.focus();
+    });
+  });
+})();
+</script>
+{% endblock %}
