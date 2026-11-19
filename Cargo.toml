@@ -63,7 +63,7 @@ ammonia = "4.2.5"
 # Rust cryptography so local and Docker builds need no system OpenSSL toolchain.
 web-push-native = { version = "0.5", features = ["vapid"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-tower-http = { version = "0.6", features = ["fs"] }
+tower-http = { version = "0.7", features = ["fs"] }
 # Encrypts third-party provider keys (e.g. OpenRouter) at rest. They must be
 # recoverable to call the provider, so the Argon2-hash rule cannot apply;
 # already in the tree through web-push-native.
