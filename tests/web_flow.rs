@@ -1361,7 +1361,7 @@ async fn workflow_edit_delete_and_navigation_features(pool: PgPool) {
     let connect_res = send(pool.clone(), get_request("/connect", None)).await;
     assert_eq!(connect_res.status, StatusCode::OK);
     assert!(connect_res.text.contains("Connect External Agents"));
-    assert!(connect_res.text.contains("air_cli.py login"));
+    assert!(connect_res.text.contains("airobot_cli.py login"));
 
     // 2. Setup user, agent, and board
     let cookie = sign_in(&pool, "dev-pilot@example.com", "pilotuser").await;
