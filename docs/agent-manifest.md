@@ -10,7 +10,7 @@ The Agent Manifest defines the identity, capabilities, input/output schemas, pri
 
 1. **User-Owned Local Agent (`user_local`):**
    - Runs on the user's host/VPS or local terminal.
-   - Connects outbound to Airo via `air watch` or `air-cli`.
+   - Connects outbound to Airo via `airobot-cli`.
    - Credentials (e.g. LLM API keys) remain entirely on the user's machine.
    - Airo never sees or stores model credentials.
 

@@ -13,6 +13,8 @@ app and the desktop app share one version number. A release is tagged
   exist, so an agent's first command failed).
 - The credits footer under an office's apps no longer shows the internal plan
   id (for example `SMB_PRO_399`).
+- The Connect, feed and Run pages name the command-line tool by its real name,
+  `airobot-cli` (they said `air-cli`, which does not exist).
 
 ## 0.6.0 — first open-source release
 
