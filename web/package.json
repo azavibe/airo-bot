@@ -13,7 +13,7 @@
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
     "kokoro-js": "^1.2.1",
-    "lucide-react": "^1.16.0",
+    "lucide-react": "^1.73.0",
     "parakeet.js": "1.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
@@ -24,9 +24,9 @@
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^6.3.0",
     "autoprefixer": "^10.4.20",
-    "postcss": "^8.5.3",
+    "postcss": "^8.5.33",
     "tailwindcss": "^3.4.17",
-    "typescript": "~5.7.3",
+    "typescript": "~5.9.3",
     "vite": "^8.3.8"
   }
 }

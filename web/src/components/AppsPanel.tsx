@@ -262,9 +262,11 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
             </div>
           </div>
         </div>
-        {!localMode && wallet?.plan_tier && (
-          <div className="text-[11px] text-neutral-400 font-mono uppercase">{wallet.plan_tier}</div>
-        )}
+        {/* TODO(air): the wallet's raw plan_tier (e.g. "smb_pro_399") is an
+            internal id, and every wallet gets one, even on self-hosted servers
+            where no plan was bought. Hidden for now; the tradeoff is that
+            people on a paid plan do not see it here. Show a friendly name
+            (e.g. "Pro") once the server can say whether a plan was bought. */}
       </button>
     </div>
   );
