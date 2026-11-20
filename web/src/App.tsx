@@ -836,7 +836,7 @@ export const App: React.FC = () => {
       openOfficeSetup(office ? { mode: 'setup', office } : { mode: 'new' });
     } else if (action.kind === 'open' && action.target) {
       const tabs: Tab[] = ['chat', 'apps', 'approvals', 'bots', 'workflows'];
-      if (action.target === 'connections') openSettings('connections');
+      if (action.target === 'connections' || action.target === 'account') openSettings(action.target);
       else if ((tabs as string[]).includes(action.target)) handleTabChange(action.target as Tab);
     }
   };
