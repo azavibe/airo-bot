@@ -42,7 +42,8 @@ export interface Note {
 }
 
 /** `send`: sends `message` as your own message; `setup`: opens office
- *  setup for this office; `open`: opens the screen named by `target`. */
+ *  setup for this office; `open`: opens the screen named by `target`
+ *  (a tab, or the `account` / `connections` section of Settings). */
 export interface NoteAction {
   label: string;
   kind: 'send' | 'setup' | 'open';

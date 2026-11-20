@@ -1758,28 +1758,77 @@ pub(crate) async fn run_agent_reply(
                     }
                 }
             }
-            None => {
-                let already: i64 = sqlx::query_scalar(
-                    "SELECT COUNT(*) FROM notes
-                     WHERE thread_id = $1 AND author_agent_id = $2
-                       AND body LIKE '%needs an AI voice%'",
-                )
-                .bind(thread_id)
-                .bind(agent_id)
-                .fetch_optional(&pool)
-                .await
-                .ok()
-                .flatten()
-                .unwrap_or(0);
-                if already == 0 {
-                    let msg = format!(
-                        "{} needs an AI voice to answer: add an OpenRouter key in Settings → Account, and it will talk in its own character.",
-                        agent.name
-                    );
-                    insert_reply_note(&pool, &state.note_sender, thread_id, agent_id, &msg).await;
-                }
-            }
+            None => post_no_ai_note(&state, thread_id, agent_id, &agent.name).await,
         }
+    }
+}
+
+/// What the Architect says in an office group chat when no bot has an AI.
+const TEAM_NEEDS_AI: &str = "Connect an AI to wake up your team: add an OpenRouter key in Settings → Account, and every bot here will answer in its own character.";
+
+/// Says, once per thread, that no AI can answer yet, with a button to
+/// Settings → Account. In an office group chat the Architect says it for the
+/// whole team, so a new office does not open on one warning per bot (each
+/// bot keeps its "Needs AI" badge); in a bot's own room the bot says it.
+async fn post_no_ai_note(state: &AppState, thread_id: Uuid, agent_id: Uuid, agent_name: &str) {
+    let pool = &state.pool;
+    let connect = json!([{ "label": "Connect an AI", "kind": "open", "target": "account" }]);
+    let architect: Option<Uuid> = sqlx::query_scalar(
+        "SELECT a.id FROM threads t
+         JOIN thread_agents ta ON ta.thread_id = t.id
+         JOIN agents a ON a.id = ta.agent_id AND a.deleted_at IS NULL
+         WHERE t.id = $1 AND t.kind = 'office' AND a.name = $2
+         LIMIT 1",
+    )
+    .bind(thread_id)
+    .bind(crate::office::group::ARCHITECT_NAME)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+    // TODO(air): two bots answering at the same moment can both see "not
+    // said yet" and post twice. The kickoff runs bots one at a time, so this
+    // is rare; a unique marker on notes would close it at the cost of a
+    // migration.
+    let (author, body, said) = match architect {
+        Some(architect) => {
+            let said: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM notes WHERE thread_id = $1 AND body = $2)",
+            )
+            .bind(thread_id)
+            .bind(TEAM_NEEDS_AI)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(true);
+            (architect, TEAM_NEEDS_AI.to_string(), said)
+        }
+        None => {
+            let said: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM notes
+                                WHERE thread_id = $1 AND author_agent_id = $2
+                                  AND body LIKE '%needs an AI voice%')",
+            )
+            .bind(thread_id)
+            .bind(agent_id)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(true);
+            let body = format!(
+                "{agent_name} needs an AI voice to answer: add an OpenRouter key in Settings → Account, and it will talk in its own character."
+            );
+            (agent_id, body, said)
+        }
+    };
+    if !said {
+        insert_bot_note(
+            pool,
+            &state.note_sender,
+            thread_id,
+            author,
+            &body,
+            Some(connect),
+        )
+        .await;
     }
 }
 

@@ -16,6 +16,12 @@ app and the desktop app share one version number. A release is tagged
 - The Connect, feed and Run pages name the command-line tool by its real name,
   `airobot-cli` (they said `air-cli`, which does not exist).
 
+### Changed
+- A new office with no AI connected opens on one note from the Architect,
+  "Connect an AI to wake up your team", with a button to Settings → Account,
+  instead of the same warning from every bot. Each bot keeps its "Needs AI"
+  badge.
+
 ## 0.6.0 — first open-source release
 
 Airobot is now open source under the GNU AGPL-3.0.

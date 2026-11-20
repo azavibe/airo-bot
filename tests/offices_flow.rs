@@ -754,3 +754,98 @@ async fn bots_fill_the_office_apps_from_their_answers(pool: PgPool) {
     assert_eq!(plain, "Just advice.");
     assert!(none.is_none());
 }
+
+/// Notes in a thread: (bot name, body, actions), oldest first.
+async fn bot_notes(pool: &PgPool, thread: Uuid) -> Vec<(String, String, Option<Value>)> {
+    sqlx::query_as(
+        "SELECT a.name, n.body, n.actions FROM notes n JOIN agents a ON a.id = n.author_agent_id
+         WHERE n.thread_id = $1 ORDER BY n.created_at, n.seq",
+    )
+    .bind(thread)
+    .fetch_all(pool)
+    .await
+    .expect("notes")
+}
+
+#[sqlx::test]
+async fn without_an_ai_the_architect_asks_once_for_the_whole_team(pool: PgPool) {
+    // A fresh self-hosted server: no OpenRouter key and no AI on this
+    // computer. The kickoff starts every bot's first task; none can answer.
+    let cookie = sign_in(&pool, "noai@example.com", "noai").await;
+    let office = new_office(&pool, &cookie, "Bakery").await;
+    let res = send(
+        pool.clone(),
+        authed_json_request(
+            "POST",
+            "/api/office/onboard",
+            json!({
+                "business_type": "Bakery",
+                "replaced_saas": [],
+                "goals": "More orders",
+                "workspace_id": office,
+                "teams": ["sales", "finance", "support"],
+            }),
+            Some(&cookie),
+        ),
+    )
+    .await;
+    assert_eq!(res.status, StatusCode::OK, "{:?}", res.body);
+    let office_id: Uuid = office.parse().expect("office id");
+    let chat: Uuid =
+        sqlx::query_scalar("SELECT id FROM threads WHERE kind = 'office' AND workspace_id = $1")
+            .bind(office_id)
+            .fetch_one(&pool)
+            .await
+            .expect("the office's group chat");
+
+    let notice = |notes: &[(String, String, Option<Value>)]| {
+        notes
+            .iter()
+            .filter(|(_, body, _)| body.starts_with("Connect an AI to wake up your team"))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    let per_bot = |notes: &[(String, String, Option<Value>)]| {
+        notes
+            .iter()
+            .filter(|(_, body, _)| body.contains("needs an AI voice"))
+            .count()
+    };
+    // The bots work one after another; wait until all three have tried.
+    for _ in 0..80 {
+        let notes = bot_notes(&pool, chat).await;
+        if !notice(&notes).is_empty() || per_bot(&notes) >= 3 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+
+    let notes = bot_notes(&pool, chat).await;
+    assert_eq!(per_bot(&notes), 0, "no warning per bot: {notes:?}");
+    let said = notice(&notes);
+    assert_eq!(said.len(), 1, "the Architect says it once: {notes:?}");
+    assert_eq!(said[0].0, "Architect");
+    assert_eq!(
+        said[0].2,
+        Some(json!([{ "label": "Connect an AI", "kind": "open", "target": "account" }])),
+        "its button opens Settings → Account"
+    );
+
+    // Writing again does not repeat it.
+    let say = send(
+        pool.clone(),
+        authed_json_request(
+            "POST",
+            &format!("/threads/{chat}/notes"),
+            json!({ "body": "Hello team", "kind": "status" }),
+            Some(&cookie),
+        ),
+    )
+    .await;
+    assert_eq!(say.status, StatusCode::CREATED, "{:?}", say.body);
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    let notes = bot_notes(&pool, chat).await;
+    assert_eq!(notice(&notes).len(), 1, "{notes:?}");
+    assert_eq!(per_bot(&notes), 0, "{notes:?}");
+}
