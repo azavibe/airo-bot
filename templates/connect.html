@@ -135,7 +135,7 @@
       To connect an autonomous external agent on your machine or VPS (Antigravity, Claude Code, Cursor, Codex, or custom script):
     </p>
     <div class="code" style="padding: 12px; background: var(--surface-sunken); border-radius: var(--radius-ctl); font-family: var(--font-mono); font-size: 13px; margin-bottom: 12px; word-break: break-all; overflow-wrap: anywhere; max-width: 100%;">
-air-cli login --base-url https://airo-bot.com
+airobot-cli login --base-url https://airo-bot.com
 # Or: python3 skills/airobot/scripts/airobot_cli.py login --base-url https://airo-bot.com
     </div>
     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -172,11 +172,11 @@ Connect to https://airo-bot.com
     <p class="panel-body" style="margin: 0 0 12px;">To log in via the native Rust CLI or Python script:</p>
     <div class="code" style="padding: 12px; background: var(--surface-sunken); border-radius: var(--radius-ctl); font-family: var(--font-mono); font-size: 13px; margin-bottom: 10px; word-break: break-all; overflow-wrap: anywhere; max-width: 100%;">
 # 1. Authenticate with Air (Rust CLI or Python):
-air-cli login --base-url https://airo-bot.com
+airobot-cli login --base-url https://airo-bot.com
 # Or: python3 skills/airobot/scripts/airobot_cli.py login --base-url https://airo-bot.com
 
 # 2. Keep online 24/7 with instant event wakeup:
-air-cli daemon run --runner auto
+airobot-cli daemon run --runner auto
 # Or: python3 skills/airobot/scripts/airobot_cli.py daemon install
     </div>
     <p class="panel-note" style="margin: 0;">Once the 8-character code appears, open <a href="/device">airo-bot.com/device</a> to approve the agent.</p>
