@@ -137,6 +137,108 @@ export const ConfirmDialog: React.FC<{
   );
 };
 
+export interface OfficeEdit {
+  name: string;
+  business_type: string;
+  website: string;
+  focus: string;
+  daily_plan: boolean;
+}
+
+/** The office's own settings in one place: its name, what the business
+ *  is, its website and this month's focus (every bot works from them), and
+ *  the morning plan. */
+export const EditOfficeDialog: React.FC<{
+  initial: OfficeEdit;
+  onSubmit: (values: OfficeEdit) => Promise<void>;
+  onClose: () => void;
+}> = ({ initial, onSubmit, onClose }) => {
+  const [values, setValues] = useState<OfficeEdit>(initial);
+  const set = (patch: Partial<OfficeEdit>) => setValues((v) => ({ ...v, ...patch }));
+  const { busy, error, go } = useAction(
+    () =>
+      onSubmit({
+        ...values,
+        name: values.name.trim(),
+        business_type: values.business_type.trim(),
+        website: values.website.trim(),
+        focus: values.focus.trim(),
+      }),
+    onClose
+  );
+  return (
+    <Shell
+      title="Edit office"
+      onClose={onClose}
+      onSubmit={go}
+      busy={busy}
+      error={error}
+      submitLabel="Save"
+      disabled={!values.name.trim()}
+    >
+      <label className="block space-y-1.5">
+        <span className="text-[11px] text-neutral-400">Office name</span>
+        <input
+          autoFocus
+          value={values.name}
+          onChange={(e) => set({ name: e.target.value })}
+          maxLength={60}
+          className={inputClass}
+        />
+      </label>
+      <label className="block space-y-1.5">
+        <span className="text-[11px] text-neutral-400">What the business is</span>
+        <input
+          value={values.business_type}
+          onChange={(e) => set({ business_type: e.target.value })}
+          maxLength={100}
+          placeholder="Dental clinic, bakery, online store…"
+          className={inputClass}
+        />
+      </label>
+      <label className="block space-y-1.5">
+        <span className="text-[11px] text-neutral-400">Website</span>
+        <input
+          value={values.website}
+          onChange={(e) => set({ website: e.target.value })}
+          maxLength={200}
+          inputMode="url"
+          placeholder="yourbusiness.com"
+          className={inputClass}
+        />
+      </label>
+      <label className="block space-y-1.5">
+        <span className="text-[11px] text-neutral-400">What matters most this month</span>
+        <input
+          value={values.focus}
+          onChange={(e) => set({ focus: e.target.value })}
+          maxLength={200}
+          list="office-focus-ideas"
+          placeholder="More customers"
+          className={inputClass}
+        />
+        <datalist id="office-focus-ideas">
+          <option value="More customers" />
+          <option value="Get paid faster" />
+          <option value="Save time on admin" />
+        </datalist>
+      </label>
+      <label className="flex items-center gap-2.5 text-[13px] text-neutral-200 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={values.daily_plan}
+          onChange={(e) => set({ daily_plan: e.target.checked })}
+          className="w-4 h-4 accent-accent"
+        />
+        Daily plan: the Architect hands out the day's tasks each morning
+      </label>
+      <p className="text-[11px] text-neutral-500 leading-relaxed">
+        Every bot in this office reads these. Leave a field empty to clear it.
+      </p>
+    </Shell>
+  );
+};
+
 /** A room in an office, with the bots that answer in it. */
 export const NewRoomDialog: React.FC<{
   officeName: string;

@@ -497,7 +497,7 @@ export const ConnectionsView: React.FC<ConnectionsViewProps> = ({
   const entry = (id: ProviderId) => catalog.find((c) => c.id === id);
   const roomTitle = (id: string | null) => {
     const t = threads.find((x) => x.id === id);
-    return t ? `#${roomName(t.title)}` : 'a room';
+    return t ? roomName(t.title) : 'a room';
   };
   const googleApp = signInApps.find((a) => a.provider === 'google');
 
@@ -728,7 +728,7 @@ export const ConnectionsView: React.FC<ConnectionsViewProps> = ({
                       <option value="">Don't receive events</option>
                       {rooms.map((t) => (
                         <option key={t.id} value={t.id}>
-                          Post events into {t.kind === 'office' ? 'the office chat' : `#${roomName(t.title)}`}
+                          Post events into {t.kind === 'office' ? 'the office chat' : roomName(t.title)}
                         </option>
                       ))}
                     </select>

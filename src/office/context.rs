@@ -149,7 +149,7 @@ pub async fn business_of_thread(pool: &PgPool, thread_id: Uuid) -> Option<Busine
 pub async fn apps_of(pool: &PgPool, workspace_id: Uuid) -> Vec<AppInfo> {
     let rows: Vec<(Uuid, String, String, Value)> = sqlx::query_as(
         "SELECT id, slug, title, ui_schema FROM office_apps
-         WHERE workspace_id = $1 AND deleted_at IS NULL
+         WHERE workspace_id = $1 AND deleted_at IS NULL AND archived_at IS NULL
          ORDER BY created_at ASC LIMIT 20",
     )
     .bind(workspace_id)

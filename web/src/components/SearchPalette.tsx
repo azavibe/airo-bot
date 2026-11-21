@@ -61,7 +61,7 @@ export const SearchPalette: React.FC<Props> = (props) => {
       out.push({
         key: `room-${t.id}`,
         group: 'Rooms',
-        label: `# ${roomName(t.title)}`,
+        label: roomName(t.title),
         detail: p.officeOf(t)?.name,
         run: () => p.onOpenRoom(t.id),
       })

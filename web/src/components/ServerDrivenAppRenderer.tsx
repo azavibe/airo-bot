@@ -1,4 +1,6 @@
 import { KanbanBoard } from './KanbanBoard';
+import { RowMenu } from './RowMenu';
+import { recordTitle } from '../utils/format';
 import React, { useState, useMemo, useEffect } from 'react';
 import { AppSchema, OfficeRecord } from '../types';
 import {
@@ -16,6 +18,8 @@ interface ServerDrivenAppRendererProps {
   records: OfficeRecord[];
   onUpdateRecordStatus: (recordId: string, newStatus: string) => Promise<void>;
   onCreateRecord: (recordType: string, data: Record<string, any>, status?: string) => Promise<void>;
+  /** Deletes a record (after the person confirms). */
+  onDeleteRecord?: (record: OfficeRecord) => void;
   appTitle: string;
   appSlug?: string;
   designMode?: boolean;
@@ -34,6 +38,7 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
   records,
   onUpdateRecordStatus,
   onCreateRecord,
+  onDeleteRecord,
   appTitle,
   appSlug = 'app',
   designMode = false,
@@ -297,6 +302,7 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
               recordType={activeView.record_type}
               onMove={onUpdateRecordStatus}
               onCreate={onCreateRecord}
+              onDelete={onDeleteRecord}
             />
           </div>
         )}
@@ -341,13 +347,14 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
                     </th>
                   ))}
                   <th className="p-3.5 text-right">Status</th>
+                  {onDeleteRecord && <th className="w-10" aria-label="Actions" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {filteredRecords.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={(activeView.columns?.length || 1) + 1}
+                      colSpan={(activeView.columns?.length || 1) + (onDeleteRecord ? 2 : 1)}
                       className="p-8 text-center text-neutral-500 italic"
                     >
                       {records.length === 0
@@ -374,6 +381,14 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
                       <td className="p-3.5 text-right font-mono text-[11px] text-neutral-400">
                         {r.status}
                       </td>
+                      {onDeleteRecord && (
+                        <td className="pr-2 text-right">
+                          <RowMenu
+                            label={`Options for ${recordTitle(r.data)}`}
+                            items={[{ label: 'Delete record', danger: true, onSelect: () => onDeleteRecord(r) }]}
+                          />
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}

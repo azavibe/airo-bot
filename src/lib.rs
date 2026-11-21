@@ -268,6 +268,7 @@ pub fn app(state: AppState) -> Router {
             "/threads/{id}/delete",
             post(handlers::threads::delete_thread),
         )
+        .route("/notes/{id}/delete", post(handlers::threads::delete_note))
         .route(
             "/threads/{id}/archive",
             post(handlers::threads::archive_thread),
@@ -451,6 +452,7 @@ pub fn app(state: AppState) -> Router {
             "/settings/agents/{id}/revoke",
             post(handlers::web::revoke_agent),
         )
+        .route("/agents/{id}/delete", post(handlers::web::delete_agent))
         .route(
             "/settings/agents/{id}/rename",
             post(handlers::web::rename_agent),
@@ -567,6 +569,22 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/office/records/{id}",
             patch(office::architect::patch_app_record),
+        )
+        .route(
+            "/api/office/records/{id}/delete",
+            post(office::architect::delete_app_record),
+        )
+        .route(
+            "/api/office/apps/{slug}/archive",
+            post(office::architect::archive_office_app),
+        )
+        .route(
+            "/api/office/apps/{slug}/unarchive",
+            post(office::architect::unarchive_office_app),
+        )
+        .route(
+            "/api/office/apps/{slug}/delete",
+            post(office::architect::delete_office_app),
         )
         .route(
             "/api/office/wallet",

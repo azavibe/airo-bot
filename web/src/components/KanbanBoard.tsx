@@ -17,6 +17,8 @@ interface Props {
   recordType: string;
   onMove: (recordId: string, stage: string) => Promise<void> | void;
   onCreate: (recordType: string, data: Record<string, any>, status?: string) => Promise<void>;
+  /** Deletes a card (after the person confirms). */
+  onDelete?: (record: OfficeRecord) => void;
   paged?: boolean;
 }
 
@@ -25,13 +27,16 @@ interface Props {
 const stageIn = (columns: string[]) => (r: OfficeRecord) =>
   columns.includes(r.status) ? r.status : r.data?.stage || r.data?.status || r.status;
 const titleOf = (r: OfficeRecord) => recordTitle(r.data);
+// The "Move to" list's last choice; it is not a stage name.
+const DELETE_CHOICE = '\u0000delete';
 
-const Card: React.FC<{ r: OfficeRecord; columns: string[]; stage: string; onMove: Props['onMove'] }> = ({
-  r,
-  columns,
-  stage,
-  onMove,
-}) => (
+const Card: React.FC<{
+  r: OfficeRecord;
+  columns: string[];
+  stage: string;
+  onMove: Props['onMove'];
+  onDelete?: Props['onDelete'];
+}> = ({ r, columns, stage, onMove, onDelete }) => (
   <div
     draggable
     onDragStart={(e) => {
@@ -51,7 +56,11 @@ const Card: React.FC<{ r: OfficeRecord; columns: string[]; stage: string; onMove
     <select
       value=""
       aria-label={`Move ${titleOf(r)} to another stage`}
-      onChange={(e) => e.target.value && onMove(r.id, e.target.value)}
+      onChange={(e) => {
+        const choice = e.target.value;
+        if (choice === DELETE_CHOICE) onDelete?.(r);
+        else if (choice) onMove(r.id, choice);
+      }}
       className="text-[10.5px] bg-transparent text-neutral-500 hover:text-neutral-300 outline-none cursor-pointer -ml-0.5"
     >
       <option value="">Move to…</option>
@@ -62,6 +71,7 @@ const Card: React.FC<{ r: OfficeRecord; columns: string[]; stage: string; onMove
             {c}
           </option>
         ))}
+      {onDelete && <option value={DELETE_CHOICE}>Delete…</option>}
     </select>
   </div>
 );
@@ -121,7 +131,15 @@ const QuickAdd: React.FC<{ onAdd: (title: string) => Promise<void> }> = ({ onAdd
   );
 };
 
-export const KanbanBoard: React.FC<Props> = ({ columns, records, recordType, onMove, onCreate, paged = false }) => {
+export const KanbanBoard: React.FC<Props> = ({
+  columns,
+  records,
+  recordType,
+  onMove,
+  onCreate,
+  onDelete,
+  paged = false,
+}) => {
   const [over, setOver] = useState<string | null>(null);
   const stageOf = stageIn(columns);
   const [page, setPage] = useState(0);
@@ -164,7 +182,7 @@ export const KanbanBoard: React.FC<Props> = ({ columns, records, recordType, onM
         </div>
         <div className={`flex-1 space-y-2 overflow-y-auto no-scrollbar ${tall ? 'min-h-[120px]' : 'max-h-[340px]'}`}>
           {items.map((r) => (
-            <Card key={r.id} r={r} columns={columns} stage={c} onMove={onMove} />
+            <Card key={r.id} r={r} columns={columns} stage={c} onMove={onMove} onDelete={onDelete} />
           ))}
         </div>
         <div className="mt-2">

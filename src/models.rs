@@ -567,6 +567,8 @@ pub struct OfficeApp {
     pub ui_schema: serde_json::Value,
     pub default_schema: Option<serde_json::Value>,
     pub last_valid_schema: Option<serde_json::Value>,
+    /// Archived: hidden from the office and its bots until restored.
+    pub archived_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

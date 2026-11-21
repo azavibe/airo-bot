@@ -2056,6 +2056,63 @@ pub async fn revoke_agent(
     )
 }
 
+/// POST /agents/:id/delete -- soft-deletes one of the person's bots and the
+/// rooms only it answered in; rooms it shares with other bots stay. Its
+/// messages are kept. The Architect runs every office's group chat, so it
+/// cannot be deleted.
+pub async fn delete_agent(
+    State(state): State<AppState>,
+    caller: Caller,
+    headers: HeaderMap,
+    Path(agent_id): Path<Uuid>,
+    JsonOrForm(body): JsonOrForm<IdempotentRequest>,
+) -> Result<Response, AppError> {
+    let Caller::User(user) = caller else {
+        return Err(AppError::Forbidden);
+    };
+    crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    let name: Option<String> = sqlx::query_scalar(
+        "SELECT name FROM agents WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    )
+    .bind(agent_id)
+    .bind(user.id)
+    .fetch_optional(&state.pool)
+    .await?;
+    let name = name.ok_or(AppError::NotFound)?;
+    if name == crate::office::group::ARCHITECT_NAME {
+        return Err(AppError::BadRequest(
+            "the Architect runs your offices' group chats, so it can't be deleted".to_string(),
+        ));
+    }
+    let mut tx = state.pool.begin().await?;
+    let rooms: Vec<Uuid> = sqlx::query_scalar(
+        "UPDATE threads t SET deleted_at = now(), updated_at = now()
+         WHERE t.user_id = $2 AND t.kind = 'room' AND t.deleted_at IS NULL
+           AND EXISTS (SELECT 1 FROM thread_agents ta
+                       WHERE ta.thread_id = t.id AND ta.agent_id = $1)
+           AND NOT EXISTS (SELECT 1 FROM thread_agents ta
+                           JOIN agents a ON a.id = ta.agent_id
+                           WHERE ta.thread_id = t.id AND ta.agent_id <> $1
+                             AND a.deleted_at IS NULL AND a.revoked_at IS NULL)
+         RETURNING t.id",
+    )
+    .bind(agent_id)
+    .bind(user.id)
+    .fetch_all(&mut *tx)
+    .await?;
+    sqlx::query("UPDATE agents SET deleted_at = now(), updated_at = now() WHERE id = $1")
+        .bind(agent_id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    social_write_response(
+        &headers,
+        StatusCode::OK,
+        "/settings/agents",
+        json!({ "status": "deleted", "id": agent_id, "rooms_deleted": rooms }),
+    )
+}
+
 #[derive(Deserialize)]
 pub struct RenameAgentRequest {
     pub name: String,

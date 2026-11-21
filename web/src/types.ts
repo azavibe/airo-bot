@@ -23,6 +23,8 @@ export interface Thread {
   kind?: 'room' | 'office';
   /** The bots that answer in this room. */
   agent_ids?: string[];
+  /** Archived: listed under "Archived" in its office until restored. */
+  archived_at?: string | null;
   state: string;
   created_at: string;
   updated_at: string;
@@ -90,6 +92,8 @@ export interface OfficeApp {
   ui_schema: AppSchema;
   default_schema?: AppSchema;
   last_valid_schema?: AppSchema;
+  /** Archived: hidden from the office and its bots until restored. */
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -170,6 +174,8 @@ export interface Office {
   daily_plan?: boolean;
   /** Stopped: the office's bots start no new work. */
   paused?: boolean;
+  /** What the business is ("Dental clinic"), as set up or edited. */
+  business_type?: string | null;
   website?: string | null;
   focus?: string | null;
 }

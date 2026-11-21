@@ -16,8 +16,9 @@ import { DesktopTitleBar, isDesktopApp } from './components/DesktopTitleBar';
 import { BotSettingsModal } from './components/BotSettingsModal';
 import { SearchPalette } from './components/SearchPalette';
 import { TeamModal } from './components/TeamModal';
-import { NameDialog, ConfirmDialog, NewRoomDialog } from './components/Dialogs';
-import { roomsOf } from './components/Sidebar';
+import { NameDialog, ConfirmDialog, NewRoomDialog, EditOfficeDialog } from './components/Dialogs';
+import type { OfficeEdit } from './components/Dialogs';
+import { roomsOf, roomLabel } from './components/Sidebar';
 import type { OfficeSetup } from './components/OnboardModal';
 import { botModelLabel, roomName } from './utils/format';
 import { Bell, X, Check } from 'lucide-react';
@@ -103,6 +104,12 @@ type Dialog =
   | { kind: 'newRoom'; office: Office }
   | { kind: 'renameRoom'; thread: Thread }
   | { kind: 'deleteRoom'; thread: Thread }
+  | { kind: 'editOffice'; office: Office }
+  | { kind: 'renameBot'; agent: Agent }
+  | { kind: 'deleteBot'; agent: Agent }
+  | { kind: 'deleteNote'; note: Note }
+  | { kind: 'deleteApp'; app: OfficeApp }
+  | { kind: 'deleteRecord'; record: OfficeRecord }
   | null;
 
 export const App: React.FC = () => {
@@ -110,6 +117,20 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(() => tabFromPath(window.location.pathname));
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [inDesktopApp] = useState(isDesktopApp);
+  // The desktop window is an app, not a web page: right-click never shows
+  // the webview's Back / Reload / Save as menu. Text fields and selected
+  // text keep theirs (copy and paste), and rows show the app's own menus.
+  useEffect(() => {
+    if (!inDesktopApp) return;
+    const onContext = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+      if ((window.getSelection()?.toString() ?? '').trim()) return;
+      e.preventDefault();
+    };
+    document.addEventListener('contextmenu', onContext);
+    return () => document.removeEventListener('contextmenu', onContext);
+  }, [inDesktopApp]);
   const [editingBot, setEditingBot] = useState<Agent | null>(null);
   const [newBotOffice, setNewBotOffice] = useState<Office | null>(null);
   const [isOnboardOpen, setIsOnboardOpen] = useState(false);
@@ -803,7 +824,91 @@ export const App: React.FC = () => {
     await postJson(`/threads/${thread.id}/delete`);
     if (activeThreadId === thread.id) setActiveThreadId(null);
     await fetchInitialData();
-    showOk(`#${roomName(thread.title)} deleted.`);
+    showOk(`${roomLabel(thread, agents)} deleted.`);
+  };
+  // Archive hides a room (or a bot's room) under "Archived" until restored.
+  const setRoomArchived = async (thread: Thread, archived: boolean) => {
+    try {
+      const updated: Thread = await postJson(`/threads/${thread.id}/${archived ? 'archive' : 'unarchive'}`);
+      setThreads((prev) => prev.map((t) => (t.id === thread.id ? { ...t, archived_at: updated.archived_at ?? null } : t)));
+      showOk(`${roomLabel(thread, agents)} ${archived ? 'archived' : 'restored'}.`);
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'That did not work.');
+    }
+  };
+  const editOffice = async (office: Office, values: OfficeEdit) => {
+    const saved = await postJson(
+      `/api/offices/${office.id}`,
+      {
+        name: values.name,
+        business_type: values.business_type,
+        website: values.website,
+        focus: values.focus,
+        daily_plan: values.daily_plan,
+        idempotency_key: newKey(),
+      },
+      'PATCH'
+    );
+    setOffices((prev) =>
+      prev.map((o) =>
+        o.id === office.id
+          ? {
+              ...o,
+              name: saved.name,
+              business_type: saved.business_type,
+              website: saved.website,
+              focus: saved.focus,
+              daily_plan: saved.daily_plan,
+            }
+          : o
+      )
+    );
+    showOk(`${saved.name} saved.`);
+  };
+  const renameBot = async (agent: Agent, name: string) => {
+    await postJson(`/settings/agents/${agent.id}/rename`, { name, idempotency_key: newKey() });
+    setAgents((prev) => prev.map((a) => (a.id === agent.id ? { ...a, name } : a)));
+  };
+  const deleteBot = async (agent: Agent) => {
+    const res = await postJson(`/agents/${agent.id}/delete`, { idempotency_key: newKey() });
+    const gone: string[] = res?.rooms_deleted ?? [];
+    if (activeThreadId && gone.includes(activeThreadId)) setActiveThreadId(null);
+    await fetchInitialData();
+    showOk(`${agent.name} deleted.`);
+  };
+  const deleteNote = async (note: Note) => {
+    await postJson(`/notes/${note.id}/delete`);
+    setNotes((prev) => prev.filter((n) => n.id !== note.id));
+  };
+  const setAppArchived = async (app: OfficeApp, archived: boolean) => {
+    try {
+      const updated: OfficeApp = await postJson(
+        `/api/office/apps/${app.slug}/${archived ? 'archive' : 'unarchive'}${officeQs()}`,
+        { idempotency_key: newKey() }
+      );
+      setApps((prev) => prev.map((a) => (a.id === app.id ? updated : a)));
+      if (archived && activeAppSlug === app.slug) {
+        const next = apps.find((a) => a.id !== app.id && !a.archived_at);
+        setActiveAppSlug(next?.slug ?? null);
+        if (next) fetchAppRecords(next.slug);
+      }
+      showOk(archived ? `${app.title} archived. Its bots stop filling it.` : `${app.title} restored.`);
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'That did not work.');
+    }
+  };
+  const deleteApp = async (app: OfficeApp) => {
+    await postJson(`/api/office/apps/${app.slug}/delete${officeQs()}`, { idempotency_key: newKey() });
+    await loadApps();
+    showOk(`${app.title} deleted.`);
+  };
+  const deleteRecord = async (record: OfficeRecord) => {
+    await postJson(`/api/office/records/${record.id}/delete${officeQs()}`, { idempotency_key: newKey() });
+    setRecords((prev) => {
+      const next: Record<string, OfficeRecord[]> = {};
+      for (const [slug, list] of Object.entries(prev)) next[slug] = list.filter((r) => r.id !== record.id);
+      return next;
+    });
   };
   const openNewBot = (office?: Office) => {
     if (isGuest) {
@@ -905,6 +1010,13 @@ export const App: React.FC = () => {
     onDeleteOffice: (office: Office) => setDialog({ kind: 'deleteOffice', office }),
     onRenameRoom: (thread: Thread) => setDialog({ kind: 'renameRoom', thread }),
     onDeleteRoom: (thread: Thread) => setDialog({ kind: 'deleteRoom', thread }),
+    onEditOffice: (office: Office) => setDialog({ kind: 'editOffice', office }),
+    onArchiveRoom: (thread: Thread) => setRoomArchived(thread, true),
+    onUnarchiveRoom: (thread: Thread) => setRoomArchived(thread, false),
+    agents,
+    onOpenBot: (agent: Agent) => setEditingBot(agent),
+    onRenameBot: (agent: Agent) => setDialog({ kind: 'renameBot', agent }),
+    onDeleteBot: (agent: Agent) => setDialog({ kind: 'deleteBot', agent }),
   };
 
   const closeDrawerThen = (fn: () => void) => () => {
@@ -986,6 +1098,7 @@ export const App: React.FC = () => {
                   onOpenBot={isGuest ? undefined : setEditingBot}
                   onAction={isGuest ? undefined : handleNoteAction}
                   onSend={isGuest ? undefined : handleSendMessage}
+                  onDeleteNote={isGuest ? undefined : (note) => setDialog({ kind: 'deleteNote', note })}
                   paused={!!activeOffice?.paused}
                   onToggleRun={isGuest || !activeOffice ? undefined : () => toggleRun(activeOffice)}
                   onOpenTeam={() => setIsTeamOpen(true)}
@@ -1006,7 +1119,7 @@ export const App: React.FC = () => {
             <div className="h-full min-h-0 hidden md:block md:col-span-4 overflow-hidden">
               <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
                 <AppsPanel
-                  apps={apps}
+                  apps={apps.filter((a) => !a.archived_at)}
                   officeName={(activeOffice ?? offices.find((o) => o.primary))?.name}
                   records={records}
                   approvals={approvals}
@@ -1043,6 +1156,10 @@ export const App: React.FC = () => {
                 onToggleDesignMode={() => setDesignMode(!designMode)}
                 onInspectWidget={handleInspectWidget}
                 onResetMod={handleResetMod}
+                onArchiveApp={isGuest ? undefined : (app) => setAppArchived(app, true)}
+                onUnarchiveApp={isGuest ? undefined : (app) => setAppArchived(app, false)}
+                onDeleteApp={isGuest ? undefined : (app) => setDialog({ kind: 'deleteApp', app })}
+                onDeleteRecord={isGuest ? undefined : (record) => setDialog({ kind: 'deleteRecord', record })}
                 officeName={(activeOffice ?? offices.find((o) => o.primary))?.name}
                 bottomDock={dockElement}
               />
@@ -1293,10 +1410,70 @@ export const App: React.FC = () => {
       )}
       {dialog?.kind === 'deleteRoom' && (
         <ConfirmDialog
-          title={`Delete #${roomName(dialog.thread.title)}?`}
+          title={`Delete ${roomLabel(dialog.thread, agents)}?`}
           message="The room leaves your list and its bots stop answering there. Its messages are kept, not erased."
           submitLabel="Delete room"
           onConfirm={() => deleteRoom(dialog.thread)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'editOffice' && (
+        <EditOfficeDialog
+          initial={{
+            name: dialog.office.name,
+            business_type: dialog.office.business_type ?? '',
+            website: dialog.office.website ?? '',
+            focus: dialog.office.focus ?? '',
+            daily_plan: dialog.office.daily_plan !== false,
+          }}
+          onSubmit={(values) => editOffice(dialog.office, values)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'renameBot' && (
+        <NameDialog
+          title="Rename bot"
+          label="Bot name"
+          initial={dialog.agent.name}
+          submitLabel="Rename"
+          maxLength={64}
+          onSubmit={(name) => renameBot(dialog.agent, name)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'deleteBot' && (
+        <ConfirmDialog
+          title={`Delete ${dialog.agent.name}?`}
+          message="The bot stops working and leaves every office, and its own room goes with it. Rooms it shares with other bots stay. Messages are kept, not erased."
+          submitLabel="Delete bot"
+          onConfirm={() => deleteBot(dialog.agent)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'deleteNote' && (
+        <ConfirmDialog
+          title="Delete this message?"
+          message="It disappears from this chat for you and its bots."
+          submitLabel="Delete message"
+          onConfirm={() => deleteNote(dialog.note)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'deleteApp' && (
+        <ConfirmDialog
+          title={`Delete ${dialog.app.title}?`}
+          message="The app and its records leave this office and its bots stop filling it. To only hide it for now, archive it instead."
+          submitLabel="Delete app"
+          onConfirm={() => deleteApp(dialog.app)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'deleteRecord' && (
+        <ConfirmDialog
+          title="Delete this record?"
+          message="It leaves the app for you and the office's bots."
+          submitLabel="Delete record"
+          onConfirm={() => deleteRecord(dialog.record)}
           onClose={() => setDialog(null)}
         />
       )}

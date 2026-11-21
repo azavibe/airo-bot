@@ -37,6 +37,7 @@ pub struct OfficeItem {
     pub daily_plan: bool,
     /// Stopped: the office's bots start no new work.
     pub paused: bool,
+    pub business_type: Option<String>,
     pub website: Option<String>,
     pub focus: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -73,7 +74,8 @@ fn slug_of(name: &str) -> String {
 pub async fn list_for(pool: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<OfficeItem>, AppError> {
     let primary = get_or_create_default_workspace(pool, user_id).await?;
     let rows = sqlx::query_as::<_, OfficeItem>(
-        "SELECT w.id, w.name, (w.id = $2) AS primary, w.daily_plan, w.paused, w.website, w.focus,
+        "SELECT w.id, w.name, (w.id = $2) AS primary, w.daily_plan, w.paused,
+                w.business_type, w.website, w.focus,
                 (SELECT COUNT(*) FROM threads t
                   WHERE t.user_id = $1 AND t.deleted_at IS NULL AND t.kind = 'room'
                     AND (t.workspace_id = w.id OR (t.workspace_id IS NULL AND w.id = $2))
@@ -295,7 +297,33 @@ pub struct RenameOfficeRequest {
     /// Stop (true) or run (false) the office's bots.
     #[serde(default)]
     pub paused: Option<bool>,
+    /// The office's profile, as set up: what the business is, its website
+    /// and what matters most this month. Absent: unchanged; empty: cleared.
+    #[serde(default)]
+    pub business_type: Option<String>,
+    #[serde(default)]
+    pub website: Option<String>,
+    #[serde(default)]
+    pub focus: Option<String>,
     pub idempotency_key: Option<String>,
+}
+
+/// A profile field from a PATCH: `None` keeps it, `Some(None)` clears it.
+fn profile_field(
+    raw: Option<&str>,
+    field: &str,
+    max: usize,
+) -> Result<Option<Option<String>>, AppError> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let value = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    if value.chars().count() > max {
+        return Err(AppError::BadRequest(format!(
+            "{field} must be at most {max} characters"
+        )));
+    }
+    Ok(Some((!value.is_empty()).then_some(value)))
 }
 
 /// PATCH /api/offices/:id (and POST /api/offices/:id/rename for forms)
@@ -311,33 +339,68 @@ pub async fn rename_office(
     };
     crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
     let ws = owned_office(&state.pool, user.id, id).await?;
+    let business_type = profile_field(body.business_type.as_deref(), "business_type", 100)?;
+    let focus = profile_field(body.focus.as_deref(), "focus", 200)?;
+    let website = match body.website.as_deref() {
+        Some(raw) => Some(
+            crate::office::kickoff::clean_website(raw)
+                .map_err(|e| AppError::BadRequest(e.to_string()))?,
+        ),
+        None => None,
+    };
+    let profile_changes = business_type.is_some() || focus.is_some() || website.is_some();
     let name = match body.name.as_deref() {
         Some(raw) => clean_name(raw)?,
-        None if body.daily_plan.is_some() || body.paused.is_some() => ws.name.clone(),
+        None if body.daily_plan.is_some() || body.paused.is_some() || profile_changes => {
+            ws.name.clone()
+        }
         None => {
             return Err(AppError::BadRequest(
-                "send a name, daily_plan or paused".to_string(),
+                "send a name, daily_plan, paused, business_type, website or focus".to_string(),
             ))
         }
     };
-    let (daily_plan, paused): (bool, bool) = sqlx::query_as(
+    let (daily_plan, paused, business_type, website, focus): (
+        bool,
+        bool,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) = sqlx::query_as(
         "UPDATE workspaces SET name = $1, daily_plan = COALESCE($3, daily_plan),
-                paused = COALESCE($4, paused), updated_at = now()
-         WHERE id = $2 RETURNING daily_plan, paused",
+                paused = COALESCE($4, paused),
+                business_type = CASE WHEN $5 THEN $6 ELSE business_type END,
+                website = CASE WHEN $7 THEN $8 ELSE website END,
+                focus = CASE WHEN $9 THEN $10 ELSE focus END,
+                updated_at = now()
+         WHERE id = $2 RETURNING daily_plan, paused, business_type, website, focus",
     )
     .bind(&name)
     .bind(ws.id)
     .bind(body.daily_plan)
     .bind(body.paused)
+    .bind(business_type.is_some())
+    .bind(business_type.flatten())
+    .bind(website.is_some())
+    .bind(website.flatten())
+    .bind(focus.is_some())
+    .bind(focus.flatten())
     .fetch_one(&state.pool)
     .await?;
     if wants_html(&headers) {
         return Ok(Redirect::to("/").into_response());
     }
-    Ok(
-        Json(json!({ "status": "updated", "id": ws.id, "name": name, "daily_plan": daily_plan, "paused": paused }))
-            .into_response(),
-    )
+    Ok(Json(json!({
+        "status": "updated",
+        "id": ws.id,
+        "name": name,
+        "daily_plan": daily_plan,
+        "paused": paused,
+        "business_type": business_type,
+        "website": website,
+        "focus": focus,
+    }))
+    .into_response())
 }
 
 /// POST /api/offices/:id/delete -- soft-deletes the office and its rooms.
