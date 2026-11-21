@@ -34,6 +34,9 @@ app and the desktop app share one version number. A release is tagged
   id (for example `SMB_PRO_399`).
 - The Connect, feed and Run pages name the command-line tool by its real name,
   `airobot-cli` (they said `air-cli`, which does not exist).
+- A room with more than 500 messages reloads with its newest 500 in the web
+  app (it loaded the first 500, so recent messages went missing after a
+  reload).
 
 ## 0.6.0 — first open-source release
 
