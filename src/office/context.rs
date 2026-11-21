@@ -16,6 +16,9 @@ use uuid::Uuid;
 const MAX_RECORDS_PER_ANSWER: usize = 10;
 /// Fields kept per record, and characters per text value.
 const MAX_FIELDS: usize = 20;
+/// Rows in a list field, and fields in each row.
+const MAX_LIST_ITEMS: usize = 20;
+const MAX_ROW_FIELDS: usize = 10;
 const MAX_VALUE_CHARS: usize = 500;
 
 /// A record a bot wrote: which app (index into the office's apps) and its data.
@@ -41,6 +44,9 @@ pub struct AppInfo {
     pub fields: Vec<String>,
     /// Kanban stages, when the app has a board.
     pub stages: Vec<String>,
+    /// Stages a bot may only move a record into with the owner's OK (a
+    /// quote being sent, a review reply going out), whatever its mode.
+    pub approval_stages: Vec<String>,
 }
 
 impl AppInfo {
@@ -95,6 +101,13 @@ impl AppInfo {
             record_type,
             fields,
             stages,
+            approval_stages: schema["approval_stages"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|s| s.as_str().map(str::to_string))
+                .take(10)
+                .collect(),
         })
     }
 
@@ -297,16 +310,43 @@ pub fn parse_records(text: &str, apps: &[AppInfo]) -> (Vec<FoundRecord>, String)
     (found, kept.join("\n").trim().to_string())
 }
 
+/// A plain value, with long text cut.
+fn plain(v: Value) -> Option<Value> {
+    match v {
+        Value::String(s) => Some(Value::String(s.chars().take(MAX_VALUE_CHARS).collect())),
+        Value::Number(_) | Value::Bool(_) => Some(v),
+        _ => None,
+    }
+}
+
 /// Keeps a record small: a limited number of fields, short text, plain
-/// values only.
-fn clean(data: Map<String, Value>) -> Map<String, Value> {
+/// values, and lists of small rows one level deep (a quote's line items, a
+/// project's milestones).
+pub(crate) fn clean(data: Map<String, Value>) -> Map<String, Value> {
     data.into_iter()
         .filter(|(k, _)| !k.is_empty() && k.len() <= 64)
         .filter_map(|(k, v)| {
             let v = match v {
-                Value::String(s) => Value::String(s.chars().take(MAX_VALUE_CHARS).collect()),
-                Value::Number(_) | Value::Bool(_) => v,
-                _ => return None,
+                Value::Array(items) => {
+                    let rows: Vec<Value> = items
+                        .into_iter()
+                        .take(MAX_LIST_ITEMS)
+                        .filter_map(|item| match item {
+                            Value::Object(row) => {
+                                let row: Map<String, Value> = row
+                                    .into_iter()
+                                    .filter(|(k, _)| !k.is_empty() && k.len() <= 64)
+                                    .filter_map(|(k, v)| plain(v).map(|v| (k, v)))
+                                    .take(MAX_ROW_FIELDS)
+                                    .collect();
+                                (!row.is_empty()).then_some(Value::Object(row))
+                            }
+                            other => plain(other),
+                        })
+                        .collect();
+                    Value::Array(rows)
+                }
+                other => plain(other)?,
             };
             Some((k, v))
         })
@@ -349,7 +389,12 @@ pub async fn apply_records(
     let mut cards: Vec<Value> = Vec::new();
     for (index, data) in records {
         let app = &apps[index];
-        let status = app.status_for(&data);
+        let mut status = app.status_for(&data);
+        // A bot can't add a record already past a stage that needs the
+        // owner's OK (a quote "Sent"): it starts at the first stage.
+        if app.approval_stages.contains(&status) {
+            status = app.stages.first().cloned().unwrap_or(status);
+        }
         let mut data = Value::Object(data);
         if !app.stages.is_empty() && app.fields.iter().any(|f| f == "stage") {
             data["stage"] = json!(status);
@@ -467,12 +512,21 @@ mod tests {
         let mut big = Map::new();
         big.insert("name".into(), json!("x".repeat(2000)));
         big.insert("nested".into(), json!({ "a": 1 }));
+        big.insert(
+            "line_items".into(),
+            json!([{ "description": "Logo", "qty": 1, "unit_price": 400, "deep": { "x": 1 } }, 5, [1]]),
+        );
         let cleaned = clean(big);
         assert_eq!(
             cleaned["name"].as_str().map(str::len),
             Some(MAX_VALUE_CHARS)
         );
         assert!(!cleaned.contains_key("nested"));
+        // Lists of small rows are kept one level deep.
+        assert_eq!(cleaned["line_items"][0]["unit_price"], 400);
+        assert!(cleaned["line_items"][0].get("deep").is_none());
+        assert_eq!(cleaned["line_items"][1], 5);
+        assert_eq!(cleaned["line_items"].as_array().map(Vec::len), Some(2));
     }
 
     #[test]

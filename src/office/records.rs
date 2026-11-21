@@ -375,8 +375,8 @@ pub async fn apply_updates(
     let mut lines = Vec::new();
     for (index, id, changes) in updates {
         let app = &apps[index];
-        let found: Vec<(Uuid, Value)> = sqlx::query_as(
-            "SELECT id, data FROM office_records
+        let found: Vec<(Uuid, Value, String)> = sqlx::query_as(
+            "SELECT id, data, status FROM office_records
              WHERE app_id = $1 AND deleted_at IS NULL AND left(id::text, $3) = $2
              LIMIT 2",
         )
@@ -386,7 +386,7 @@ pub async fn apply_updates(
         .fetch_all(pool)
         .await
         .unwrap_or_default();
-        let [(record_id, data)] = found.as_slice() else {
+        let [(record_id, data, current_status)] = found.as_slice() else {
             lines.push(format!(
                 "*Couldn't find record {id} in {} to update.*",
                 app.title
@@ -411,7 +411,15 @@ pub async fn apply_updates(
             .map(|k| format!("{k}: {} → {}", short(data.get(k)), short(changes.get(k))))
             .collect::<Vec<_>>()
             .join(", ");
-        if trusted {
+        // Moving into a stage that needs the owner's OK (a quote being
+        // sent) waits for it, whatever the bot's mode.
+        let mut merged = data.as_object().cloned().unwrap_or_default();
+        for (k, v) in &changes {
+            merged.insert(k.clone(), v.clone());
+        }
+        let next_status = app.status_for(&merged);
+        let gated = next_status != *current_status && app.approval_stages.contains(&next_status);
+        if trusted && !gated {
             if apply_change(pool, app, *record_id, &changes).await.is_ok() {
                 emit(
                     state,
@@ -622,6 +630,189 @@ pub async fn finish_record_change(
     }
     emit_for(state, record_id, "updated").await;
     Ok(())
+}
+
+// ---------------------------------------------------------------- convert
+
+#[derive(Debug, Deserialize)]
+pub struct OfficeParam {
+    pub office: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ConvertRequest {
+    /// The app to make the new record in (one the source app's `convert`
+    /// rules name).
+    pub to_app: String,
+    pub idempotency_key: Option<String>,
+}
+
+/// A `set` value with its placeholders filled: `{ref}` (a short reference
+/// from the new record's id), `{today}` and `{today+N}` (dates).
+fn fill(value: &Value, reference: &str) -> Value {
+    let Some(text) = value.as_str() else {
+        return value.clone();
+    };
+    let today = chrono::Utc::now().date_naive();
+    let mut out = text
+        .replace("{ref}", reference)
+        .replace("{today}", &today.to_string());
+    while let Some(start) = out.find("{today+") {
+        let Some(end) = out[start..].find('}') else {
+            break;
+        };
+        let days: i64 = out[start + 7..start + end].parse().unwrap_or(0);
+        let date = today + chrono::Duration::days(days.clamp(0, 3650));
+        out.replace_range(start..start + end + 1, &date.to_string());
+    }
+    Value::String(out)
+}
+
+/// POST /api/office/records/:id/convert?office= -- makes a record in
+/// another app from this one, as the source app's `convert` rule says (a
+/// quote into an invoice or a project): its fields mapped by name, its
+/// fixed values set, its contact kept. Converting the same record to the
+/// same app again returns the record made the first time.
+pub async fn convert_record(
+    State(state): State<AppState>,
+    caller: Caller,
+    headers: axum::http::HeaderMap,
+    Query(q): Query<OfficeParam>,
+    axum::extract::Path(record_id): axum::extract::Path<Uuid>,
+    Json(body): Json<ConvertRequest>,
+) -> Result<Json<Value>, AppError> {
+    crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    let Caller::User(user) = &caller else {
+        return Err(AppError::Forbidden);
+    };
+    crate::handlers::offices::owned_office(&state.pool, user.id, q.office).await?;
+    let pool = &state.pool;
+    type Source = (String, Value, Option<Uuid>, String, String, Value);
+    let source: Option<Source> = sqlx::query_as(
+        "SELECT r.status, r.data, r.contact_id, a.slug, a.title, a.ui_schema
+         FROM office_records r JOIN office_apps a ON a.id = r.app_id
+         WHERE r.id = $1 AND r.workspace_id = $2 AND r.deleted_at IS NULL
+           AND a.deleted_at IS NULL AND a.archived_at IS NULL",
+    )
+    .bind(record_id)
+    .bind(q.office)
+    .fetch_optional(pool)
+    .await?;
+    let Some((status, data, contact_id, source_slug, source_title, schema)) = source else {
+        return Err(AppError::NotFound);
+    };
+    let rule = schema["convert"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|r| r["to_app"].as_str() == Some(body.to_app.as_str()))
+        .cloned()
+        .ok_or_else(|| AppError::BadRequest("this record can't be converted to that app".into()))?;
+    if let Some(stage) = rule["when_stage"].as_str() {
+        if status != stage {
+            return Err(AppError::BadRequest(format!(
+                "only a record in {stage} can be converted; move it there first"
+            )));
+        }
+    }
+    // Converted before: the same record again.
+    if let Some(done) = data["converted_to"][body.to_app.as_str()]
+        .as_str()
+        .and_then(|s| s.parse::<Uuid>().ok())
+    {
+        let existing: Option<(String, Value)> = sqlx::query_as(
+            "SELECT status, data FROM office_records WHERE id = $1 AND deleted_at IS NULL",
+        )
+        .bind(done)
+        .fetch_optional(pool)
+        .await?;
+        if let Some((target_status, target_data)) = existing {
+            return Ok(Json(json!({
+                "record": { "id": done, "app_slug": body.to_app, "status": target_status, "data": target_data },
+                "source_id": record_id,
+                "already": true,
+            })));
+        }
+    }
+    let target: Option<(Uuid, String, String, Value)> = sqlx::query_as(
+        "SELECT id, slug, title, ui_schema FROM office_apps
+         WHERE workspace_id = $1 AND slug = $2 AND deleted_at IS NULL AND archived_at IS NULL",
+    )
+    .bind(q.office)
+    .bind(&body.to_app)
+    .fetch_optional(pool)
+    .await?;
+    let Some((target_id, target_slug, target_title, target_schema)) = target else {
+        return Err(AppError::BadRequest(format!(
+            "add the {} app to this office first",
+            body.to_app
+        )));
+    };
+    let app = AppInfo::from_schema(
+        target_id,
+        target_slug.clone(),
+        target_title.clone(),
+        &target_schema,
+    )
+    .ok_or_else(|| AppError::BadRequest("that app has no record type".into()))?;
+
+    let new_id = Uuid::new_v4();
+    let reference = new_id.simple().to_string()[..6].to_ascii_uppercase();
+    let mut fields = Map::new();
+    for (to_key, from_key) in rule["map"].as_object().into_iter().flatten() {
+        if let Some(v) = from_key.as_str().and_then(|k| data.get(k)) {
+            if !v.is_null() {
+                fields.insert(to_key.clone(), v.clone());
+            }
+        }
+    }
+    for (key, value) in rule["set"].as_object().into_iter().flatten() {
+        fields.insert(key.clone(), fill(value, &reference));
+    }
+    fields.insert(
+        "converted_from".into(),
+        json!(format!("{source_title}: {}", title_of(&data))),
+    );
+    let target_status = app.status_for(&fields);
+    let mut fields = Value::Object(fields);
+    if !app.stages.is_empty() && app.fields.iter().any(|f| f == "stage") {
+        fields["stage"] = json!(target_status);
+    }
+
+    let mut tx = pool.begin().await?;
+    sqlx::query(
+        "INSERT INTO office_records (id, workspace_id, app_id, record_type, status, data, contact_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    )
+    .bind(new_id)
+    .bind(q.office)
+    .bind(target_id)
+    .bind(&app.record_type)
+    .bind(&target_status)
+    .bind(&fields)
+    .bind(contact_id)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "UPDATE office_records
+         SET data = jsonb_set(data, '{converted_to}',
+                COALESCE(data->'converted_to', '{}'::jsonb) || jsonb_build_object($2::text, $3::text)),
+             updated_at = now()
+         WHERE id = $1",
+    )
+    .bind(record_id)
+    .bind(&target_slug)
+    .bind(new_id.to_string())
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    emit(&state, q.office, new_id, &target_slug, "created");
+    emit(&state, q.office, record_id, &source_slug, "updated");
+    Ok(Json(json!({
+        "record": { "id": new_id, "app_slug": target_slug, "app_title": target_title, "status": target_status, "data": fields },
+        "source_id": record_id,
+        "already": false,
+    })))
 }
 
 #[cfg(test)]

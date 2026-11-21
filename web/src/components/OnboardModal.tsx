@@ -35,6 +35,9 @@ const TEAMS = [
   { id: 'finance', name: 'Invoices & money', bot: 'Finance Manager', app: 'Invoices & cashflow', replaces: 'Xero, QuickBooks', connect: 'stripe' },
   { id: 'support', name: 'Customer support', bot: 'Support Agent', app: 'Support inbox', replaces: 'Zendesk, Freshdesk', connect: 'google' },
   { id: 'bookings', name: 'Bookings', bot: 'Scheduler', app: 'Appointments', replaces: 'Calendly, Acuity', connect: 'google' },
+  { id: 'quotes', name: 'Quotes & proposals', bot: 'Sales Lead', app: 'Quotes, convert to invoice or project', replaces: 'PandaDoc, Proposify' },
+  { id: 'projects', name: 'Projects', bot: 'Project Manager', app: 'Projects & tasks', replaces: 'Asana, Trello', connect: 'google' },
+  { id: 'reviews', name: 'Reviews', bot: 'Support Agent', app: 'Reviews & reputation', replaces: 'Birdeye, Podium' },
   { id: 'store', name: 'Online store', bot: 'Store Manager', app: null, replaces: null, connect: 'shopify' },
 ];
 

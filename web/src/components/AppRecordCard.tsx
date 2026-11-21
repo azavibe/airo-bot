@@ -97,6 +97,22 @@ export const AppRecordCard: React.FC<{
     (c) => !TITLE_KEYS.includes(c.key) && c.key !== 'stage' && c.key !== 'status'
   );
   const shown = expanded ? fields : fields.filter((c) => changed.has(c.key) || data[c.key] !== undefined).slice(0, 3);
+  const converted: Record<string, string> = data.converted_to ?? {};
+  const conversions = ((app?.ui_schema as any)?.convert ?? []).filter(
+    (c: any) => c?.to_app && (!c.when_stage || c.when_stage === record.status) && !converted[c.to_app]
+  ) as { label: string; to_app: string }[];
+  const convert = async (toApp: string) => {
+    if (!store) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await store.convert(record.id, toApp);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.');
+    } finally {
+      setBusy(false);
+    }
+  };
   const verb =
     card.action === 'created'
       ? 'Added to'
@@ -257,6 +273,28 @@ export const AppRecordCard: React.FC<{
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />}
           </div>
           {error && <p className="text-[11px] text-red-300">{error}</p>}
+        </div>
+      )}
+
+      {(conversions.length > 0 || Object.keys(converted).length > 0) && (
+        <div className="px-3 pb-2 flex flex-wrap items-center gap-1.5">
+          {Object.keys(converted).map((slug) => (
+            <span key={slug} className="text-[11px] text-emerald-300/90">
+              ✓ In {slug.replace(/-/g, ' ')}
+            </span>
+          ))}
+          {conversions.map((c) => (
+            <button
+              key={c.to_app}
+              type="button"
+              disabled={busy}
+              onClick={() => void convert(c.to_app)}
+              className="h-7 px-2.5 rounded-md bg-white/10 text-white text-[12px] hover:bg-white/15 disabled:opacity-40"
+            >
+              {c.label}
+            </button>
+          ))}
+          {!pending && error && <span className="text-[11px] text-red-300">{error}</span>}
         </div>
       )}
 

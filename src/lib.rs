@@ -658,6 +658,10 @@ pub fn app(state: AppState) -> Router {
             patch(office::architect::patch_app_record),
         )
         .route("/api/office/records", get(office::records::get_records))
+        .route(
+            "/api/office/records/{id}/convert",
+            post(office::records::convert_record),
+        )
         .route("/api/office/events", get(office::records::office_events))
         .route(
             "/api/office/records/{id}/delete",

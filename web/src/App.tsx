@@ -604,6 +604,25 @@ export const App: React.FC = () => {
     }
   };
 
+  // A quote becomes an invoice or a project (its app's convert rule).
+  const convertRecord = async (record: { id: string }, toApp: string) => {
+    try {
+      const res = await fetch(`/api/office/records/${record.id}/convert${officeQs()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ to_app: toApp, idempotency_key: `convert:${record.id}:${toApp}` }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'That did not work.');
+      const title = apps.find((a) => a.slug === toApp)?.title ?? toApp;
+      showOk(data?.already ? `Already in ${title}.` : `Added to ${title}.`);
+      if (activeAppSlug) fetchAppRecords(activeAppSlug);
+      fetchAppRecords(toApp);
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'That did not work.');
+    }
+  };
+
   const handleSendMessage = async (text: string) => {
     if (isGuest) {
       setIsAuthModalOpen(true);
@@ -1301,6 +1320,7 @@ export const App: React.FC = () => {
                 officeName={(activeOffice ?? offices.find((o) => o.primary))?.name}
                 bottomDock={dockElement}
                 onQuickAction={isGuest ? undefined : askTeam}
+                onConvertRecord={isGuest ? undefined : convertRecord}
               />
             </div>
           </div>

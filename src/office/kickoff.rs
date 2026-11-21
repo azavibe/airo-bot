@@ -82,6 +82,11 @@ pub fn starter_tasks(bot_name: &str, p: &Profile) -> Option<[String; 3]> {
             "Write the booking confirmation and the reminder message.".to_string(),
             "Write a no-show policy that is fair but firm, in 3 lines.".to_string(),
         ],
+        "Project Manager" => [
+            format!("Add the 2 or 3 client projects {biz} most likely has on right now to Projects & Tasks, each with its client, due date, value and next milestone.{ctx}"),
+            "Write a short weekly update a client would be glad to get.".to_string(),
+            "Say which project is most at risk and the one thing that would get it back on track.".to_string(),
+        ],
         "Store Manager" => [
             format!("Suggest 3 quick wins for {biz}'s online store, one line each.{ctx}"),
             "Write reply templates for order problems: late, wrong item, refund.".to_string(),

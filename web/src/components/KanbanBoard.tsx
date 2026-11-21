@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { OfficeRecord } from '../types';
+import { Conversion, OfficeRecord } from '../types';
 import { recordTitle } from '../utils/format';
 
 // A Kanban board for an app's records.
@@ -19,16 +19,34 @@ interface Props {
   onCreate: (recordType: string, data: Record<string, any>, status?: string) => Promise<void>;
   /** Deletes a card (after the person confirms). */
   onDelete?: (record: OfficeRecord) => void;
+  /** The app's conversions (a quote into an invoice), offered in a card's
+   *  menu when the card is in the right stage. */
+  conversions?: Conversion[];
+  onConvert?: (record: OfficeRecord, toApp: string) => void;
+  /** The fields a card shows (the app's `card_fields`); its title is one. */
+  cardFields?: string[];
   paged?: boolean;
 }
+
+const TITLE_KEYS = ['name', 'title', 'client', 'client_name', 'customer', 'subject', 'script_hook', 'caption', 'invoice_number'];
+const MONEY = /(value|total|amount|price)/;
+const ISO_DAY = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+
+/** A card's line for one field: money as money, dates as dates. */
+const fieldText = (key: string, v: any): string => {
+  if (MONEY.test(key) && v !== '' && !Number.isNaN(Number(v))) return `$${Number(v).toLocaleString()}`;
+  if (typeof v === 'string' && ISO_DAY.test(v)) return new Date(`${v}T00:00:00`).toLocaleDateString();
+  return typeof v === 'object' ? '' : String(v);
+};
 
 /** The stage a card is in: its status when that is a stage (moving sets
  *  the status), else the stage written in its data. */
 const stageIn = (columns: string[]) => (r: OfficeRecord) =>
   columns.includes(r.status) ? r.status : r.data?.stage || r.data?.status || r.status;
 const titleOf = (r: OfficeRecord) => recordTitle(r.data);
-// The "Move to" list's last choice; it is not a stage name.
+// The "Move to" list's last choices; they are not stage names.
 const DELETE_CHOICE = '\u0000delete';
+const CONVERT_CHOICE = '\u0000convert:';
 
 const Card: React.FC<{
   r: OfficeRecord;
@@ -36,7 +54,15 @@ const Card: React.FC<{
   stage: string;
   onMove: Props['onMove'];
   onDelete?: Props['onDelete'];
-}> = ({ r, columns, stage, onMove, onDelete }) => (
+  conversions?: Conversion[];
+  onConvert?: Props['onConvert'];
+  cardFields?: string[];
+}> = ({ r, columns, stage, onMove, onDelete, conversions = [], onConvert, cardFields }) => {
+  const converted: Record<string, string> = r.data?.converted_to ?? {};
+  const offered = onConvert
+    ? conversions.filter((c) => (!c.when_stage || c.when_stage === stage) && !converted[c.to_app])
+    : [];
+  return (
   <div
     draggable
     onDragStart={(e) => {
@@ -46,12 +72,25 @@ const Card: React.FC<{
     className="glass-card p-3 space-y-1.5 cursor-grab active:cursor-grabbing hover:border-white/20 transition-colors"
   >
     <div className="text-[13px] font-medium text-white leading-snug">{titleOf(r)}</div>
-    {r.data?.phone && <div className="text-[11.5px] text-neutral-400">{r.data.phone}</div>}
-    {r.data?.estimated_value != null && r.data.estimated_value !== '' && (
-      <div className="text-[11.5px] font-mono text-emerald-400">${Number(r.data.estimated_value).toLocaleString()}</div>
-    )}
-    {r.data?.last_agent_note && (
-      <div className="text-[11px] text-neutral-400 line-clamp-2">{r.data.last_agent_note}</div>
+    {(cardFields ?? ['phone', 'estimated_value', 'last_agent_note'])
+      // Every field but the one the title already shows.
+      .filter((k) => k !== TITLE_KEYS.find((t) => r.data?.[t]) && k !== 'stage' && r.data?.[k] != null && r.data[k] !== '')
+      .slice(0, 3)
+      .map((k) =>
+        MONEY.test(k) ? (
+          <div key={k} className="text-[11.5px] font-mono text-emerald-400">
+            {fieldText(k, r.data[k])}
+          </div>
+        ) : (
+          <div key={k} className="text-[11.5px] text-neutral-400 line-clamp-2">
+            {fieldText(k, r.data[k])}
+          </div>
+        )
+      )}
+    {Object.keys(converted).length > 0 && (
+      <div className="text-[11px] text-emerald-300/90">
+        Converted to {Object.keys(converted).map((a) => a.split('-')[0]).join(' and ')}
+      </div>
     )}
     <select
       value=""
@@ -59,6 +98,7 @@ const Card: React.FC<{
       onChange={(e) => {
         const choice = e.target.value;
         if (choice === DELETE_CHOICE) onDelete?.(r);
+        else if (choice.startsWith(CONVERT_CHOICE)) onConvert?.(r, choice.slice(CONVERT_CHOICE.length));
         else if (choice) onMove(r.id, choice);
       }}
       className="text-[10.5px] bg-transparent text-neutral-500 hover:text-neutral-300 outline-none cursor-pointer -ml-0.5"
@@ -71,10 +111,16 @@ const Card: React.FC<{
             {c}
           </option>
         ))}
+      {offered.map((c) => (
+        <option key={c.to_app} value={`${CONVERT_CHOICE}${c.to_app}`}>
+          {c.label}
+        </option>
+      ))}
       {onDelete && <option value={DELETE_CHOICE}>Delete…</option>}
     </select>
   </div>
-);
+  );
+};
 
 const QuickAdd: React.FC<{ onAdd: (title: string) => Promise<void> }> = ({ onAdd }) => {
   const [open, setOpen] = useState(false);
@@ -138,6 +184,9 @@ export const KanbanBoard: React.FC<Props> = ({
   onMove,
   onCreate,
   onDelete,
+  conversions,
+  onConvert,
+  cardFields,
   paged = false,
 }) => {
   const [over, setOver] = useState<string | null>(null);
@@ -182,7 +231,17 @@ export const KanbanBoard: React.FC<Props> = ({
         </div>
         <div className={`flex-1 space-y-2 overflow-y-auto no-scrollbar ${tall ? 'min-h-[120px]' : 'max-h-[340px]'}`}>
           {items.map((r) => (
-            <Card key={r.id} r={r} columns={columns} stage={c} onMove={onMove} onDelete={onDelete} />
+            <Card
+              key={r.id}
+              r={r}
+              columns={columns}
+              stage={c}
+              onMove={onMove}
+              onDelete={onDelete}
+              conversions={conversions}
+              onConvert={onConvert}
+              cardFields={cardFields}
+            />
           ))}
         </div>
         <div className="mt-2">

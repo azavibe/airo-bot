@@ -33,6 +33,8 @@ interface ServerDrivenAppRendererProps {
   headerActions?: React.ReactNode;
   /** Sends a quick action's message to the office chat; absent hides them. */
   onQuickAction?: (message: string) => void;
+  /** Converts a record by one of the app's `convert` rules. */
+  onConvertRecord?: (record: OfficeRecord, toApp: string) => void;
 }
 
 export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = ({
@@ -51,6 +53,7 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
   headerLeft,
   headerActions,
   onQuickAction,
+  onConvertRecord,
 }) => {
   const [isResetting, setIsResetting] = useState(false);
 
@@ -344,6 +347,9 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
               onMove={onUpdateRecordStatus}
               onCreate={onCreateRecord}
               onDelete={onDeleteRecord}
+              conversions={effectiveSchema?.convert}
+              onConvert={onConvertRecord}
+              cardFields={activeView.card_fields}
             />
           </div>
         )}
