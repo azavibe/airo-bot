@@ -26,6 +26,8 @@ interface AppsHubProps {
   onToggleDesignMode?: () => void;
   onInspectWidget?: (slug: string, viewId: string) => void;
   onResetMod?: (slug: string) => Promise<void>;
+  /** An app's quick action: a job for the office's team, sent to its chat. */
+  onQuickAction?: (message: string) => void;
   /** Hides an app from the office and its bots until it is restored. */
   onArchiveApp?: (app: OfficeApp) => void;
   onUnarchiveApp?: (app: OfficeApp) => void;
@@ -56,6 +58,7 @@ export const AppsHub: React.FC<AppsHubProps> = ({
   onDeleteRecord,
   officeName,
   bottomDock,
+  onQuickAction,
 }) => {
   const [provisioning, setProvisioning] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -371,6 +374,7 @@ export const AppsHub: React.FC<AppsHubProps> = ({
             bottomDock={bottomDock}
             headerLeft={picker}
             headerActions={actions}
+            onQuickAction={onQuickAction}
           />
         )}
       </div>

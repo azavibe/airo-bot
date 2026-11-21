@@ -33,6 +33,14 @@ app and the desktop app share one version number. A release is tagged
   the Store Manager sees Shopify, the Sales Lead sees leads and Gmail. Change
   it in the bot's settings under "What it can use". Bots read fresh data from
   their tools before they answer; anything they send stays a draft.
+- **Honest outcomes**: when a bot is handed a job, it ends by saying how it
+  went: done, nothing to do, blocked (and what it needs) or needs your OK.
+  Failed jobs say so too. Each bot's settings list its recent work with
+  these outcomes and what each job cost.
+- **App charts and quick actions**: apps get a chart view (pipeline value by
+  stage, invoiced by month, tickets by stage, bookings by month) with a
+  table view, and one-tap "Ask the team" buttons such as "Find new leads"
+  or "Chase overdue invoices" that send the job to the office chat.
 - **Monthly spending caps**: set a hard cap on included AI credits for an
   office (Edit office) and for any bot (its settings). A call that would go
   past a cap is never made; the office's morning plan and queued tasks wait

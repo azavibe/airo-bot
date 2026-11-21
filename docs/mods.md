@@ -62,7 +62,7 @@ A valid Mod `ui_schema` JSON object consists of:
     }
   ],
   "quick_actions": [
-    { "label": "Run Lead Scout Bot", "trigger_workflow_slug": "lead-scout" }
+    { "label": "Find new leads", "ask": "Find 5 new leads that fit this business and add them to the Lead Pipeline." }
   ]
 }
 ```
@@ -73,7 +73,7 @@ A valid Mod `ui_schema` JSON object consists of:
 | `kanban` | Interactive drag-and-drop stage progression | `columns` (array of string stages), `card_fields` (keys to show on cards) |
 | `datatable` | High-density sortable table with filters | `columns` (array of `{ key, label, type }`) |
 | `media_gallery`| Video/image generation feeds (Wan 3.0 / social) | `media_field` (URL key), `caption_field`, `badge_field` |
-| `chart` | Metrics and performance spline or bar graphs | `x_axis`, `y_axis`, `chart_type` (`spline` or `bar`) |
+| `chart` | One series from the records, as bars or a line | `x_axis` (a field, or `status`; dates group by month), optional `y_axis` (a number field to sum; absent counts records), `chart_type` (`bar` or `spline`), optional `order` (the x values' order) |
 
 ### Supported Column Types for `datatable`:
 - `text`: Plain text string

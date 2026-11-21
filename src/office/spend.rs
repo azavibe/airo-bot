@@ -272,7 +272,8 @@ pub async fn notify_cap(
 }
 
 /// GET /agents/:id/stats -- what one bot has spent: this month (and its
-/// cap), last month, and credits per day for the last 30 days.
+/// cap), last month, and credits per day for the last 30 days; and its 10
+/// most recent jobs with their outcomes.
 pub async fn agent_stats(
     State(state): State<AppState>,
     caller: Caller,
@@ -315,7 +316,41 @@ pub async fn agent_stats(
     .bind(agent_id)
     .fetch_all(&state.pool)
     .await?;
+    // Its recent jobs with their honest outcomes and what each cost.
+    type WorkRow = (
+        Uuid,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        String,
+        chrono::DateTime<chrono::Utc>,
+        i64,
+    );
+    let work: Vec<WorkRow> = sqlx::query_as(
+        "SELECT t.id, t.title, t.outcome, t.outcome_note, t.status, t.executor, t.created_at,
+                (CASE WHEN t.executor = 'chat' AND jsonb_typeof(t.payload->'credits') = 'number'
+                      THEN (t.payload->>'credits')::numeric::bigint ELSE 0 END
+                 + COALESCE((SELECT SUM(l.credits_charged) FROM credit_ledger l WHERE l.task_id = t.id), 0)
+                )::bigint
+         FROM tasks t
+         WHERE t.assigned_agent_id = $1 AND t.deleted_at IS NULL
+         ORDER BY t.created_at DESC LIMIT 10",
+    )
+    .bind(agent_id)
+    .fetch_all(&state.pool)
+    .await?;
     Ok(Json(json!({
+        "recent_work": work.into_iter().map(|(id, title, outcome, note, status, executor, at, credits)| json!({
+            "id": id,
+            "title": title,
+            "outcome": outcome,
+            "outcome_note": note,
+            "status": status,
+            "executor": executor,
+            "created_at": at,
+            "credits": credits,
+        })).collect::<Vec<_>>(),
         "month_spent": month_spent,
         "month_calls": month_calls,
         "last_month_spent": last_month_spent,

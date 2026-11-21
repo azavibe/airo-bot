@@ -210,9 +210,11 @@ async fn finish(state: &AppState, task: &ClaimedTaskRow, ok: bool, result: serde
     } else {
         ("FAILED", "failed")
     };
+    // A task that failed says so, unless its outcome was already set.
     if let Err(e) = sqlx::query(
         "UPDATE tasks
          SET fsm_state = $2, status = $3, state_payload = state_payload || $4,
+             outcome = CASE WHEN $2 = 'FAILED' THEN COALESCE(outcome, 'failed') ELSE outcome END,
              wake_at = NULL, updated_at = now()
          WHERE id = $1",
     )
@@ -225,6 +227,36 @@ async fn finish(state: &AppState, task: &ClaimedTaskRow, ok: bool, result: serde
     {
         error!(task_id = %task.id, error = %e, "failed to finish task");
     }
+}
+
+/// A finished task's answer: its OUTCOME line is read and kept on the task,
+/// and the note in the room leads with it ("Blocked: 'Chase invoices'").
+async fn finish_with_outcome(state: &AppState, task: &ClaimedTaskRow, output: &str) {
+    let (text, outcome) = crate::office::outcome::take(output);
+    finish(state, task, true, json!(text)).await;
+    let label = match &outcome {
+        Some((o, note)) => {
+            if let Err(e) = sqlx::query(
+                "UPDATE tasks SET outcome = $2, outcome_note = $3, updated_at = now() WHERE id = $1",
+            )
+            .bind(task.id)
+            .bind(o.as_str())
+            .bind((!note.is_empty()).then_some(note.as_str()))
+            .execute(&state.pool)
+            .await
+            {
+                error!(task_id = %task.id, error = %e, "failed to record a task's outcome");
+            }
+            crate::office::outcome::line(*o, note)
+        }
+        None => String::new(),
+    };
+    let head = outcome
+        .as_ref()
+        .map(|(o, _)| o.label())
+        .unwrap_or("Finished");
+    let body = format!("{head}: '{}'.\n\n{text}\n\n{label}", task.title);
+    note(state, task, body.trim()).await;
 }
 
 async fn note(state: &AppState, task: &ClaimedTaskRow, body: &str) {
@@ -346,15 +378,7 @@ async fn run_initial_step(state: &AppState, task: &ClaimedTaskRow) {
             web: web.is_on(),
         };
         match ai(request).await {
-            Ok(output) => {
-                finish(state, task, true, json!(output)).await;
-                note(
-                    state,
-                    task,
-                    &format!("Done: '{}'.\n\n{}", task.title, output),
-                )
-                .await;
-            }
+            Ok(output) => finish_with_outcome(state, task, &output).await,
             Err(err) => {
                 finish(state, task, false, json!({ "error": err })).await;
                 note(
@@ -475,14 +499,7 @@ async fn run_initial_step(state: &AppState, task: &ClaimedTaskRow) {
     {
         Ok(completion) => {
             budget_gate::record_usage(pool, ledger_id, &completion.usage).await;
-            let output = completion.text;
-            finish(state, task, true, json!(output)).await;
-            note(
-                state,
-                task,
-                &format!("Done: '{}'.\n\n{}", task.title, output),
-            )
-            .await;
+            finish_with_outcome(state, task, &completion.text).await;
         }
         Err(e) => {
             warn!(task_id = %task.id, error = %e, "provider call failed");
@@ -539,7 +556,8 @@ async fn office_prompts(state: &AppState, task: &ClaimedTaskRow) -> (String, Str
         )
     };
     let sys = format!(
-        "You are an autonomous SMB virtual office agent executing an office task. Be concise, actionable, and professional.{lessons_prompt}"
+        "You are an autonomous SMB virtual office agent executing an office task. Be concise, actionable, and professional.{lessons_prompt}{}",
+        crate::office::outcome::INSTRUCTION
     );
     let user_prompt = format!("Task: {}\nPayload: {}", task.title, task.state_payload);
     (sys, user_prompt)
