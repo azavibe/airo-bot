@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Pin, Trash2 } from 'lucide-react';
-import { Agent, Lesson, Memory } from '../types';
+import { Agent, EditOfficeTab, Lesson, Memory } from '../types';
+import { DocumentsPanel } from './DocumentsPanel';
 import { useEscape, closeOnBackdrop } from '../utils/useEscape';
 
 // Small dialogs for naming, renaming and deleting offices and rooms. Each
@@ -362,13 +363,13 @@ export const EditOfficeDialog: React.FC<{
   /** The bots a fact can belong to. */
   agents: Agent[];
   initial: OfficeEdit;
-  /** Open on the Memory tab. */
-  startOnMemory?: boolean;
+  /** The tab it opens on. */
+  startTab?: EditOfficeTab;
   onSubmit: (values: OfficeEdit) => Promise<void>;
   onClose: () => void;
-}> = ({ officeId, agents, initial, startOnMemory = false, onSubmit, onClose }) => {
+}> = ({ officeId, agents, initial, startTab = 'profile', onSubmit, onClose }) => {
   const [values, setValues] = useState<OfficeEdit>(initial);
-  const [tab, setTab] = useState<'profile' | 'memory'>(startOnMemory ? 'memory' : 'profile');
+  const [tab, setTab] = useState<EditOfficeTab>(startTab);
   const set = (patch: Partial<OfficeEdit>) => setValues((v) => ({ ...v, ...patch }));
   const { busy, error, go } = useAction(
     () =>
@@ -405,9 +406,14 @@ export const EditOfficeDialog: React.FC<{
         <button type="button" role="tab" aria-selected={tab === 'memory'} onClick={() => setTab('memory')} className={tabClass(tab === 'memory')}>
           Memory
         </button>
+        <button type="button" role="tab" aria-selected={tab === 'documents'} onClick={() => setTab('documents')} className={tabClass(tab === 'documents')}>
+          Documents
+        </button>
       </div>
       {tab === 'memory' ? (
         <MemoryPanel officeId={officeId} agents={agents} />
+      ) : tab === 'documents' ? (
+        <DocumentsPanel officeId={officeId} website={initial.website} />
       ) : (
       <>
       <label className="block space-y-1.5">

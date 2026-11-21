@@ -33,6 +33,12 @@ app and the desktop app share one version number. A release is tagged
   the Store Manager sees Shopify, the Sales Lead sees leads and Gmail. Change
   it in the bot's settings under "What it can use". Bots read fresh data from
   their tools before they answer; anything they send stays a draft.
+- **Documents**: give the office's bots your price list, FAQ, policies or
+  website pages under Edit office → Documents (PDF, Word, text, Markdown,
+  CSV, pasted text or a page address). Bots are shown the passages that fit
+  the conversation and say which document they used. Search your documents
+  from the same tab. A bot can be told to answer only from documents, so it
+  says "I don't know" instead of guessing.
 
 ### Changed
 - Each screen has one place in the navigation: the sidebar. The chat

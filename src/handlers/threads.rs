@@ -1540,6 +1540,8 @@ async fn deliver_reply(
     // the message says so, with an Undo button each.
     let (body, saved) =
         crate::office::memory::apply_remember(pool, thread_id, architect.id, &body).await;
+    // `[doc 1a2b3c4d]` citations become "(from “Price list”)".
+    let body = crate::office::documents::cite(pool, thread_id, &body).await;
     let (body, actions) = if saved.is_empty() {
         (body, actions)
     } else {
@@ -1703,6 +1705,17 @@ pub(crate) async fn run_agent_reply(
                 sys.push_str(
                     &crate::office::contacts::context_block(&pool, business.workspace_id, &history)
                         .await,
+                );
+                // The passages of the office's documents that fit this
+                // conversation, and whether to answer only from them.
+                sys.push_str(
+                    &crate::office::documents::context_block(
+                        &pool,
+                        business.workspace_id,
+                        agent_id,
+                        &history,
+                    )
+                    .await,
                 );
             }
         }

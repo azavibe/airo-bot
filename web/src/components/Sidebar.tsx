@@ -14,7 +14,7 @@ import {
   Archive,
   Contact,
 } from 'lucide-react';
-import { Agent, Office, Thread, UserProfile } from '../types';
+import { Agent, EditOfficeTab, Office, Thread, UserProfile } from '../types';
 import type { Tab } from '../App';
 import { RowMenu, RowMenuItem, useContextMenu } from './RowMenu';
 import { BotAvatar } from './BotAvatar';
@@ -44,7 +44,7 @@ interface SidebarProps {
   onDeleteOffice: (office: Office) => void;
   /** Name, business, website, focus, goal and daily plan in one dialog;
    *  `memory` opens it on the office's memory. */
-  onEditOffice: (office: Office, memory?: boolean) => void;
+  onEditOffice: (office: Office, tab?: EditOfficeTab) => void;
   onRenameRoom: (thread: Thread) => void;
   onDeleteRoom: (thread: Thread) => void;
   onArchiveRoom: (thread: Thread) => void;
@@ -159,7 +159,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showArchived, setShowArchived] = useState<string[]>([]);
   const officeItems = (office: Office): RowMenuItem[] => [
     { label: 'Edit office…', onSelect: () => onEditOffice(office) },
-    { label: 'Memory…', onSelect: () => onEditOffice(office, true) },
+    { label: 'Memory…', onSelect: () => onEditOffice(office, 'memory') },
+    { label: 'Documents…', onSelect: () => onEditOffice(office, 'documents') },
     { label: 'New bot', onSelect: () => onNewBot(office) },
     { label: 'New room', onSelect: () => onNewRoom(office) },
     { label: 'Set up for a business', onSelect: () => onSetUpOffice(office) },

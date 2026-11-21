@@ -492,6 +492,25 @@ pub fn app(state: AppState) -> Router {
             post(office::contacts::delete_contact),
         )
         .route(
+            "/api/offices/{id}/documents",
+            get(office::documents::list_documents)
+                .post(office::documents::create_document)
+                // Uploads carry a file in base64; every other route keeps 1 MB.
+                .layer(DefaultBodyLimit::max(office::documents::UPLOAD_BODY_LIMIT)),
+        )
+        .route(
+            "/api/offices/{id}/documents/search",
+            get(office::documents::search_documents),
+        )
+        .route(
+            "/api/documents/{id}",
+            get(office::documents::get_document).patch(office::documents::update_document),
+        )
+        .route(
+            "/api/documents/{id}/delete",
+            post(office::documents::delete_document),
+        )
+        .route(
             "/api/contacts/{id}/memory",
             post(office::contacts::add_contact_memory),
         )

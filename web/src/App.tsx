@@ -38,6 +38,7 @@ import {
   AgentTaskPlan,
   Office,
   NoteAction,
+  EditOfficeTab,
 } from './types';
 
 export type Tab = 'chat' | 'apps' | 'approvals' | 'bots' | 'contacts' | 'workflows' | 'settings';
@@ -107,7 +108,7 @@ type Dialog =
   | { kind: 'newRoom'; office: Office }
   | { kind: 'renameRoom'; thread: Thread }
   | { kind: 'deleteRoom'; thread: Thread }
-  | { kind: 'editOffice'; office: Office; memory?: boolean }
+  | { kind: 'editOffice'; office: Office; tab?: EditOfficeTab }
   | { kind: 'renameBot'; agent: Agent }
   | { kind: 'deleteBot'; agent: Agent }
   | { kind: 'deleteNote'; note: Note }
@@ -1031,7 +1032,7 @@ export const App: React.FC = () => {
     onDeleteOffice: (office: Office) => setDialog({ kind: 'deleteOffice', office }),
     onRenameRoom: (thread: Thread) => setDialog({ kind: 'renameRoom', thread }),
     onDeleteRoom: (thread: Thread) => setDialog({ kind: 'deleteRoom', thread }),
-    onEditOffice: (office: Office, memory?: boolean) => setDialog({ kind: 'editOffice', office, memory }),
+    onEditOffice: (office: Office, tab?: EditOfficeTab) => setDialog({ kind: 'editOffice', office, tab }),
     onArchiveRoom: (thread: Thread) => setRoomArchived(thread, true),
     onUnarchiveRoom: (thread: Thread) => setRoomArchived(thread, false),
     agents,
@@ -1455,7 +1456,7 @@ export const App: React.FC = () => {
           agents={agents.filter((a) =>
             roomsOf(dialog.office, threads, offices).some((t) => t.agent_ids?.includes(a.id))
           )}
-          startOnMemory={!!dialog.memory}
+          startTab={dialog.tab}
           initial={{
             name: dialog.office.name,
             business_type: dialog.office.business_type ?? '',

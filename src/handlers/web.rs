@@ -2193,6 +2193,9 @@ pub struct AgentSettingsRequest {
     pub ai_model: Option<String>,
     #[serde(default)]
     pub provider_model: Option<String>,
+    /// Answer only from the office's documents.
+    #[serde(default)]
+    pub documents_only: Option<bool>,
     #[serde(default)]
     pub idempotency_key: Option<String>,
 }
@@ -2206,6 +2209,7 @@ pub struct AgentSettingsView {
     pub ai_engine: Option<String>,
     pub ai_model: Option<String>,
     pub provider_model: Option<String>,
+    pub documents_only: bool,
 }
 
 /// Trims a setting; `None` = unchanged, `Some(None)` = clear.
@@ -2297,9 +2301,10 @@ pub async fn update_agent_settings(
             ai_engine = CASE WHEN $7 THEN $8 ELSE ai_engine END,
             ai_model = CASE WHEN $9 THEN $10 ELSE ai_model END,
             provider_model = CASE WHEN $11 THEN $12 ELSE provider_model END,
+            documents_only = COALESCE($13, documents_only),
             updated_at = now()
          WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND revoked_at IS NULL
-         RETURNING id, name, handle, instructions, ai_engine, ai_model, provider_model",
+         RETURNING id, name, handle, instructions, ai_engine, ai_model, provider_model, documents_only",
     )
     .bind(agent_id)
     .bind(user_id)
@@ -2313,6 +2318,7 @@ pub async fn update_agent_settings(
     .bind(ai_model.flatten())
     .bind(provider_model.is_some())
     .bind(provider_model.flatten())
+    .bind(body.documents_only)
     .fetch_optional(&state.pool)
     .await?
     .ok_or(AppError::NotFound)?;

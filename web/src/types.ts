@@ -185,6 +185,23 @@ export interface Office {
   about?: string | null;
 }
 
+/** Something an office's bots answer from: a file, pasted text or a
+ *  web page, kept as text. */
+export interface OfficeDocument {
+  id: string;
+  workspace_id: string;
+  title: string;
+  kind: 'file' | 'text' | 'page';
+  filename?: string | null;
+  source_url?: string | null;
+  chars: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Which tab the Edit office dialog opens on. */
+export type EditOfficeTab = 'profile' | 'memory' | 'documents';
+
 /** A fact an office remembers: the whole office's, or one bot's. */
 export interface Memory {
   id: string;

@@ -1502,7 +1502,7 @@ async fn shopify_action(
 
 // ---------- Webhooks ----------
 
-fn is_public_ip(ip: IpAddr) -> bool {
+pub(crate) fn is_public_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
             let [a, b, ..] = v4.octets();
