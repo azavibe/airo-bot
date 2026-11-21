@@ -22,6 +22,12 @@ app and the desktop app share one version number. A release is tagged
   them.
 - Rooms share context: each bot sees the latest messages from the office's
   other rooms, and the lessons learned from your approval decisions.
+- **Contacts**: one record per customer, in the sidebar. Leads, invoices,
+  bookings and tickets that name someone link to their contact (by email,
+  phone or name), shown on the contact's timeline; bots add contacts but
+  never change them. Facts about a contact reach a bot only when the
+  conversation names that contact. Stripe customers import without
+  duplicates. Marketing-email consent is kept per contact.
 - **Per-bot access**: each bot sees and fills only its own apps and reads
   only its own connected tools: the Finance Manager sees invoices and Stripe,
   the Store Manager sees Shopify, the Sales Lead sees leads and Gmail. Change

@@ -12,6 +12,7 @@ import {
   MessageSquare,
   ChevronDown,
   Archive,
+  Contact,
 } from 'lucide-react';
 import { Agent, Office, Thread, UserProfile } from '../types';
 import type { Tab } from '../App';
@@ -234,6 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <Users className="w-4 h-4" />,
       meta: agentCount > 0 ? <span className="text-[11px] text-neutral-500 font-mono">{agentCount}</span> : null,
     },
+    { tab: 'contacts', label: 'Contacts', icon: <Contact className="w-4 h-4" /> },
     { tab: 'workflows', label: 'Workflows', icon: <GitBranch className="w-4 h-4" /> },
   ];
   // Connections, devices and admin are sections of Settings (account row below).

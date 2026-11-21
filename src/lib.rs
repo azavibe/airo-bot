@@ -178,6 +178,7 @@ fn is_spa_route(path: &str) -> bool {
         "/procedures",
         "/approvals",
         "/bots",
+        "/contacts",
         "/inbox",
         "/signin",
         "/admin",

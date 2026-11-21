@@ -14,6 +14,7 @@ import { ConnectModal } from './components/ConnectModal';
 import { BottomDock } from './components/BottomDock';
 import { DesktopTitleBar, isDesktopApp } from './components/DesktopTitleBar';
 import { BotSettingsModal } from './components/BotSettingsModal';
+import { ContactsView } from './components/ContactsView';
 import { SearchPalette } from './components/SearchPalette';
 import { TeamModal } from './components/TeamModal';
 import { NameDialog, ConfirmDialog, NewRoomDialog, EditOfficeDialog } from './components/Dialogs';
@@ -39,13 +40,14 @@ import {
   NoteAction,
 } from './types';
 
-export type Tab = 'chat' | 'apps' | 'approvals' | 'bots' | 'workflows' | 'settings';
+export type Tab = 'chat' | 'apps' | 'approvals' | 'bots' | 'contacts' | 'workflows' | 'settings';
 
 const TAB_PATHS: Record<Tab, string> = {
   chat: '/',
   apps: '/apps',
   approvals: '/approvals',
   bots: '/bots',
+  contacts: '/contacts',
   workflows: '/workflows',
   settings: '/settings',
 };
@@ -57,6 +59,7 @@ const tabFromPath = (path: string): Tab => {
   if (path.startsWith('/approvals')) return 'approvals';
   if (path.startsWith('/bots') || path.startsWith('/tasks') || path.startsWith('/agents')) return 'bots';
   if (path.startsWith('/workflows') || path.startsWith('/procedures')) return 'workflows';
+  if (path.startsWith('/contacts')) return 'contacts';
   // Connections and Admin live inside Settings; their old addresses still work.
   if (
     path.startsWith('/settings') ||
@@ -958,7 +961,7 @@ export const App: React.FC = () => {
         .then(() => showOk('Forgotten.'))
         .catch((e) => showError(e instanceof Error ? e.message : 'That did not work.'));
     } else if (action.kind === 'open' && action.target) {
-      const tabs: Tab[] = ['chat', 'apps', 'approvals', 'bots', 'workflows'];
+      const tabs: Tab[] = ['chat', 'apps', 'approvals', 'bots', 'contacts', 'workflows'];
       if (action.target === 'connections' || action.target === 'account') openSettings(action.target);
       else if ((tabs as string[]).includes(action.target)) handleTabChange(action.target as Tab);
     }
@@ -1216,6 +1219,17 @@ export const App: React.FC = () => {
                     ? { today: wallet.web_runs_today ?? 0, limit: wallet.web_runs_limit ?? 0 }
                     : null
                 }
+                bottomDock={dockElement}
+              />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'contacts' && (
+          <div className="col-span-12 md:col-span-9 h-full min-h-0 overflow-hidden">
+            <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
+              <ContactsView
+                office={activeOffice ?? offices.find((o) => o.primary) ?? null}
                 bottomDock={dockElement}
               />
             </div>
