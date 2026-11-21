@@ -1,6 +1,7 @@
 pub mod access;
 pub mod architect;
 pub mod budget_gate;
+pub mod contacts;
 pub mod context;
 pub mod daily;
 pub mod evolver;

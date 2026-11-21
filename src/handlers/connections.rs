@@ -1048,6 +1048,48 @@ pub(crate) async fn read_for_bot(
     action: &str,
     input: Value,
 ) -> Result<Value, String> {
+    read_action(
+        state,
+        workspace_id,
+        None,
+        Some(agent_id),
+        connection_id,
+        action,
+        input,
+    )
+    .await
+}
+
+/// [`read_for_bot`] on the owner's behalf (an import), logged as theirs.
+pub(crate) async fn read_for_owner(
+    state: &AppState,
+    workspace_id: Uuid,
+    user_id: Uuid,
+    connection_id: Uuid,
+    action: &str,
+    input: Value,
+) -> Result<Value, String> {
+    read_action(
+        state,
+        workspace_id,
+        Some(user_id),
+        None,
+        connection_id,
+        action,
+        input,
+    )
+    .await
+}
+
+async fn read_action(
+    state: &AppState,
+    workspace_id: Uuid,
+    actor_user: Option<Uuid>,
+    actor_agent: Option<Uuid>,
+    connection_id: Uuid,
+    action: &str,
+    input: Value,
+) -> Result<Value, String> {
     let row = sqlx::query_as::<_, ConnectionRow>(&format!(
         "SELECT {ROW_COLUMNS} FROM connections
          WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL"
@@ -1090,12 +1132,13 @@ pub(crate) async fn read_for_bot(
     let outcome = connectors::run_action(&ctx, spec.id, &input).await;
     let _ = sqlx::query(
         "INSERT INTO connection_actions
-            (connection_id, workspace_id, actor_agent_id, action, status)
-         VALUES ($1, $2, $3, $4, $5)",
+            (connection_id, workspace_id, actor_user_id, actor_agent_id, action, status)
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
     .bind(row.id)
     .bind(row.workspace_id)
-    .bind(agent_id)
+    .bind(actor_user)
+    .bind(actor_agent)
     .bind(spec.id)
     .bind(if outcome.is_ok() { "ok" } else { "error" })
     .execute(&state.pool)

@@ -595,6 +595,8 @@ pub struct OfficeRecord {
     pub data: serde_json::Value,
     pub content_hash: Option<i64>,
     pub created_by_agent_id: Option<Uuid>,
+    /// The contact this record is about, when it names one.
+    pub contact_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
