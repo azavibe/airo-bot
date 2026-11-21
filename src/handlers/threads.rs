@@ -1691,6 +1691,15 @@ pub(crate) async fn run_agent_reply(
             {
                 sys.push_str(&office);
             }
+            // Fresh data from the connected tools this bot may use.
+            if let Some(business) =
+                crate::office::context::business_of_thread(&pool, thread_id).await
+            {
+                sys.push_str(
+                    &crate::office::access::tools_block(&state, business.workspace_id, agent_id)
+                        .await,
+                );
+            }
         }
         if let Some(line) = &mode.task_line {
             history.push('\n');

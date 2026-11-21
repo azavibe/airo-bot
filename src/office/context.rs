@@ -235,7 +235,25 @@ pub fn prompt(business: &Business, apps: &[AppInfo]) -> String {
 pub async fn prompt_for_thread(pool: &PgPool, thread_id: Uuid, agent_id: Uuid) -> Option<String> {
     let business = business_of_thread(pool, thread_id).await?;
     let apps = apps_of(pool, business.workspace_id).await;
-    let mut out = prompt(&business, &apps);
+    // A bot is told about (and may fill) only the apps it may use.
+    let access = super::access::effective(pool, business.workspace_id, agent_id).await;
+    let usable: Vec<AppInfo> = apps
+        .iter()
+        .filter(|a| access.may_use_app(&a.slug))
+        .cloned()
+        .collect();
+    let mut out = prompt(&business, &usable);
+    let name: Option<String> = sqlx::query_scalar("SELECT name FROM agents WHERE id = $1")
+        .bind(agent_id)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten();
+    let is_architect = name.as_deref() == Some(super::group::ARCHITECT_NAME);
+    out.push_str(
+        &super::access::records_block(pool, business.workspace_id, agent_id, &apps, is_architect)
+            .await,
+    );
     out.push_str(
         &super::memory::prompt_block(pool, business.workspace_id, thread_id, agent_id).await,
     );
@@ -313,7 +331,13 @@ pub async fn apply_records(
     let Some(business) = business_of_thread(pool, thread_id).await else {
         return (text.to_string(), None);
     };
-    let apps = apps_of(pool, business.workspace_id).await;
+    // Records go only into apps this bot may use; others stay as text.
+    let access = super::access::effective(pool, business.workspace_id, agent_id).await;
+    let apps: Vec<AppInfo> = apps_of(pool, business.workspace_id)
+        .await
+        .into_iter()
+        .filter(|a| access.may_use_app(&a.slug))
+        .collect();
     let (records, rest) = parse_records(text, &apps);
     if records.is_empty() {
         return (text.to_string(), None);

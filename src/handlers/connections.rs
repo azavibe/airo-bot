@@ -1036,6 +1036,90 @@ pub async fn run_action(
     }
 }
 
+/// Runs one read-only action for a bot that was given this connection (see
+/// `office::access`), the way `run_action` does for API callers: the same
+/// token refresh, logging and reconnect marking. Writes are refused; they
+/// stay drafts and approvals. The error is a short message a bot may see.
+pub(crate) async fn read_for_bot(
+    state: &AppState,
+    workspace_id: Uuid,
+    agent_id: Uuid,
+    connection_id: Uuid,
+    action: &str,
+    input: Value,
+) -> Result<Value, String> {
+    let row = sqlx::query_as::<_, ConnectionRow>(&format!(
+        "SELECT {ROW_COLUMNS} FROM connections
+         WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL"
+    ))
+    .bind(connection_id)
+    .bind(workspace_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|_| "could not read the connection".to_string())?
+    .ok_or_else(|| "the connection was removed".to_string())?;
+    let provider = row.provider().map_err(|_| "unknown provider".to_string())?;
+    let spec = connectors::action(provider, action).ok_or_else(|| "unknown action".to_string())?;
+    if spec.writes {
+        return Err("bots may only read through a connection here".to_string());
+    }
+    if row.status == "needs_reconnect" {
+        return Err(format!("{} needs to be connected again", provider.name()));
+    }
+    if let Some(product) = spec.product {
+        if !connectors::google_products(&row.scopes).contains(&product) {
+            return Err(format!(
+                "this Google connection has no {product} permission"
+            ));
+        }
+    }
+    let apps = connector_apps(state)
+        .await
+        .map_err(|_| "connections are not set up".to_string())?;
+    let token = access_token(state, &apps, &row, provider)
+        .await
+        .map_err(|_| format!("{} needs to be connected again", provider.name()))?;
+    let ctx = ActionContext {
+        apps: &apps,
+        provider,
+        access_token: token.as_deref(),
+        external_account_id: row.external_account_id.as_deref(),
+        config: &row.config,
+        production: state.config.production,
+    };
+    let outcome = connectors::run_action(&ctx, spec.id, &input).await;
+    let _ = sqlx::query(
+        "INSERT INTO connection_actions
+            (connection_id, workspace_id, actor_agent_id, action, status)
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(row.id)
+    .bind(row.workspace_id)
+    .bind(agent_id)
+    .bind(spec.id)
+    .bind(if outcome.is_ok() { "ok" } else { "error" })
+    .execute(&state.pool)
+    .await;
+    match outcome {
+        Ok(result) => {
+            let _ = sqlx::query(
+                "UPDATE connections SET last_used_at = now(), last_error = NULL, updated_at = now()
+                 WHERE id = $1",
+            )
+            .bind(row.id)
+            .execute(&state.pool)
+            .await;
+            Ok(result)
+        }
+        Err(error) => {
+            if error.needs_reconnect {
+                let _ = mark_needs_reconnect(state, row.id, &error.public).await;
+            }
+            Err(error.public)
+        }
+    }
+}
+
 // ---------- Provider apps (Google sign-in and friends) ----------
 
 /// The OAuth apps this server can use: the environment's first, then the
