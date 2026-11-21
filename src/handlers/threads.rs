@@ -622,8 +622,20 @@ pub async fn get_thread(
         .into_response());
     }
 
+    // The newest notes, in reading order (oldest first), so a room past the
+    // cap reloads with its latest messages rather than its first ones.
+    // TODO(air): past MAX_NOTES_PER_THREAD a reloaded room has no way to page
+    // back to its oldest notes. A `seq` cursor here plus a "load older"
+    // control in the web app would reach them, at the cost of a second load
+    // path in the chat; the spec does not ask for one yet.
     let notes = sqlx::query_as::<_, Note>(
-        "SELECT * FROM notes WHERE thread_id = $1 AND deleted_at IS NULL ORDER BY seq ASC LIMIT $2",
+        "SELECT * FROM (
+             SELECT * FROM notes
+             WHERE thread_id = $1 AND deleted_at IS NULL
+             ORDER BY seq DESC
+             LIMIT $2
+         ) newest
+         ORDER BY seq ASC",
     )
     .bind(thread.id)
     .bind(MAX_NOTES_PER_THREAD)
