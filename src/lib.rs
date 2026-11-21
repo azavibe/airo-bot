@@ -467,6 +467,14 @@ pub fn app(state: AppState) -> Router {
             post(office::memory::delete_lesson),
         )
         .route(
+            "/agents/{id}/access",
+            get(office::access::get_access).put(office::access::set_access),
+        )
+        .route(
+            "/agents/{id}/access/reset",
+            post(office::access::reset_access),
+        )
+        .route(
             "/settings/agents/{id}/rename",
             post(handlers::web::rename_agent),
         )

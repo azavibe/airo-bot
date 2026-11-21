@@ -22,6 +22,11 @@ app and the desktop app share one version number. A release is tagged
   them.
 - Rooms share context: each bot sees the latest messages from the office's
   other rooms, and the lessons learned from your approval decisions.
+- **Per-bot access**: each bot sees and fills only its own apps and reads
+  only its own connected tools: the Finance Manager sees invoices and Stripe,
+  the Store Manager sees Shopify, the Sales Lead sees leads and Gmail. Change
+  it in the bot's settings under "What it can use". Bots read fresh data from
+  their tools before they answer; anything they send stays a draft.
 
 ### Changed
 - Each screen has one place in the navigation: the sidebar. The chat

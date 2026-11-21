@@ -914,6 +914,15 @@ export const App: React.FC = () => {
       return next;
     });
   };
+  // The office a bot's settings are about: the one you're in when the bot
+  // works there, else the office of its first room.
+  const officeOfBot = (agent: Agent | null): Office | null => {
+    if (!agent) return null;
+    const rooms = threads.filter((t) => t.agent_ids?.includes(agent.id));
+    const here = officeOfThread(activeThreadId);
+    if (here && rooms.some((t) => officeOfThread(t.id)?.id === here.id)) return here;
+    return rooms.length > 0 ? officeOfThread(rooms[0].id) ?? null : null;
+  };
   const openNewBot = (office?: Office) => {
     if (isGuest) {
       setIsAuthModalOpen(true);
@@ -1516,6 +1525,7 @@ export const App: React.FC = () => {
       <BotSettingsModal
         bot={editingBot}
         createIn={editingBot ? null : newBotOffice}
+        office={officeOfBot(editingBot)}
         localMode={!!userProfile?.local_mode}
         localEngine={localEngine}
         onClose={() => {

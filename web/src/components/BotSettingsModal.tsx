@@ -3,6 +3,7 @@ import { X, Loader2 } from 'lucide-react';
 import { Agent, LocalEngineId, Office } from '../types';
 import { botModelLabel } from '../utils/format';
 import { useEscape, closeOnBackdrop } from '../utils/useEscape';
+import { BotAccessPanel } from './BotAccessPanel';
 
 // One bot's settings: its name, its character, and which AI it thinks
 // with. In the desktop app that is a tool on this computer (Claude Code,
@@ -70,6 +71,8 @@ interface Props {
   localMode: boolean;
   /** Desktop app: the AI tool chosen for this computer. */
   localEngine?: string | null;
+  /** The office whose apps and tools this bot's access is about. */
+  office?: Office | null;
   onClose: () => void;
   onSaved: (bot: Agent) => void;
   onCreated?: (bot: Agent, roomId: string | null) => void;
@@ -85,6 +88,7 @@ export const BotSettingsModal: React.FC<Props> = ({
   createIn = null,
   localMode,
   localEngine,
+  office = null,
   onClose,
   onSaved,
   onCreated,
@@ -339,6 +343,8 @@ export const BotSettingsModal: React.FC<Props> = ({
             </div>
           )}
         </div>
+
+        {bot && office && <BotAccessPanel botId={bot.id} office={office} />}
 
         <div className="flex items-center justify-between pt-1">
           {error ? <span className="text-xs text-red-300">{error}</span> : <span />}
