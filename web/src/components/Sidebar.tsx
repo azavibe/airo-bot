@@ -159,6 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showArchived, setShowArchived] = useState<string[]>([]);
   const officeItems = (office: Office): RowMenuItem[] => [
     { label: 'Edit office…', onSelect: () => onEditOffice(office) },
+    { label: 'Goal & milestones…', onSelect: () => onEditOffice(office, 'goal') },
     { label: 'Memory…', onSelect: () => onEditOffice(office, 'memory') },
     { label: 'Documents…', onSelect: () => onEditOffice(office, 'documents') },
     { label: 'New bot', onSelect: () => onNewBot(office) },

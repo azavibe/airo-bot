@@ -7,6 +7,7 @@ pub mod daily;
 pub mod documents;
 pub mod evolver;
 pub mod fsm_dispatcher;
+pub mod goals;
 pub mod group;
 pub mod kickoff;
 pub mod memory;

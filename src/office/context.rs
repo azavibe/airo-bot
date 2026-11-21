@@ -254,6 +254,7 @@ pub async fn prompt_for_thread(pool: &PgPool, thread_id: Uuid, agent_id: Uuid) -
         &super::access::records_block(pool, business.workspace_id, agent_id, &apps, is_architect)
             .await,
     );
+    out.push_str(&super::goals::prompt_block(pool, business.workspace_id, is_architect).await);
     out.push_str(
         &super::memory::prompt_block(pool, business.workspace_id, thread_id, agent_id).await,
     );

@@ -499,6 +499,19 @@ pub fn app(state: AppState) -> Router {
                 // Uploads carry a file in base64; every other route keeps 1 MB.
                 .layer(DefaultBodyLimit::max(office::documents::UPLOAD_BODY_LIMIT)),
         )
+        .route("/api/offices/{id}/goal", get(office::goals::get_goal))
+        .route(
+            "/api/offices/{id}/milestones",
+            post(office::goals::create_milestone),
+        )
+        .route(
+            "/api/milestones/{id}",
+            patch(office::goals::update_milestone),
+        )
+        .route(
+            "/api/milestones/{id}/delete",
+            post(office::goals::delete_milestone),
+        )
         .route(
             "/api/offices/{id}/documents/search",
             get(office::documents::search_documents),

@@ -115,6 +115,17 @@ pub async fn run_daily_plan_loop(state: AppState) {
             Ok(n) => tracing::info!(offices = n, "daily plans started"),
             Err(error) => tracing::warn!(?error, "daily plan tick failed"),
         }
+        // Opt-in check-ins and the Monday report share this loop.
+        match super::goals::run_due_check_ins(&state).await {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(offices = n, "check-ins started"),
+            Err(error) => tracing::warn!(?error, "check-in tick failed"),
+        }
+        match super::goals::run_due_reports(&state).await {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(offices = n, "weekly reports posted"),
+            Err(error) => tracing::warn!(?error, "weekly report tick failed"),
+        }
     }
 }
 
