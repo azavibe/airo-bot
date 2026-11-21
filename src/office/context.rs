@@ -20,8 +20,16 @@ const MAX_VALUE_CHARS: usize = 500;
 
 /// A record a bot wrote: which app (index into the office's apps) and its data.
 pub type FoundRecord = (usize, Map<String, Value>);
-/// An office row: id, name, business type, website, focus.
-type OfficeRow = (Uuid, String, Option<String>, Option<String>, Option<String>);
+/// An office row: id, name, business type, website, focus, goal, about.
+type OfficeRow = (
+    Uuid,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
 
 /// An app a bot can fill: where records go and what they look like.
 #[derive(Debug, Clone)]
@@ -117,13 +125,17 @@ pub struct Business {
     pub business_type: Option<String>,
     pub website: Option<String>,
     pub focus: Option<String>,
+    /// Where the business is going (the owner's goal).
+    pub goal: Option<String>,
+    /// What it is like: hours, prices, tone, policies.
+    pub about: Option<String>,
 }
 
 /// The office a room belongs to (rooms made before offices belong to the
 /// owner's first office).
 pub async fn business_of_thread(pool: &PgPool, thread_id: Uuid) -> Option<Business> {
     let row: Option<OfficeRow> = sqlx::query_as(
-        "SELECT w.id, w.name, w.business_type, w.website, w.focus
+        "SELECT w.id, w.name, w.business_type, w.website, w.focus, w.goal, w.about
              FROM threads t
              JOIN workspaces w ON w.id = COALESCE(t.workspace_id, (
                  SELECT w2.id FROM workspaces w2
@@ -136,13 +148,15 @@ pub async fn business_of_thread(pool: &PgPool, thread_id: Uuid) -> Option<Busine
     .await
     .ok()
     .flatten();
-    let (workspace_id, name, business_type, website, focus) = row?;
+    let (workspace_id, name, business_type, website, focus, goal, about) = row?;
     Some(Business {
         workspace_id,
         name,
         business_type: business_type.filter(|b| !b.trim().is_empty() && b != "Small business"),
         website,
         focus,
+        goal: goal.filter(|g| !g.trim().is_empty()),
+        about: about.filter(|a| !a.trim().is_empty()),
     })
 }
 
@@ -174,11 +188,19 @@ pub fn prompt(business: &Business, apps: &[AppInfo]) -> String {
     if let Some(focus) = &business.focus {
         out.push_str(&format!(" What matters most this month: {focus}."));
     }
+    if let Some(goal) = &business.goal {
+        out.push_str(&format!(
+            " Where the business is going: {goal}. Work toward it."
+        ));
+    }
     out.push_str(
         " If the name says what the business is (a hotel, a clinic, a bakery), work from that.\n\
          Airobot is this business's own back office: its CRM, bookings, support desk, invoices and social studio are the apps below, inside Airobot. \
          Never recommend, compare or price other software (HubSpot, Calendly, Zendesk, QuickBooks and the like), and never treat software or CRM as what this business sells.\n",
     );
+    if let Some(about) = &business.about {
+        out.push_str(&format!("\n## About the business\n{about}\n"));
+    }
     if !apps.is_empty() {
         out.push_str("\n## Apps you can fill\n");
         for app in apps {
@@ -207,12 +229,17 @@ pub fn prompt(business: &Business, apps: &[AppInfo]) -> String {
     out
 }
 
-/// The office prompt for a bot answering in `thread_id`, if the room is in
-/// an office.
-pub async fn prompt_for_thread(pool: &PgPool, thread_id: Uuid) -> Option<String> {
+/// The office prompt for `agent_id` answering in `thread_id`, if the room
+/// is in an office: the business, its apps, what the office remembers, the
+/// lessons it learned and what happened lately in its other rooms.
+pub async fn prompt_for_thread(pool: &PgPool, thread_id: Uuid, agent_id: Uuid) -> Option<String> {
     let business = business_of_thread(pool, thread_id).await?;
     let apps = apps_of(pool, business.workspace_id).await;
-    Some(prompt(&business, &apps))
+    let mut out = prompt(&business, &apps);
+    out.push_str(
+        &super::memory::prompt_block(pool, business.workspace_id, thread_id, agent_id).await,
+    );
+    Some(out)
 }
 
 /// Records found in an answer: (index into `apps`, data).
@@ -405,9 +432,13 @@ mod tests {
             business_type: None,
             website: None,
             focus: None,
+            goal: Some("Open a second hotel by summer".into()),
+            about: Some("Check-in from 2pm. Breakfast is included.".into()),
         };
         let text = prompt(&business, &[crm()]);
         assert!(text.contains("You work for Bamboo Hotel."));
+        assert!(text.contains("Where the business is going: Open a second hotel by summer."));
+        assert!(text.contains("## About the business\nCheck-in from 2pm."));
         assert!(text.contains("ADD <app>"));
         assert!(text.contains("leads-pipeline"));
         assert!(text.contains("Question: "));

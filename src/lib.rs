@@ -454,6 +454,19 @@ pub fn app(state: AppState) -> Router {
         )
         .route("/agents/{id}/delete", post(handlers::web::delete_agent))
         .route(
+            "/api/offices/{id}/memory",
+            get(office::memory::list_memory).post(office::memory::create_memory),
+        )
+        .route("/api/memories/{id}", patch(office::memory::update_memory))
+        .route(
+            "/api/memories/{id}/delete",
+            post(office::memory::delete_memory),
+        )
+        .route(
+            "/api/lessons/{id}/delete",
+            post(office::memory::delete_lesson),
+        )
+        .route(
             "/settings/agents/{id}/rename",
             post(handlers::web::rename_agent),
         )

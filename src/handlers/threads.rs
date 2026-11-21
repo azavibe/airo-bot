@@ -1536,6 +1536,25 @@ async fn deliver_reply(
     // apps; the chat shows a short "Added ..." line instead.
     let (body, actions) =
         crate::office::context::apply_records(pool, thread_id, architect.id, body).await;
+    // Facts it saved (`REMEMBER: ...` lines) go into the office's memory and
+    // the message says so, with an Undo button each.
+    let (body, saved) =
+        crate::office::memory::apply_remember(pool, thread_id, architect.id, &body).await;
+    let (body, actions) = if saved.is_empty() {
+        (body, actions)
+    } else {
+        let (line, buttons) = crate::office::memory::remembered_note(&saved);
+        let mut all = actions
+            .and_then(|a| a.as_array().cloned())
+            .unwrap_or_default();
+        all.extend(buttons);
+        let body = if body.is_empty() {
+            line
+        } else {
+            format!("{body}\n\n{line}")
+        };
+        (body, Some(serde_json::Value::Array(all)))
+    };
     let body = body.as_str();
     if !mode.route || team.is_empty() {
         insert_bot_note(
@@ -1667,7 +1686,8 @@ pub(crate) async fn run_agent_reply(
         // Office bots know the business and its apps; the general
         // Assistant stays general.
         if agent.name != crate::office::ASSISTANT_NAME {
-            if let Some(office) = crate::office::context::prompt_for_thread(&pool, thread_id).await
+            if let Some(office) =
+                crate::office::context::prompt_for_thread(&pool, thread_id, agent_id).await
             {
                 sys.push_str(&office);
             }
