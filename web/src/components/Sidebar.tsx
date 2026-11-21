@@ -11,10 +11,12 @@ import {
   GitBranch,
   MessageSquare,
   ChevronDown,
+  Archive,
 } from 'lucide-react';
-import { Office, Thread, UserProfile } from '../types';
+import { Agent, Office, Thread, UserProfile } from '../types';
 import type { Tab } from '../App';
-import { RowMenu } from './RowMenu';
+import { RowMenu, RowMenuItem, useContextMenu } from './RowMenu';
+import { BotAvatar } from './BotAvatar';
 import { roomName } from '../utils/format';
 
 interface SidebarProps {
@@ -39,11 +41,58 @@ interface SidebarProps {
   /** Turns the Architect's morning plan on or off. */
   onToggleDailyPlan: (office: Office) => void;
   onDeleteOffice: (office: Office) => void;
+  /** Name, business, website, focus and daily plan in one dialog. */
+  onEditOffice: (office: Office) => void;
   onRenameRoom: (thread: Thread) => void;
   onDeleteRoom: (thread: Thread) => void;
+  onArchiveRoom: (thread: Thread) => void;
+  onUnarchiveRoom: (thread: Thread) => void;
+  /** The person's bots: a room with one bot is shown as that bot. */
+  agents: Agent[];
+  onOpenBot: (agent: Agent) => void;
+  onRenameBot: (agent: Agent) => void;
+  onDeleteBot: (agent: Agent) => void;
   pendingApprovalsCount?: number;
   agentCount?: number;
 }
+
+/** The bot a room belongs to: a room with exactly one bot is that bot's. */
+export const botOfRoom = (thread: Thread, agents: Agent[]): Agent | undefined =>
+  thread.kind !== 'office' && thread.agent_ids?.length === 1
+    ? agents.find((a) => a.id === thread.agent_ids![0])
+    : undefined;
+
+/** A room's name as shown: its bot's name, else the room's own name. */
+export const roomLabel = (thread: Thread, agents: Agent[]) =>
+  botOfRoom(thread, agents)?.name ?? roomName(thread.title);
+
+/** A room's picture: its bot's avatar, or two overlapping ones for a room
+ *  shared by several bots. */
+export const RoomIcon: React.FC<{ thread: Thread; agents: Agent[]; size?: number }> = ({
+  thread,
+  agents,
+  size = 18,
+}) => {
+  const bots = (thread.agent_ids ?? [])
+    .map((id) => agents.find((a) => a.id === id))
+    .filter((a): a is Agent => !!a)
+    .slice(0, 2);
+  if (bots.length === 0) {
+    return <span aria-hidden="true" className="rounded-full bg-white/10 flex-shrink-0" style={{ width: size, height: size }} />;
+  }
+  if (bots.length === 1) return <BotAvatar name={bots[0].name} id={bots[0].id} size={size} />;
+  const small = Math.round(size * 0.8);
+  return (
+    <span aria-hidden="true" className="relative flex-shrink-0" style={{ width: size + small * 0.45, height: size }}>
+      <span className="absolute left-0 top-0">
+        <BotAvatar name={bots[0].name} id={bots[0].id} size={small} />
+      </span>
+      <span className="absolute right-0 bottom-0">
+        <BotAvatar name={bots[1].name} id={bots[1].id} size={small} />
+      </span>
+    </span>
+  );
+};
 
 /** The rooms of one office; rooms made before offices belong to the first. */
 export const roomsOf = (office: Office, threads: Thread[], offices: Office[]) =>
@@ -91,11 +140,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRenameOffice,
   onToggleDailyPlan,
   onDeleteOffice,
+  onEditOffice,
   onRenameRoom,
   onDeleteRoom,
+  onArchiveRoom,
+  onUnarchiveRoom,
+  agents,
+  onOpenBot,
+  onRenameBot,
+  onDeleteBot,
   pendingApprovalsCount = 0,
   agentCount = 0,
 }) => {
+  // Right-click shows the same choices as "⋯", never the browser's menu.
+  const contextMenu = useContextMenu();
+  const [showArchived, setShowArchived] = useState<string[]>([]);
+  const officeItems = (office: Office): RowMenuItem[] => [
+    { label: 'Edit office…', onSelect: () => onEditOffice(office) },
+    { label: 'New bot', onSelect: () => onNewBot(office) },
+    { label: 'New room', onSelect: () => onNewRoom(office) },
+    { label: 'Set up for a business', onSelect: () => onSetUpOffice(office) },
+    { label: 'Rename', onSelect: () => onRenameOffice(office) },
+    {
+      label: office.daily_plan === false ? 'Turn on daily plan' : 'Turn off daily plan',
+      onSelect: () => onToggleDailyPlan(office),
+    },
+    ...(office.primary ? [] : [{ label: 'Delete office', danger: true, onSelect: () => onDeleteOffice(office) }]),
+  ];
+  // A bot's room offers the bot's choices; a shared room, the room's.
+  const roomItems = (t: Thread): RowMenuItem[] => {
+    const bot = botOfRoom(t, agents);
+    if (t.archived_at) {
+      return [
+        { label: 'Restore', onSelect: () => onUnarchiveRoom(t) },
+        bot
+          ? { label: 'Delete bot', danger: true, onSelect: () => onDeleteBot(bot) }
+          : { label: 'Delete room', danger: true, onSelect: () => onDeleteRoom(t) },
+      ];
+    }
+    if (bot) {
+      return [
+        { label: 'Bot settings', onSelect: () => onOpenBot(bot) },
+        { label: 'Rename bot', onSelect: () => onRenameBot(bot) },
+        { label: 'Archive', onSelect: () => onArchiveRoom(t) },
+        { label: 'Delete bot', danger: true, onSelect: () => onDeleteBot(bot) },
+      ];
+    }
+    return [
+      { label: 'Rename room', onSelect: () => onRenameRoom(t) },
+      { label: 'Archive room', onSelect: () => onArchiveRoom(t) },
+      { label: 'Delete room', danger: true, onSelect: () => onDeleteRoom(t) },
+    ];
+  };
   const isAuthenticated = userProfile?.authenticated ?? false;
   const displayHandle =
     userProfile?.handle || (userProfile?.email ? userProfile.email.split('@')[0] : 'you');
@@ -142,6 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside className="w-full h-full flex flex-col text-neutral-300 overflow-hidden select-none">
+      {contextMenu.menu}
       <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-3 pb-3">
         {/* New and Search: level with the other panels' headers */}
         <div className="h-14 flex items-center gap-1">
@@ -209,12 +306,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             offices.map((office) => {
               const all = roomsOf(office, threads, offices);
               const chat = all.find((t) => t.kind === 'office');
-              const rooms = all.filter((t) => t.kind !== 'office');
+              const rooms = all.filter((t) => t.kind !== 'office' && !t.archived_at);
+              const archived = all.filter((t) => t.kind !== 'office' && !!t.archived_at);
+              const archivedOpen = showArchived.includes(office.id);
               const isCollapsed = collapsed.includes(office.id);
               const chatActive = !!chat && chat.id === activeThreadId && activeTab === 'chat';
               return (
                 <section key={office.id} aria-label={office.name}>
-                  <div className="group h-8 flex items-center gap-1 pl-3 pr-1">
+                  <div
+                    className="group h-8 flex items-center gap-1 pl-3 pr-1"
+                    onContextMenu={(e) => contextMenu.open(e, officeItems(office))}
+                  >
                     {/* The name opens the office's group chat; only the arrow collapses. */}
                     <button
                       onClick={() => {
@@ -237,20 +339,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                     </button>
-                    <RowMenu
-                      label={`${office.name} options`}
-                      className={hoverReveal}
-                      items={[
-                        { label: 'New room', onSelect: () => onNewRoom(office) },
-                        { label: 'Set up for a business', onSelect: () => onSetUpOffice(office) },
-                        { label: 'Rename', onSelect: () => onRenameOffice(office) },
-                        {
-                          label: office.daily_plan === false ? 'Turn on daily plan' : 'Turn off daily plan',
-                          onSelect: () => onToggleDailyPlan(office),
-                        },
-                        ...(office.primary ? [] : [{ label: 'Delete office', danger: true, onSelect: () => onDeleteOffice(office) }]),
-                      ]}
-                    />
+                    <RowMenu label={`${office.name} options`} className={hoverReveal} items={officeItems(office)} />
                     <button
                       onClick={() => onNewBot(office)}
                       title={`New bot in ${office.name}`}
@@ -273,8 +362,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       ) : (
                         rooms.map((t) => {
                           const isActive = activeThreadId === t.id && activeTab === 'chat';
+                          const label = roomLabel(t, agents);
                           return (
-                            <div key={t.id} className={`group relative ${rowClass(isActive)} !px-0`}>
+                            <div
+                              key={t.id}
+                              className={`group relative ${rowClass(isActive)} !px-0`}
+                              onContextMenu={(e) => contextMenu.open(e, roomItems(t))}
+                            >
                               <button
                                 onClick={() => {
                                   onSelectThread(t.id);
@@ -282,20 +376,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 }}
                                 className="flex-1 min-w-0 h-full flex items-center gap-2 pl-3 text-left"
                               >
-                                <span className="text-neutral-500">#</span>
-                                <span className="truncate">{roomName(t.title)}</span>
+                                <RoomIcon thread={t} agents={agents} />
+                                <span className="truncate">{label}</span>
                               </button>
-                              <RowMenu
-                                label={`${roomName(t.title)} options`}
-                                className={`mr-1.5 ${hoverReveal}`}
-                                items={[
-                                  { label: 'Rename', onSelect: () => onRenameRoom(t) },
-                                  { label: 'Delete room', danger: true, onSelect: () => onDeleteRoom(t) },
-                                ]}
-                              />
+                              <RowMenu label={`${label} options`} className={`mr-1.5 ${hoverReveal}`} items={roomItems(t)} />
                             </div>
                           );
                         })
+                      )}
+                      {archived.length > 0 && (
+                        <>
+                          <button
+                            onClick={() =>
+                              setShowArchived((prev) =>
+                                prev.includes(office.id) ? prev.filter((x) => x !== office.id) : [...prev, office.id]
+                              )
+                            }
+                            aria-expanded={archivedOpen}
+                            className="w-full h-7 flex items-center gap-2 px-3 rounded-lg text-[12px] text-neutral-500 hover:text-white hover:bg-white/[0.04] transition-colors"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                            <span className="flex-1 text-left">Archived</span>
+                            <span className="font-mono text-[11px]">{archived.length}</span>
+                          </button>
+                          {archivedOpen &&
+                            archived.map((t) => {
+                              const isActive = activeThreadId === t.id && activeTab === 'chat';
+                              const label = roomLabel(t, agents);
+                              return (
+                                <div
+                                  key={t.id}
+                                  className={`group relative ${rowClass(isActive)} !px-0 opacity-70`}
+                                  onContextMenu={(e) => contextMenu.open(e, roomItems(t))}
+                                >
+                                  <button
+                                    onClick={() => {
+                                      onSelectThread(t.id);
+                                      go('chat');
+                                    }}
+                                    className="flex-1 min-w-0 h-full flex items-center gap-2 pl-3 text-left"
+                                  >
+                                    <RoomIcon thread={t} agents={agents} />
+                                    <span className="truncate">{label}</span>
+                                  </button>
+                                  <RowMenu label={`${label} options`} className={`mr-1.5 ${hoverReveal}`} items={roomItems(t)} />
+                                </div>
+                              );
+                            })}
+                        </>
                       )}
                     </div>
                   )}

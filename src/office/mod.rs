@@ -119,8 +119,8 @@ pub const OFFICE_ROLES: [(&str, &str, &str, &str); 6] = [
 
 /// Gives a person the bots they need to chat from day one, without
 /// changing anything they set up themselves. Safe to call on every sign-in:
-/// - the general Assistant and its `#assistant` room (made once; a room the
-///   person deleted is not brought back),
+/// - the general Assistant and its `#assistant` room (made once; a room or
+///   Assistant the person deleted is not brought back),
 /// - a bot in each office channel that has never had one, so a message in
 ///   `#leads-crm` and friends always gets an answer,
 /// - a group chat for each office, with the Architect in it.
@@ -130,14 +130,6 @@ pub async fn ensure_starter_bots(
 ) -> Result<(), crate::error::AppError> {
     let workspace = crate::handlers::airo::get_or_create_default_workspace(pool, user_id).await?;
 
-    let assistant = owned_bot(
-        pool,
-        user_id,
-        ASSISTANT_NAME,
-        "assistant",
-        ASSISTANT_INSTRUCTIONS,
-    )
-    .await?;
     let room_ever_made: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM threads WHERE user_id = $1 AND title = $2)",
     )
@@ -145,7 +137,16 @@ pub async fn ensure_starter_bots(
     .bind(ASSISTANT_ROOM)
     .fetch_one(pool)
     .await?;
+    // Made once, with its room: an Assistant the person deleted stays gone.
     if !room_ever_made {
+        let assistant = owned_bot(
+            pool,
+            user_id,
+            ASSISTANT_NAME,
+            "assistant",
+            ASSISTANT_INSTRUCTIONS,
+        )
+        .await?;
         let mut tx = pool.begin().await?;
         let thread_id: Uuid = sqlx::query_scalar(
             "INSERT INTO threads (title, slug, user_id, workspace_id, visibility, status)

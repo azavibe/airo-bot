@@ -429,6 +429,52 @@ pub async fn delete_thread(
     Ok(Json(json!({ "status": "deleted", "id": thread.id })).into_response())
 }
 
+// ---------- POST /notes/:id/delete ----------
+
+/// Soft-deletes one message. Only the room's owner may, for any message in
+/// it (their own or a bot's); the message is hidden, not erased.
+pub async fn delete_note(
+    State(state): State<AppState>,
+    caller: Caller,
+    headers: HeaderMap,
+    Path(note_id): Path<Uuid>,
+) -> Result<Response, AppError> {
+    crate::idempotency::key(&headers, None)?;
+    let thread_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT thread_id FROM notes WHERE id = $1 AND deleted_at IS NULL")
+            .bind(note_id)
+            .fetch_optional(&state.pool)
+            .await?;
+    let thread_id = thread_id.ok_or(AppError::NotFound)?;
+    let thread = find_thread(&state.pool, thread_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    if !is_owning_human(&caller, &thread) {
+        // Someone else's room: as if the message did not exist.
+        return Err(AppError::NotFound);
+    }
+    let mut tx = state.pool.begin().await?;
+    let deleted =
+        sqlx::query("UPDATE notes SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL")
+            .bind(note_id)
+            .execute(&mut *tx)
+            .await?;
+    if deleted.rows_affected() > 0 {
+        sqlx::query(
+            "UPDATE threads SET note_count = GREATEST(note_count - 1, 0), updated_at = now()
+             WHERE id = $1",
+        )
+        .bind(thread.id)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    if wants_html(&headers) {
+        return Ok(Redirect::to(&format!("/t/{}", thread.id)).into_response());
+    }
+    Ok(Json(json!({ "status": "deleted", "id": note_id, "thread_id": thread.id })).into_response())
+}
+
 // ---------- GET /threads/:id ----------
 
 #[derive(sqlx::FromRow)]

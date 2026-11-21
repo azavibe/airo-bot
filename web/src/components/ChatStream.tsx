@@ -3,6 +3,8 @@ import { ArrowLeft, Zap, X, Play, Square } from 'lucide-react';
 import { Thread, Note, Agent, NoteAction } from '../types';
 import { roomName } from '../utils/format';
 import { Markdown, questionsIn } from '../utils/markdown';
+import { BotAvatar } from './BotAvatar';
+import { RowMenu, RowMenuItem, useContextMenu } from './RowMenu';
 
 /** Answer boxes under a bot's questions: each question gets its own field,
  *  and the answer goes back to that bot as your message. */
@@ -81,6 +83,8 @@ interface ChatStreamProps {
   onAction?: (action: NoteAction) => void;
   /** Sends a message as the person (answers to a bot's questions). */
   onSend?: (text: string) => Promise<void>;
+  /** Deletes one message (after the person confirms). */
+  onDeleteNote?: (note: Note) => void;
   /** The office this room belongs to is stopped (its bots start no work). */
   paused?: boolean;
   /** Runs or stops the office's bots. */
@@ -106,6 +110,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   onOpenBot,
   onAction,
   onSend,
+  onDeleteNote,
   paused = false,
   onToggleRun,
   onOpenTeam,
@@ -128,7 +133,38 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   }, [notes]);
 
   const isGroup = thread?.kind === 'office';
-  const channelTitle = thread ? (isGroup ? officeName || 'Office' : roomName(thread.title)) : 'Chat';
+  // A bot's own room is named after the bot; a shared room keeps its name.
+  const soleBot = !isGroup && roomBots.length === 1 ? roomBots[0].agent : null;
+  const channelTitle = thread
+    ? isGroup
+      ? officeName || 'Office'
+      : soleBot?.name ?? roomName(thread.title)
+    : 'Chat';
+  const contextMenu = useContextMenu();
+  const noteItems = (note: Note): RowMenuItem[] => [
+    {
+      label: 'Copy message',
+      onSelect: () => {
+        navigator.clipboard?.writeText(note.body).catch(() => undefined);
+      },
+    },
+    ...(onDeleteNote ? [{ label: 'Delete message', danger: true, onSelect: () => onDeleteNote(note) }] : []),
+  ];
+  // Right-click on a message: copying selected text keeps the browser's
+  // menu; otherwise the message's own menu opens.
+  const onNoteContext = (e: React.MouseEvent, note: Note) => {
+    if ((window.getSelection()?.toString() ?? '').trim()) return;
+    contextMenu.open(e, noteItems(note));
+  };
+  const noteMenu = (note: Note, side: 'left' | 'right') => (
+    <span
+      className={`absolute top-0 z-10 ${
+        side === 'right' ? '-left-8' : 'right-0'
+      } [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-within:opacity-100`}
+    >
+      <RowMenu label="Message options" items={noteItems(note)} />
+    </span>
+  );
 
   const emptyState = isGuest ? (
     <>
@@ -182,6 +218,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
 
   return (
     <div className="w-full h-full flex flex-col justify-between relative overflow-hidden select-none">
+      {contextMenu.menu}
       {/* Room header: the room, and who answers here with which AI */}
       <div className="panel-header justify-between gap-3 px-5 border-b border-white/[0.08]">
         <div className="flex items-center gap-2 min-w-0">
@@ -194,10 +231,14 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
               <ArrowLeft className="w-4 h-4" />
             </button>
           )}
-          <h2 className="text-[15px] font-semibold text-white tracking-tight truncate">
-            {thread && !isGroup && <span className="text-neutral-500 font-normal mr-0.5">#</span>}
-            {channelTitle}
-          </h2>
+          {thread && !isGroup && roomBots.length > 0 && (
+            <span className="flex -space-x-1.5 flex-shrink-0" aria-hidden="true">
+              {roomBots.slice(0, 3).map(({ agent }) => (
+                <BotAvatar key={agent.id} name={agent.name} id={agent.id} size={22} />
+              ))}
+            </span>
+          )}
+          <h2 className="text-[15px] font-semibold text-white tracking-tight truncate">{channelTitle}</h2>
         </div>
 
         {thread && (
@@ -282,9 +323,16 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
 
               if (!isBot) {
                 return (
-                  <div key={note.id} className={`flex flex-col items-end ${gap}`}>
-                    <div className="max-w-[80%] px-3.5 py-2 text-[14px] leading-relaxed select-text glass-bubble-user text-white">
-                      <Markdown text={note.body} />
+                  <div
+                    key={note.id}
+                    className={`flex flex-col items-end ${gap}`}
+                    onContextMenu={(e) => onNoteContext(e, note)}
+                  >
+                    <div className="group relative max-w-[80%]">
+                      {noteMenu(note, 'right')}
+                      <div className="px-3.5 py-2 text-[14px] leading-relaxed select-text glass-bubble-user text-white">
+                        <Markdown text={note.body} />
+                      </div>
                     </div>
                     <span className="text-[10px] text-neutral-500 mt-1 pr-1">{time}</span>
                   </div>
@@ -292,7 +340,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
               }
 
               return (
-                <div key={note.id} className={gap}>
+                <div key={note.id} className={`group relative ${gap}`} onContextMenu={(e) => onNoteContext(e, note)}>
+                  {noteMenu(note, 'left')}
                   {!sameSpeaker && (
                     <div className="flex items-center gap-2 text-[12px] mb-1">
                       <span className="font-semibold text-neutral-100">{name}</span>

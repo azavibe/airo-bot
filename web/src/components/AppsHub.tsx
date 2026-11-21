@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { OfficeApp, OfficeRecord } from '../types';
 import { ServerDrivenAppRenderer } from './ServerDrivenAppRenderer';
+import { RowMenu } from './RowMenu';
 import {
   Layers,
   Video,
@@ -25,13 +26,19 @@ interface AppsHubProps {
   onToggleDesignMode?: () => void;
   onInspectWidget?: (slug: string, viewId: string) => void;
   onResetMod?: (slug: string) => Promise<void>;
+  /** Hides an app from the office and its bots until it is restored. */
+  onArchiveApp?: (app: OfficeApp) => void;
+  onUnarchiveApp?: (app: OfficeApp) => void;
+  /** Deletes an app and its records (after the person confirms). */
+  onDeleteApp?: (app: OfficeApp) => void;
+  onDeleteRecord?: (record: OfficeRecord) => void;
   /** The office these apps belong to. */
   officeName?: string;
   bottomDock?: React.ReactNode;
 }
 
 export const AppsHub: React.FC<AppsHubProps> = ({
-  apps,
+  apps: allApps,
   activeAppSlug,
   onSelectApp,
   onOpenOnboard,
@@ -43,13 +50,54 @@ export const AppsHub: React.FC<AppsHubProps> = ({
   onToggleDesignMode,
   onInspectWidget,
   onResetMod,
+  onArchiveApp,
+  onUnarchiveApp,
+  onDeleteApp,
+  onDeleteRecord,
   officeName,
   bottomDock,
 }) => {
   const [provisioning, setProvisioning] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const archivedApps = allApps.filter((a) => !!a.archived_at);
+  const apps = allApps.filter((a) => !a.archived_at);
 
   const activeApp = apps.find((a) => a.slug === activeAppSlug) || apps[0] || null;
+  // Archived apps wait here until they are restored.
+  const archivedList = archivedApps.length > 0 && (
+    <div className="space-y-1">
+      <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-neutral-500">Archived</div>
+      {archivedApps.map((app) => (
+        <div key={app.id} className="flex items-center gap-2 px-3 py-1.5 text-[13px] text-neutral-400">
+          <span className="flex-1 truncate">{app.title}</span>
+          {onUnarchiveApp && (
+            <button
+              type="button"
+              onClick={() => {
+                setPickerOpen(false);
+                onUnarchiveApp(app);
+              }}
+              className="text-[12px] text-neutral-300 hover:text-white"
+            >
+              Restore
+            </button>
+          )}
+          {onDeleteApp && (
+            <button
+              type="button"
+              onClick={() => {
+                setPickerOpen(false);
+                onDeleteApp(app);
+              }}
+              className="text-[12px] text-red-300 hover:text-red-200"
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 
   const handleLaunch = async (type: string, kind: 'crm' | 'social' | 'finance') => {
     setProvisioning(type);
@@ -88,6 +136,7 @@ export const AppsHub: React.FC<AppsHubProps> = ({
 
         {/* Scrollable Catalog Body */}
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+          {archivedList && <div className="glass-card py-1 border-white/10">{archivedList}</div>}
           <div className="text-xs text-neutral-400 bg-white/[0.03] border border-white/5 rounded-2xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
@@ -261,6 +310,7 @@ export const AppsHub: React.FC<AppsHubProps> = ({
               </button>
             </li>
           ))}
+          {archivedList && <li className="border-t border-white/10 mt-1">{archivedList}</li>}
         </ul>
       )}
     </div>
@@ -289,6 +339,15 @@ export const AppsHub: React.FC<AppsHubProps> = ({
       >
         <Plus className="w-3.5 h-3.5" /> Add app
       </button>
+      {activeApp && (onArchiveApp || onDeleteApp) && (
+        <RowMenu
+          label={`${activeApp.title} options`}
+          items={[
+            ...(onArchiveApp ? [{ label: 'Archive app', onSelect: () => onArchiveApp(activeApp) }] : []),
+            ...(onDeleteApp ? [{ label: 'Delete app', danger: true, onSelect: () => onDeleteApp(activeApp) }] : []),
+          ]}
+        />
+      )}
     </>
   );
 
@@ -303,6 +362,7 @@ export const AppsHub: React.FC<AppsHubProps> = ({
             records={records[activeApp.slug] || []}
             onUpdateRecordStatus={onUpdateRecordStatus}
             onCreateRecord={onCreateRecord}
+            onDeleteRecord={onDeleteRecord}
             appTitle={activeApp.title}
             appSlug={activeApp.slug}
             designMode={designMode}

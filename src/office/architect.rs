@@ -18,7 +18,7 @@ use crate::handlers::airo::get_or_create_default_workspace;
 use crate::models::{OfficeApp, OfficeRecord, WorkspaceLesson, WorkspaceWallet};
 use crate::state::AppState;
 
-const APP_COLUMNS: &str = "id, workspace_id, slug, title, icon, category, replaces_saas, ui_schema, default_schema, last_valid_schema, created_at, updated_at";
+const APP_COLUMNS: &str = "id, workspace_id, slug, title, icon, category, replaces_saas, ui_schema, default_schema, last_valid_schema, archived_at, created_at, updated_at";
 const RECORD_COLUMNS: &str = "id, workspace_id, app_id, record_type, status, data, content_hash, created_by_agent_id, created_at, updated_at";
 const WALLET_SELECT: &str = "SELECT workspace_id, plan_tier, credit_balance, max_daily_credit_burn,
         CASE WHEN burn_day < CURRENT_DATE THEN 0 ELSE credits_burned_today END AS credits_burned_today,
@@ -503,7 +503,7 @@ pub async fn onboard_workspace(
                 workspace_id, slug, title, icon, category, replaces_saas, ui_schema, default_schema, last_valid_schema
              )
              VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7)
-             ON CONFLICT (workspace_id, slug) DO NOTHING
+             ON CONFLICT (workspace_id, slug) WHERE deleted_at IS NULL DO NOTHING
              RETURNING id",
         )
         .bind(office_id)
@@ -924,6 +924,124 @@ pub async fn patch_app_record(
     Ok(Json(updated))
 }
 
+/// Body of the archive and delete routes: only an idempotency key.
+#[derive(Debug, Default, Deserialize)]
+pub struct IdempotentBody {
+    pub idempotency_key: Option<String>,
+}
+
+/// Sets or clears an app's `archived_at`. An archived app is hidden from
+/// the office and its bots (they stop filling it) until it is restored.
+async fn set_app_archived(
+    state: &AppState,
+    caller: &Caller,
+    office: Option<Uuid>,
+    headers: &HeaderMap,
+    slug: &str,
+    body: Option<IdempotentBody>,
+    archived: bool,
+) -> Result<Json<OfficeApp>, AppError> {
+    let body = body.unwrap_or_default();
+    crate::idempotency::key(headers, body.idempotency_key.as_deref())?;
+    let workspace_id = app_workspace(state, caller, office).await?;
+    let app = find_app(state, workspace_id, slug).await?;
+    let updated = sqlx::query_as::<_, OfficeApp>(&format!(
+        "UPDATE office_apps
+         SET archived_at = CASE WHEN $2 THEN COALESCE(archived_at, now()) ELSE NULL END,
+             updated_at = now()
+         WHERE id = $1
+         RETURNING {APP_COLUMNS}"
+    ))
+    .bind(app.id)
+    .bind(archived)
+    .fetch_one(&state.pool)
+    .await?;
+    Ok(Json(updated))
+}
+
+/// POST /api/office/apps/{slug}/archive
+pub async fn archive_office_app(
+    State(state): State<AppState>,
+    caller: Caller,
+    Query(office): Query<OfficeQuery>,
+    headers: HeaderMap,
+    Path(slug): Path<String>,
+    body: Option<Json<IdempotentBody>>,
+) -> Result<Json<OfficeApp>, AppError> {
+    let body = body.map(|Json(b)| b);
+    set_app_archived(&state, &caller, office.office, &headers, &slug, body, true).await
+}
+
+/// POST /api/office/apps/{slug}/unarchive
+pub async fn unarchive_office_app(
+    State(state): State<AppState>,
+    caller: Caller,
+    Query(office): Query<OfficeQuery>,
+    headers: HeaderMap,
+    Path(slug): Path<String>,
+    body: Option<Json<IdempotentBody>>,
+) -> Result<Json<OfficeApp>, AppError> {
+    let body = body.map(|Json(b)| b);
+    set_app_archived(&state, &caller, office.office, &headers, &slug, body, false).await
+}
+
+/// POST /api/office/apps/{slug}/delete -- soft-deletes the app and its
+/// records. Nothing is erased; the slug can be installed again afterwards.
+pub async fn delete_office_app(
+    State(state): State<AppState>,
+    caller: Caller,
+    Query(office): Query<OfficeQuery>,
+    headers: HeaderMap,
+    Path(slug): Path<String>,
+    body: Option<Json<IdempotentBody>>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let body = body.map(|Json(b)| b).unwrap_or_default();
+    crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    let workspace_id = app_workspace(&state, &caller, office.office).await?;
+    let app = find_app(&state, workspace_id, &slug).await?;
+    let mut tx = state.pool.begin().await?;
+    sqlx::query(
+        "UPDATE office_records SET deleted_at = now(), updated_at = now()
+         WHERE app_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(app.id)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("UPDATE office_apps SET deleted_at = now(), updated_at = now() WHERE id = $1")
+        .bind(app.id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(Json(
+        json!({ "status": "deleted", "id": app.id, "slug": app.slug }),
+    ))
+}
+
+/// POST /api/office/records/{id}/delete -- soft-deletes one record.
+pub async fn delete_app_record(
+    State(state): State<AppState>,
+    caller: Caller,
+    Query(office): Query<OfficeQuery>,
+    headers: HeaderMap,
+    Path(record_id): Path<Uuid>,
+    body: Option<Json<IdempotentBody>>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let body = body.map(|Json(b)| b).unwrap_or_default();
+    crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    let workspace_id = app_workspace(&state, &caller, office.office).await?;
+    let deleted: Option<Uuid> = sqlx::query_scalar(
+        "UPDATE office_records SET deleted_at = now(), updated_at = now()
+         WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+         RETURNING id",
+    )
+    .bind(record_id)
+    .bind(workspace_id)
+    .fetch_optional(&state.pool)
+    .await?;
+    let id = deleted.ok_or(AppError::NotFound)?;
+    Ok(Json(json!({ "status": "deleted", "id": id })))
+}
+
 /// GET /api/office/wallet -- the primary workspace's wallet, provisioned
 /// with the plan default the first time it is read.
 pub async fn get_workspace_wallet(
@@ -1234,7 +1352,7 @@ pub async fn install_office_app(
                 workspace_id, slug, title, icon, category, replaces_saas, ui_schema, default_schema, last_valid_schema
              )
              VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $7)
-             ON CONFLICT (workspace_id, slug) DO NOTHING
+             ON CONFLICT (workspace_id, slug) WHERE deleted_at IS NULL DO NOTHING
              RETURNING id",
         )
         .bind(workspace_id)

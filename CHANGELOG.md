@@ -7,6 +7,25 @@ app and the desktop app share one version number. A release is tagged
 
 ## Unreleased
 
+### Added
+- **Edit office**: one dialog (office ⋯ or right-click) for the office's name,
+  what the business is, its website, this month's focus and the daily plan.
+- Archive and delete for rooms, bots, apps, app records and single messages.
+  Archived rooms and apps wait under "Archived" until restored. Everything is
+  a soft delete; nothing is erased.
+- Right-click menus on offices, rooms and messages. The desktop app no longer
+  shows the webview's Back / Reload / Save as menu.
+
+### Changed
+- Rooms no longer show `#`. A room with one bot is shown as that bot, with
+  its avatar and name, and its menu acts on the bot (Bot settings, Rename bot,
+  Archive, Delete bot). The chat header shows the bot's avatar.
+- A deleted Assistant is not recreated at the next sign-in.
+- A new office with no AI connected opens on one note from the Architect,
+  "Connect an AI to wake up your team", with a button to Settings → Account,
+  instead of the same warning from every bot. Each bot keeps its "Needs AI"
+  badge.
+
 ### Fixed
 - The agent skill and the Connect page now point at the real helper script,
   `skills/airobot/scripts/airobot_cli.py` (they named a file that does not
@@ -15,12 +34,6 @@ app and the desktop app share one version number. A release is tagged
   id (for example `SMB_PRO_399`).
 - The Connect, feed and Run pages name the command-line tool by its real name,
   `airobot-cli` (they said `air-cli`, which does not exist).
-
-### Changed
-- A new office with no AI connected opens on one note from the Architect,
-  "Connect an AI to wake up your team", with a button to Settings → Account,
-  instead of the same warning from every bot. Each bot keeps its "Needs AI"
-  badge.
 
 ## 0.6.0 — first open-source release
 
