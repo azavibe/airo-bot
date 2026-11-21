@@ -162,7 +162,9 @@ async fn setup(state: &AppState) -> (String, Uuid, Uuid, Uuid) {
     (cookie, office, bot, room)
 }
 
-async fn say(state: &AppState, cookie: &str, room: Uuid, text: &str) {
+/// Sends a message as the owner; returns its place in the room, so a
+/// reply can be told apart from earlier ones.
+async fn say(state: &AppState, cookie: &str, room: Uuid, text: &str) -> i64 {
     let (status, body) = call(
         state,
         "POST",
@@ -172,26 +174,40 @@ async fn say(state: &AppState, cookie: &str, room: Uuid, text: &str) {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    let id: Uuid = body["id"].as_str().expect("note id").parse().expect("uuid");
+    sqlx::query_scalar("SELECT seq FROM notes WHERE id = $1")
+        .bind(id)
+        .fetch_one(&state.pool)
+        .await
+        .expect("seq")
 }
 
-/// The newest note by `bot` in `room` whose body contains `marker`.
-async fn bot_note(pool: &PgPool, room: Uuid, bot: Uuid, marker: &str) -> (String, Option<Value>) {
+/// The bot's reply in `room` after the owner's message `after` (its seq)
+/// whose body contains `marker`.
+async fn bot_note(
+    pool: &PgPool,
+    room: Uuid,
+    bot: Uuid,
+    after: i64,
+    marker: &str,
+) -> (String, Option<Value>) {
     wait_for(|| async {
         sqlx::query_as::<_, (String, Option<Value>)>(
             "SELECT body, cards FROM notes WHERE thread_id = $1 AND author_agent_id = $2
-               AND body LIKE '%' || $3 || '%'
-             ORDER BY created_at DESC LIMIT 1",
+               AND seq > $4 AND body LIKE '%' || $3 || '%'
+             ORDER BY seq LIMIT 1",
         )
         .bind(room)
         .bind(bot)
         .bind(marker)
+        .bind(after)
         .fetch_optional(pool)
         .await
         .ok()
         .flatten()
     })
     .await
-    .unwrap_or_else(|| panic!("no note with {marker}"))
+    .unwrap_or_else(|| panic!("no reply with {marker}"))
 }
 
 async fn record_view(state: &AppState, cookie: &str, office: Uuid, id: &str) -> Value {
@@ -213,8 +229,8 @@ async fn bot_records_become_live_cards_and_changes_wait_for_an_ok(pool: PgPool) 
     let (cookie, office, bot, room) = setup(&state).await;
 
     // ADD: the message carries a card reference, not a copy.
-    say(&state, &cookie, room, "Please add Rosa as a lead").await;
-    let (body, cards) = bot_note(&pool, room, bot, "Added her").await;
+    let sent = say(&state, &cookie, room, "Please add Rosa as a lead").await;
+    let (body, cards) = bot_note(&pool, room, bot, sent, "Added her").await;
     assert!(!body.contains("ADD "), "{body}");
     let cards = cards.expect("cards");
     assert_eq!(cards[0]["type"], "app_record_card");
@@ -233,8 +249,8 @@ async fn bot_records_become_live_cards_and_changes_wait_for_an_ok(pool: PgPool) 
     assert_eq!(view["pending"].as_array().expect("pending").len(), 0);
 
     // UPDATE by an Ask first bot: nothing changes until the owner says so.
-    say(&state, &cookie, room, "Rosa just said yes, mark her Won").await;
-    let (body, cards) = bot_note(&pool, room, bot, "waits for your OK").await;
+    let sent = say(&state, &cookie, room, "Rosa just said yes, mark her Won").await;
+    let (body, cards) = bot_note(&pool, room, bot, sent, "waits for your OK").await;
     assert!(body.contains("stage: New Lead → Won"), "{body}");
     let card = &cards.expect("cards")[0];
     assert_eq!(card["action"], "proposed_update");
@@ -289,8 +305,8 @@ async fn bot_records_become_live_cards_and_changes_wait_for_an_ok(pool: PgPool) 
     assert_eq!(note.as_deref(), Some("approved with your edits"));
 
     // Another proposal, rejected: the record stays as it was.
-    say(&state, &cookie, room, "Actually mark her Won").await;
-    let (_, cards) = bot_note(&pool, room, bot, "She signed").await;
+    let sent = say(&state, &cookie, room, "Actually mark her Won").await;
+    let (_, cards) = bot_note(&pool, room, bot, sent, "She signed").await;
     let approval = cards.expect("cards")[0]["approval_id"]
         .as_str()
         .expect("approval")
@@ -314,8 +330,8 @@ async fn bot_records_become_live_cards_and_changes_wait_for_an_ok(pool: PgPool) 
         .execute(&pool)
         .await
         .expect("trust");
-    say(&state, &cookie, room, "Set Rosa's value 1500").await;
-    let (body, cards) = bot_note(&pool, room, bot, "Updated Rosa's Cafe").await;
+    let sent = say(&state, &cookie, room, "Set Rosa's value 1500").await;
+    let (body, cards) = bot_note(&pool, room, bot, sent, "Updated Rosa's Cafe").await;
     assert!(body.contains("estimated_value: 900 → 1500"), "{body}");
     let card = &cards.expect("cards")[0];
     assert_eq!(card["action"], "updated");
