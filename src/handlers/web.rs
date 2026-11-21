@@ -2196,6 +2196,9 @@ pub struct AgentSettingsRequest {
     /// Answer only from the office's documents.
     #[serde(default)]
     pub documents_only: Option<bool>,
+    /// The bot's own hard monthly spending cap in credits; 0 removes it.
+    #[serde(default)]
+    pub monthly_cap_credits: Option<i64>,
     #[serde(default)]
     pub idempotency_key: Option<String>,
 }
@@ -2210,6 +2213,7 @@ pub struct AgentSettingsView {
     pub ai_model: Option<String>,
     pub provider_model: Option<String>,
     pub documents_only: bool,
+    pub monthly_cap_credits: Option<i64>,
 }
 
 /// Trims a setting; `None` = unchanged, `Some(None)` = clear.
@@ -2285,6 +2289,7 @@ pub async fn update_agent_settings(
     }
     let ai_model = setting(body.ai_model);
     let provider_model = setting(body.provider_model);
+    let cap = crate::office::spend::cap_setting(body.monthly_cap_credits)?;
     for model in [&ai_model, &provider_model].into_iter().flatten().flatten() {
         if !model_name_ok(model) {
             return Err(AppError::BadRequest(
@@ -2302,9 +2307,12 @@ pub async fn update_agent_settings(
             ai_model = CASE WHEN $9 THEN $10 ELSE ai_model END,
             provider_model = CASE WHEN $11 THEN $12 ELSE provider_model END,
             documents_only = COALESCE($13, documents_only),
+            monthly_cap_credits = CASE WHEN $14 THEN $15 ELSE monthly_cap_credits END,
+            cap_notice_month = CASE WHEN $14 THEN NULL ELSE cap_notice_month END,
             updated_at = now()
          WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND revoked_at IS NULL
-         RETURNING id, name, handle, instructions, ai_engine, ai_model, provider_model, documents_only",
+         RETURNING id, name, handle, instructions, ai_engine, ai_model, provider_model,
+                   documents_only, monthly_cap_credits",
     )
     .bind(agent_id)
     .bind(user_id)
@@ -2319,6 +2327,8 @@ pub async fn update_agent_settings(
     .bind(provider_model.is_some())
     .bind(provider_model.flatten())
     .bind(body.documents_only)
+    .bind(cap.is_some())
+    .bind(cap.flatten())
     .fetch_optional(&state.pool)
     .await?
     .ok_or(AppError::NotFound)?;

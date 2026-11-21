@@ -33,6 +33,12 @@ app and the desktop app share one version number. A release is tagged
   the Store Manager sees Shopify, the Sales Lead sees leads and Gmail. Change
   it in the bot's settings under "What it can use". Bots read fresh data from
   their tools before they answer; anything they send stays a draft.
+- **Monthly spending caps**: set a hard cap on included AI credits for an
+  office (Edit office) and for any bot (its settings). A call that would go
+  past a cap is never made; the office's morning plan and queued tasks wait
+  until the 1st or until you raise the cap, and the office chat says so once.
+  The office header shows "spent / cap this month", and each bot's settings
+  show what it spent, with a 30-day chart.
 - **Documents**: give the office's bots your price list, FAQ, policies or
   website pages under Edit office → Documents (PDF, Word, text, Markdown,
   CSV, pasted text or a page address). Bots are shown the passages that fit

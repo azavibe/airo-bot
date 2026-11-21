@@ -10,6 +10,7 @@ pub mod fsm_dispatcher;
 pub mod group;
 pub mod kickoff;
 pub mod memory;
+pub mod spend;
 
 use sqlx::PgPool;
 use uuid::Uuid;

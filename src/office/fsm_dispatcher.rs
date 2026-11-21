@@ -65,6 +65,7 @@ impl FsmTaskState {
 struct ClaimedTaskRow {
     id: Uuid,
     workspace_id: Uuid,
+    assigned_agent_id: Option<Uuid>,
     thread_id: Option<Uuid>,
     title: String,
     state_payload: serde_json::Value,
@@ -120,11 +121,17 @@ async fn run_dispatcher_tick(
     let mut tx = state.pool.begin().await?;
     let tasks: Vec<ClaimedTaskRow> = sqlx::query_as(
         r#"
-        SELECT id, workspace_id, thread_id, title, state_payload
+        SELECT id, workspace_id, assigned_agent_id, thread_id, title, state_payload
         FROM tasks
         WHERE executor = 'server' AND deleted_at IS NULL
           AND (fsm_state = 'QUEUED'
                OR (fsm_state = 'WAITING_IO' AND (wake_at IS NULL OR wake_at <= now())))
+          -- An office at its monthly spending cap starts no task until the
+          -- cap is raised or the month turns over.
+          AND NOT EXISTS (
+              SELECT 1 FROM workspaces w
+              WHERE w.id = tasks.workspace_id
+                AND w.cap_notice_month = date_trunc('month', now())::date)
         ORDER BY created_at ASC
         LIMIT $1
         FOR UPDATE SKIP LOCKED
@@ -398,12 +405,14 @@ async fn run_initial_step(state: &AppState, task: &ClaimedTaskRow) {
         requires_manual_approval: false,
         action_type: "execute_task_step".into(),
     };
+    let spender = budget_gate::Spender::new(task.workspace_id, task.assigned_agent_id);
     let ledger_id = match budget_gate::check_and_deduct(
         pool,
         task.workspace_id,
         &proposal,
         Some(task.id),
         approved,
+        spender,
     )
     .await
     {
@@ -411,6 +420,20 @@ async fn run_initial_step(state: &AppState, task: &ClaimedTaskRow) {
             // Fail closed: never run unmetered. Try again shortly.
             warn!(task_id = %task.id, error = ?e, "budget gate unavailable; re-queueing");
             retry_later(pool, task.id, 60).await;
+            return;
+        }
+        Ok(gate)
+            if matches!(
+                gate.limit,
+                Some(budget_gate::LimitHit::MonthlyOffice | budget_gate::LimitHit::MonthlyBot)
+            ) =>
+        {
+            // A monthly cap: the task waits (it isn't failed) and the
+            // owner is told once this month.
+            if let Some(limit) = gate.limit {
+                crate::office::spend::notify_cap(state, limit, spender, task.thread_id).await;
+            }
+            retry_later(pool, task.id, 3600).await;
             return;
         }
         Ok(gate) if !gate.passed => {
@@ -468,6 +491,7 @@ async fn run_initial_step(state: &AppState, task: &ClaimedTaskRow) {
                 task.workspace_id,
                 Some(task.id),
                 &proposal,
+                spender,
             )
             .await;
             finish(

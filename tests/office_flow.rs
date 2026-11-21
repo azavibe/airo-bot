@@ -619,7 +619,7 @@ async fn budget_gate_rolls_the_daily_burn_over_and_fails_closed_on_balance(pool:
         requires_manual_approval: false,
         action_type: "call_llm".into(),
     };
-    let gate = budget_gate::check_and_deduct(&pool, ws, &proposal, None, false)
+    let gate = budget_gate::check_and_deduct(&pool, ws, &proposal, None, false, Default::default())
         .await
         .expect("gate");
     assert!(gate.passed, "yesterday's burn must not block today");
@@ -637,12 +637,12 @@ async fn budget_gate_rolls_the_daily_burn_over_and_fails_closed_on_balance(pool:
         .execute(&pool)
         .await
         .expect("drain");
-    let gate = budget_gate::check_and_deduct(&pool, ws, &proposal, None, false)
+    let gate = budget_gate::check_and_deduct(&pool, ws, &proposal, None, false, Default::default())
         .await
         .expect("gate");
     assert!(!gate.passed);
 
-    budget_gate::refund_credit_charge(&pool, ws, None, &proposal)
+    budget_gate::refund_credit_charge(&pool, ws, None, &proposal, Default::default())
         .await
         .expect("refund");
     let balance: i64 =

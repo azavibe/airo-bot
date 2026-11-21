@@ -148,6 +148,8 @@ export interface OfficeEdit {
   goal: string;
   about: string;
   daily_plan: boolean;
+  /** Monthly spending cap in credits; empty for none. */
+  monthly_cap: string;
 }
 
 /** One request to the server; throws its short message on failure. */
@@ -365,9 +367,12 @@ export const EditOfficeDialog: React.FC<{
   initial: OfficeEdit;
   /** The tab it opens on. */
   startTab?: EditOfficeTab;
+  /** This month's spend, for the cap field; null hides the cap (desktop
+   *  app: no credits). */
+  spend?: { spent: number; reached: boolean } | null;
   onSubmit: (values: OfficeEdit) => Promise<void>;
   onClose: () => void;
-}> = ({ officeId, agents, initial, startTab = 'profile', onSubmit, onClose }) => {
+}> = ({ officeId, agents, initial, startTab = 'profile', spend = null, onSubmit, onClose }) => {
   const [values, setValues] = useState<OfficeEdit>(initial);
   const [tab, setTab] = useState<EditOfficeTab>(startTab);
   const set = (patch: Partial<OfficeEdit>) => setValues((v) => ({ ...v, ...patch }));
@@ -381,6 +386,7 @@ export const EditOfficeDialog: React.FC<{
         focus: values.focus.trim(),
         goal: values.goal.trim(),
         about: values.about.trim(),
+        monthly_cap: values.monthly_cap.trim(),
       }),
     onClose
   );
@@ -493,6 +499,28 @@ export const EditOfficeDialog: React.FC<{
         />
         Daily plan: the Architect hands out the day's tasks each morning
       </label>
+      {spend && (
+        <label className="block space-y-1.5">
+          <span className="text-[11px] text-neutral-400">Monthly spending cap (included AI credits)</span>
+          <div className="flex items-center gap-2">
+            <input
+              value={values.monthly_cap}
+              onChange={(e) => set({ monthly_cap: e.target.value.replace(/[^0-9]/g, '') })}
+              inputMode="numeric"
+              placeholder="No cap"
+              className={`${inputClass} w-36`}
+            />
+            <span className="text-[12px] text-neutral-400">
+              credits · {spend.spent.toLocaleString()} spent this month
+              {spend.reached ? ' · cap reached' : ''}
+            </span>
+          </div>
+          <span className="block text-[11px] text-neutral-500 leading-relaxed">
+            When the office reaches it, its bots make no paid AI calls and the morning plan and queued tasks wait until
+            the 1st or until you raise it. Your own OpenRouter key and AI tools aren't capped.
+          </span>
+        </label>
+      )}
       <p className="text-[11px] text-neutral-500 leading-relaxed">
         Every bot in this office reads these. Leave a field empty to clear it.
       </p>

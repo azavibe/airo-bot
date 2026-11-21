@@ -183,6 +183,12 @@ export interface Office {
   goal?: string | null;
   /** What it is like: hours, prices, tone, policies. */
   about?: string | null;
+  /** Hard monthly spending cap in credits; none when null. */
+  monthly_cap_credits?: number | null;
+  /** Credits its paid AI calls cost this month. */
+  month_spent_credits?: number;
+  /** The cap stopped paid work this month (until raised or the 1st). */
+  cap_reached?: boolean;
 }
 
 /** Something an office's bots answer from: a file, pasted text or a

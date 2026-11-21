@@ -242,9 +242,15 @@ pub async fn execute_procedure_evolution(
             };
             let mut ledger_id = None;
             if metered {
-                let gate =
-                    budget_gate::check_and_deduct(pool, workspace.id, &proposal, None, false)
-                        .await?;
+                let gate = budget_gate::check_and_deduct(
+                    pool,
+                    workspace.id,
+                    &proposal,
+                    None,
+                    false,
+                    budget_gate::Spender::new(workspace.id, None),
+                )
+                .await?;
                 if !gate.passed {
                     return Err(AppError::Conflict(format!(
                         "usage guard: {}",
@@ -289,9 +295,14 @@ Reply with only a JSON object:
                 Err(e) => {
                     warn!(%procedure_id, error = %e, "evolver provider call failed");
                     if metered {
-                        let _ =
-                            budget_gate::refund_credit_charge(pool, workspace.id, None, &proposal)
-                                .await;
+                        let _ = budget_gate::refund_credit_charge(
+                            pool,
+                            workspace.id,
+                            None,
+                            &proposal,
+                            budget_gate::Spender::new(workspace.id, None),
+                        )
+                        .await;
                     }
                     heuristic()
                 }

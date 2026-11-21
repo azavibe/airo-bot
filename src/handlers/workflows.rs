@@ -2230,12 +2230,14 @@ pub async fn execute_openrouter_step_internal(
         action_type: "workflow_step_execution".into(),
     };
 
+    let spender = crate::office::spend::Spender::new(workspace_id, None);
     let gate = crate::office::budget_gate::check_and_deduct(
         &state.pool,
         workspace_id,
         &proposal,
         run.task_id,
         false,
+        spender,
     )
     .await?;
     if !gate.passed {
@@ -2303,6 +2305,7 @@ pub async fn execute_openrouter_step_internal(
                 workspace_id,
                 run.task_id,
                 &proposal,
+                spender,
             )
             .await;
             Err(e)

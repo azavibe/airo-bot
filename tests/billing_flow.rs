@@ -276,9 +276,16 @@ async fn a_metered_call_records_its_real_cost_on_the_charge(pool: PgPool) {
         requires_manual_approval: false,
         action_type: "chat_reply".into(),
     };
-    let gate = budget_gate::check_and_deduct(&pool, workspace_id, &proposal, None, false)
-        .await
-        .expect("gate");
+    let gate = budget_gate::check_and_deduct(
+        &pool,
+        workspace_id,
+        &proposal,
+        None,
+        false,
+        Default::default(),
+    )
+    .await
+    .expect("gate");
     assert!(gate.passed);
     let ledger_id = gate.ledger_id.expect("the charge names its ledger row");
 
@@ -313,9 +320,16 @@ async fn a_metered_call_records_its_real_cost_on_the_charge(pool: PgPool) {
     assert!(recorded);
 
     // A provider that reports no cost keeps the estimate rather than zero.
-    let gate = budget_gate::check_and_deduct(&pool, workspace_id, &proposal, None, false)
-        .await
-        .expect("gate");
+    let gate = budget_gate::check_and_deduct(
+        &pool,
+        workspace_id,
+        &proposal,
+        None,
+        false,
+        Default::default(),
+    )
+    .await
+    .expect("gate");
     budget_gate::record_usage(&pool, gate.ledger_id, &Usage::default()).await;
     let cost: i64 = sqlx::query_scalar("SELECT raw_cost_micros FROM credit_ledger WHERE id = $1")
         .bind(gate.ledger_id.expect("id"))

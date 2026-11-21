@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ArrowLeft, Zap, X, Play, Square } from 'lucide-react';
 import { Thread, Note, Agent, NoteAction } from '../types';
-import { roomName } from '../utils/format';
+import { formatCredits, roomName } from '../utils/format';
 import { Markdown, questionsIn } from '../utils/markdown';
 import { BotAvatar } from './BotAvatar';
 import { RowMenu, RowMenuItem, useContextMenu } from './RowMenu';
@@ -88,6 +88,11 @@ interface ChatStreamProps {
   /** The office this room belongs to is stopped (its bots start no work). */
   paused?: boolean;
   /** Runs or stops the office's bots. */
+  /** This office's spend this month and its cap, shown as a chip; null
+   *  hides it (desktop app, guests). */
+  spend?: { spent: number; cap: number | null; reached: boolean } | null;
+  /** Opens where the cap is set. */
+  onOpenSpend?: () => void;
   onToggleRun?: () => void;
   /** Opens the office's team (all its bots). */
   onOpenTeam?: () => void;
@@ -113,6 +118,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   onDeleteNote,
   paused = false,
   onToggleRun,
+  spend,
+  onOpenSpend,
   onOpenTeam,
   isGuest = false,
   onOpenOnboard,
@@ -265,6 +272,30 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
             )}
             {!isGroup && roomBots.length > 2 && (
               <span className="text-[11px] text-neutral-500">+{roomBots.length - 2}</span>
+            )}
+            {spend && (
+              <button
+                onClick={onOpenSpend}
+                title={
+                  spend.cap
+                    ? `Spent this month of this office's monthly cap. ${spend.reached ? 'Paid work is stopped until you raise it or the 1st.' : 'Click to change the cap.'}`
+                    : 'Spent this month. Click to set a monthly cap.'
+                }
+                className={`h-7 px-2.5 rounded-full text-[11.5px] flex items-center gap-1.5 flex-shrink-0 transition-colors border ${
+                  spend.reached
+                    ? 'border-red-400/50 text-white'
+                    : spend.cap && spend.spent >= spend.cap * 0.8
+                    ? 'border-amber-400/50 text-neutral-200'
+                    : 'border-white/10 text-neutral-300 hover:text-white hover:border-white/20'
+                }`}
+              >
+                {spend.reached && <span className="w-1.5 h-1.5 rounded-full bg-red-400" aria-hidden="true" />}
+                <span className="font-medium">{formatCredits(spend.spent)}</span>
+                <span className="text-neutral-500">
+                  {spend.cap ? `/ ${formatCredits(spend.cap)} this month` : 'credits this month'}
+                </span>
+                {spend.reached && <span className="sr-only">Cap reached</span>}
+              </button>
             )}
             {onToggleRun && (
               <button

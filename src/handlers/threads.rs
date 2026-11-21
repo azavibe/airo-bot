@@ -1310,8 +1310,18 @@ async fn post_limit_note(
         Some(LimitHit::Balance) => format!(
             "Your plan has used its {LIMIT_NOTE_MARKER}, so {agent_name} can't answer right now."
         ),
+        Some(LimitHit::MonthlyOffice) => format!(
+            "This office has reached its monthly spending cap, the {LIMIT_NOTE_MARKER} you set, so {agent_name} can't answer with included credits until the 1st. Raise the cap in Edit office, or add your own OpenRouter key in Settings."
+        ),
+        Some(LimitHit::MonthlyBot) => format!(
+            "{agent_name} has reached its own monthly spending cap, the {LIMIT_NOTE_MARKER} you set, so it can't answer with included credits until the 1st. Raise it in {agent_name}'s settings."
+        ),
         None => format!("{agent_name} is paused by the workspace's {LIMIT_NOTE_MARKER}."),
     };
+    if matches!(limit, Some(LimitHit::MonthlyOffice | LimitHit::MonthlyBot)) {
+        insert_reply_note(&state.pool, &state.note_sender, thread_id, agent_id, &why).await;
+        return;
+    }
     let next = match state.config.upgrade_url.as_deref() {
         Some(url) => format!(
             "Upgrade your plan for more ({url}), or add your own OpenRouter key in Settings to keep chatting now."
@@ -1791,7 +1801,8 @@ pub(crate) async fn run_agent_reply(
                 // The platform's key costs us money: charge the workspace
                 // before calling, refuse when a limit is reached, and refund
                 // if the provider fails. Fails closed on database errors.
-                let mut charge: Option<(Uuid, ActionProposal, Option<Uuid>)> = None;
+                let mut charge: Option<(Uuid, ActionProposal, Option<Uuid>, budget_gate::Spender)> =
+                    None;
                 if voice.metered {
                     let workspace_id = match paying_workspace(&pool, thread_id).await {
                         Ok(id) => id,
@@ -1800,6 +1811,18 @@ pub(crate) async fn run_agent_reply(
                             return;
                         }
                     };
+                    // The office the room is in (rooms without one belong to
+                    // the first office) and this bot: both caps apply.
+                    let office: Option<Uuid> =
+                        sqlx::query_scalar("SELECT workspace_id FROM threads WHERE id = $1")
+                            .bind(thread_id)
+                            .fetch_optional(&pool)
+                            .await
+                            .ok()
+                            .flatten()
+                            .flatten();
+                    let spender =
+                        budget_gate::Spender::new(office.unwrap_or(workspace_id), Some(agent_id));
                     let proposal = ActionProposal {
                         provider: "openrouter".into(),
                         model_or_tool: model.clone(),
@@ -1813,19 +1836,50 @@ pub(crate) async fn run_agent_reply(
                         requires_manual_approval: false,
                         action_type: "chat_reply".into(),
                     };
-                    match budget_gate::check_and_deduct(&pool, workspace_id, &proposal, None, false)
-                        .await
+                    match budget_gate::check_and_deduct(
+                        &pool,
+                        workspace_id,
+                        &proposal,
+                        None,
+                        false,
+                        spender,
+                    )
+                    .await
                     {
                         Err(error) => {
                             tracing::warn!(?error, %thread_id, "budget gate unavailable; reply skipped");
                             return;
                         }
                         Ok(gate) if !gate.passed || gate.requires_approval => {
-                            post_limit_note(&state, thread_id, agent_id, &agent.name, gate.limit)
+                            // A monthly cap posts its card once; the room
+                            // that got it needs no second note.
+                            let carded = match gate.limit {
+                                Some(limit) => {
+                                    crate::office::spend::notify_cap(
+                                        &state,
+                                        limit,
+                                        spender,
+                                        Some(thread_id),
+                                    )
+                                    .await
+                                }
+                                None => None,
+                            };
+                            if carded != Some(thread_id) {
+                                post_limit_note(
+                                    &state,
+                                    thread_id,
+                                    agent_id,
+                                    &agent.name,
+                                    gate.limit,
+                                )
                                 .await;
+                            }
                             return;
                         }
-                        Ok(gate) => charge = Some((workspace_id, proposal, gate.ledger_id)),
+                        Ok(gate) => {
+                            charge = Some((workspace_id, proposal, gate.ledger_id, spender))
+                        }
                     }
                 }
                 match crate::openrouter::call_openrouter_web(
@@ -1838,7 +1892,7 @@ pub(crate) async fn run_agent_reply(
                 .await
                 {
                     Ok(completion) => {
-                        if let Some((_, _, ledger_id)) = &charge {
+                        if let Some((_, _, ledger_id, _)) = &charge {
                             budget_gate::record_usage(&pool, *ledger_id, &completion.usage).await;
                         }
                         let trimmed = completion.text.trim();
@@ -1851,12 +1905,13 @@ pub(crate) async fn run_agent_reply(
                     }
                     Err(err) => {
                         tracing::warn!(%err, agent = %agent.name, "agent reply failed");
-                        if let Some((workspace_id, proposal, _)) = &charge {
+                        if let Some((workspace_id, proposal, _, spender)) = &charge {
                             let _ = budget_gate::refund_credit_charge(
                                 &pool,
                                 *workspace_id,
                                 None,
                                 proposal,
+                                *spender,
                             )
                             .await;
                         }
