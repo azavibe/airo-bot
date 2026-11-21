@@ -97,7 +97,7 @@ Airobot ships a working "AI team in one chat" product. It has offices (workspace
 - Pricing is a flat 25 credits per metered AI call — [src/office/budget_gate.rs:3-5](src/office/budget_gate.rs).
 - The wallet is "created once with the plan's monthly credits; never reset here" — [src/office/architect.rs:433](src/office/architect.rs). A grep for checkout, billing, top-up or refill in `src` found no purchase flow.
 - `dedicated_phone_number` is "Reserved for V2 Twilio/SIP provisioning" — [migrations/0039_airobot_virtual_office.sql:40](migrations/0039_airobot_virtual_office.sql).
-- Metering applies only when the platform OpenRouter key is used; a user's own key or a local AI is not metered — [src/handlers/threads.rs:1660-1720](src/handlers/threads.rs).
+- Metering applies only when the platform OpenRouter key is used; a user's own key or a local AI is not metered — [src/handlers/threads.rs:1683-1760](src/handlers/threads.rs).
 
 **Outside agents**
 - Device-code sign-in uses `/device/code`, `/device/token` and `/device`, with approve and deny — [src/lib.rs](src/lib.rs) route table; [src/handlers/device.rs](src/handlers/device.rs).
