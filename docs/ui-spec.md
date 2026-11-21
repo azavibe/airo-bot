@@ -151,12 +151,8 @@ When switching to full-canvas tabs (**Apps**, **Approvals**, **Bots**, **Workflo
 ## 4. Floating Dynamic Island Bottom Dock
 
 The bottom dock is an interactive floating pill centered inside the bottom canvas:
-1. **Typing Mode vs. Nav Mode:**
-   - When idle, the dock displays quick navigation icons (`Chat`, `Apps`, `+ Provision`, `Approvals`, `Bots`, `Workflows`) followed by an expandable `Ask bot...` input bar.
-   - Clicking the input bar slides the navigation icons into a compact hamburger menu icon, giving full width to the text prompt, voice push-to-talk mic button (only where the browser supports speech input), and send button. Typing does not leave the current tab; sending a message switches to Chat so the reply is visible.
-   - Clicking the hamburger menu smoothly expands navigation buttons back out. In nav mode the hamburger appears only on mobile, where it opens the rooms drawer.
-   - Bots and Workflows icons appear on wide docks; narrower layouts reach them from the sidebar or drawer.
-2. **Composer:** The prompt is a textarea that grows with its text like claude.ai's, up to `min(240px, 40vh)`, then scrolls inside itself; the dock's corners soften from a pill once it spans more than one line, and the nav and send buttons stay pinned to its bottom edge. Enter sends and Shift+Enter adds a line; on touch keyboards (coarse pointer) Enter adds a line and the Send button sends. IME composition never sends.
+1. **No navigation in the dock.** Every screen has one home: the sidebar (Approvals, Apps, Bots, Workflows, and the offices and rooms for chat). The right panel's Apps / Approvals tabs show the current office's context, not navigation. The dock is only the composer: the prompt, the voice mic (only where the browser supports speech input) and send. On phones the dock starts with a **Rooms & menu** button that opens the sidebar drawer, with a dot when approvals are waiting. Typing does not leave the current tab; sending a message switches to Chat so the reply is visible.
+2. **Composer:** The prompt is a textarea that grows with its text like claude.ai's, up to `min(240px, 40vh)`, then scrolls inside itself; the dock's corners soften from a pill once it spans more than one line, and the menu (phones) and send buttons stay pinned to its bottom edge. Enter sends and Shift+Enter adds a line; on touch keyboards (coarse pointer) Enter adds a line and the Send button sends. IME composition never sends.
 3. **Global Access:** The same dock instance (with composer text and the live task pill) is embedded in every tab view.
 
 ## 4.0 Appearance
