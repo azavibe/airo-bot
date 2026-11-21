@@ -49,7 +49,7 @@ export interface Note {
  *  `forget`: forgets the memory whose id is `target` (a bot's Undo). */
 export interface NoteAction {
   label: string;
-  kind: 'send' | 'setup' | 'open' | 'forget';
+  kind: 'send' | 'setup' | 'open' | 'forget' | 'keep_milestone';
   message?: string;
   target?: string;
 }
@@ -215,7 +215,7 @@ export interface OfficeDocument {
 }
 
 /** Which tab the Edit office dialog opens on. */
-export type EditOfficeTab = 'profile' | 'memory' | 'documents';
+export type EditOfficeTab = 'profile' | 'goal' | 'memory' | 'documents';
 
 /** A fact an office remembers: the whole office's, or one bot's. */
 export interface Memory {

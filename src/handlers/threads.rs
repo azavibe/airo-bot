@@ -1585,6 +1585,25 @@ async fn deliver_reply(
         crate::office::memory::apply_remember(pool, thread_id, architect.id, &body).await;
     // `[doc 1a2b3c4d]` citations become "(from “Price list”)".
     let body = crate::office::documents::cite(pool, thread_id, &body).await;
+    // Milestones it proposed (`MILESTONE:` lines) wait for the owner's
+    // Keep.
+    let (body, proposed) =
+        crate::office::goals::apply_milestones(pool, thread_id, architect.id, &body).await;
+    let (body, actions) = if proposed.is_empty() {
+        (body, actions)
+    } else {
+        let (line, buttons) = crate::office::goals::proposed_note(&proposed);
+        let mut all = actions
+            .and_then(|a| a.as_array().cloned())
+            .unwrap_or_default();
+        all.extend(buttons);
+        let body = if body.is_empty() {
+            line
+        } else {
+            format!("{body}\n\n{line}")
+        };
+        (body, Some(serde_json::Value::Array(all)))
+    };
     let (body, actions) = if saved.is_empty() {
         (body, actions)
     } else {

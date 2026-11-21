@@ -33,6 +33,12 @@ app and the desktop app share one version number. A release is tagged
   the Store Manager sees Shopify, the Sales Lead sees leads and Gmail. Change
   it in the bot's settings under "What it can use". Bots read fresh data from
   their tools before they answer; anything they send stays a draft.
+- **Goals that move**: set the office's goal under Edit office → Goal, and
+  the Architect proposes measurable milestones for you to keep (or add your
+  own, with dates). Every bot works toward the open ones. Turn on check-ins
+  (daily, weekly or monthly) to hear how it's going, and get a weekly report
+  card every Monday, counted from your records, jobs and spend, using no AI
+  credits.
 - **Honest outcomes**: when a bot is handed a job, it ends by saying how it
   went: done, nothing to do, blocked (and what it needs) or needs your OK.
   Failed jobs say so too. Each bot's settings list its recent work with

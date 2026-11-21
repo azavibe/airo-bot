@@ -331,6 +331,12 @@ pub struct RenameOfficeRequest {
     /// lets work that waited on the old cap run again.
     #[serde(default)]
     pub monthly_cap_credits: Option<i64>,
+    /// The Architect's check-ins: off, daily, weekly or monthly.
+    #[serde(default)]
+    pub check_in: Option<String>,
+    /// The Monday report card in the office chat.
+    #[serde(default)]
+    pub weekly_report: Option<bool>,
     pub idempotency_key: Option<String>,
 }
 
@@ -389,12 +395,25 @@ pub async fn rename_office(
         None => None,
     };
     let cap = crate::office::spend::cap_setting(body.monthly_cap_credits)?;
+    if let Some(check_in) = body.check_in.as_deref() {
+        if !matches!(check_in, "off" | "daily" | "weekly" | "monthly") {
+            return Err(AppError::BadRequest(
+                "check_in is off, daily, weekly or monthly".to_string(),
+            ));
+        }
+    }
     let profile_changes = business_type.is_some()
         || focus.is_some()
         || website.is_some()
         || goal.is_some()
         || about.is_some()
-        || cap.is_some();
+        || cap.is_some()
+        || body.check_in.is_some()
+        || body.weekly_report.is_some();
+    let old_goal: Option<String> = sqlx::query_scalar("SELECT goal FROM workspaces WHERE id = $1")
+        .bind(ws.id)
+        .fetch_one(&state.pool)
+        .await?;
     let name = match body.name.as_deref() {
         Some(raw) => clean_name(raw)?,
         None if body.daily_plan.is_some() || body.paused.is_some() || profile_changes => {
@@ -416,8 +435,21 @@ pub async fn rename_office(
         Option<String>,
         Option<String>,
         Option<i64>,
+        String,
+        bool,
     );
-    let (daily_plan, paused, business_type, website, focus, goal, about, monthly_cap): Saved = sqlx::query_as(
+    let (
+        daily_plan,
+        paused,
+        business_type,
+        website,
+        focus,
+        goal,
+        about,
+        monthly_cap,
+        check_in,
+        weekly_report,
+    ): Saved = sqlx::query_as(
         "UPDATE workspaces SET name = $1, daily_plan = COALESCE($3, daily_plan),
                 paused = COALESCE($4, paused),
                 business_type = CASE WHEN $5 THEN $6 ELSE business_type END,
@@ -427,9 +459,12 @@ pub async fn rename_office(
                 about = CASE WHEN $13 THEN $14 ELSE about END,
                 monthly_cap_credits = CASE WHEN $15 THEN $16 ELSE monthly_cap_credits END,
                 cap_notice_month = CASE WHEN $15 THEN NULL ELSE cap_notice_month END,
+                check_in = COALESCE($17, check_in),
+                weekly_report = COALESCE($18, weekly_report),
                 updated_at = now()
          WHERE id = $2
-         RETURNING daily_plan, paused, business_type, website, focus, goal, about, monthly_cap_credits",
+         RETURNING daily_plan, paused, business_type, website, focus, goal, about,
+                   monthly_cap_credits, check_in, weekly_report",
     )
     .bind(&name)
     .bind(ws.id)
@@ -447,8 +482,24 @@ pub async fn rename_office(
     .bind(about.flatten())
     .bind(cap.is_some())
     .bind(cap.flatten())
+    .bind(body.check_in.as_deref())
+    .bind(body.weekly_report)
     .fetch_one(&state.pool)
     .await?;
+    // A new goal: the Architect proposes milestones toward it.
+    if let Some(new_goal) = goal.as_deref().filter(|g| Some(*g) != old_goal.as_deref()) {
+        match (
+            crate::office::group::ensure_office_chat(&state.pool, user.id, ws.id).await,
+            crate::office::group::architect_bot(&state.pool, user.id).await,
+        ) {
+            (Ok(chat), Ok(architect)) => {
+                crate::office::goals::propose_for_goal(&state, chat, architect, user.id, new_goal)
+            }
+            (chat, architect) => {
+                tracing::warn!(?chat, ?architect, office = %ws.id, "no Architect to propose milestones")
+            }
+        }
+    }
     if cap.is_some() {
         // Work that waited on the old cap may start again.
         state.dispatcher_wake.notify_one();
@@ -468,6 +519,8 @@ pub async fn rename_office(
         "goal": goal,
         "about": about,
         "monthly_cap_credits": monthly_cap,
+        "check_in": check_in,
+        "weekly_report": weekly_report,
     }))
     .into_response())
 }

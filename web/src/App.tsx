@@ -892,7 +892,8 @@ export const App: React.FC = () => {
         business_type: values.business_type,
         website: values.website,
         focus: values.focus,
-        goal: values.goal,
+        // The goal is saved from its own tab (where a new one asks the
+        // Architect for milestones); Profile doesn't send it.
         about: values.about,
         daily_plan: values.daily_plan,
         // Sent only when changed: changing the cap restarts work it stopped.
@@ -1007,6 +1008,11 @@ export const App: React.FC = () => {
     } else if (action.kind === 'setup') {
       const office = officeOfThread(activeThreadId) ?? offices.find((o) => o.primary);
       openOfficeSetup(office ? { mode: 'setup', office } : { mode: 'new' });
+    } else if (action.kind === 'keep_milestone' && action.target) {
+      // Keep a milestone the Architect proposed.
+      postJson(`/api/milestones/${action.target}`, { status: 'active', idempotency_key: `keep:${action.target}` }, 'PATCH')
+        .then(() => showOk('Milestone kept.'))
+        .catch((e) => showError(e instanceof Error ? e.message : 'That did not work.'));
     } else if (action.kind === 'forget' && action.target) {
       // A bot's "Remembered: ..." Undo.
       postJson(`/api/memories/${action.target}/delete`)
@@ -1017,6 +1023,7 @@ export const App: React.FC = () => {
       const office = officeOfThread(activeThreadId) ?? offices.find((o) => o.primary);
       const botId = action.target.startsWith('bot:') ? action.target.slice(4) : null;
       if (action.target === 'office' && office) setDialog({ kind: 'editOffice', office });
+      else if (action.target === 'goal' && office) setDialog({ kind: 'editOffice', office, tab: 'goal' });
       else if (botId) {
         const bot = agents.find((a) => a.id === botId);
         if (bot) setEditingBot(bot);

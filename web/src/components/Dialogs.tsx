@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Pin, Trash2 } from 'lucide-react';
 import { Agent, EditOfficeTab, Lesson, Memory } from '../types';
 import { DocumentsPanel } from './DocumentsPanel';
+import { GoalPanel } from './GoalPanel';
 import { useEscape, closeOnBackdrop } from '../utils/useEscape';
 
 // Small dialogs for naming, renaming and deleting offices and rooms. Each
@@ -409,6 +410,9 @@ export const EditOfficeDialog: React.FC<{
         <button type="button" role="tab" aria-selected={tab === 'profile'} onClick={() => setTab('profile')} className={tabClass(tab === 'profile')}>
           Profile
         </button>
+        <button type="button" role="tab" aria-selected={tab === 'goal'} onClick={() => setTab('goal')} className={tabClass(tab === 'goal')}>
+          Goal
+        </button>
         <button type="button" role="tab" aria-selected={tab === 'memory'} onClick={() => setTab('memory')} className={tabClass(tab === 'memory')}>
           Memory
         </button>
@@ -416,7 +420,9 @@ export const EditOfficeDialog: React.FC<{
           Documents
         </button>
       </div>
-      {tab === 'memory' ? (
+      {tab === 'goal' ? (
+        <GoalPanel officeId={officeId} onGoalSaved={(goal) => set({ goal })} />
+      ) : tab === 'memory' ? (
         <MemoryPanel officeId={officeId} agents={agents} />
       ) : tab === 'documents' ? (
         <DocumentsPanel officeId={officeId} website={initial.website} />
@@ -468,16 +474,6 @@ export const EditOfficeDialog: React.FC<{
           <option value="Get paid faster" />
           <option value="Save time on admin" />
         </datalist>
-      </label>
-      <label className="block space-y-1.5">
-        <span className="text-[11px] text-neutral-400">Goal: where the business is going</span>
-        <input
-          value={values.goal}
-          onChange={(e) => set({ goal: e.target.value })}
-          maxLength={300}
-          placeholder="Open a second shop by summer"
-          className={inputClass}
-        />
       </label>
       <label className="block space-y-1.5">
         <span className="text-[11px] text-neutral-400">About the business: hours, prices, tone, policies</span>
