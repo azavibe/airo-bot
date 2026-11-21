@@ -24,6 +24,9 @@ app and the desktop app share one version number. A release is tagged
   other rooms, and the lessons learned from your approval decisions.
 
 ### Changed
+- Each screen has one place in the navigation: the sidebar. The chat
+  composer no longer repeats the Chat, Approvals, Apps, Bots and Workflows
+  icons; on phones its menu button opens the sidebar.
 - Rooms no longer show `#`. A room with one bot is shown as that bot, with
   its avatar and name, and its menu acts on the bot (Bot settings, Rename bot,
   Archive, Delete bot). The chat header shows the bot's avatar.

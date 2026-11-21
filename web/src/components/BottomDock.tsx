@@ -4,14 +4,9 @@ import { VoiceSettings, Recording, startRecording, transcribe, groqKey } from '.
 import type { Tab } from '../App';
 import {
   Menu,
-  MessageSquare,
-  LayoutGrid,
-  Bell,
-  Users,
   Mic,
   MicOff,
   Send,
-  GitBranch,
   ChevronUp,
   CheckCircle2,
   Clock,
@@ -47,11 +42,6 @@ const COMPOSER_LINE_PX = 32;
 // button sends (as on claude.ai); everywhere else Enter sends.
 const enterAddsLine = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
-
-const navButtonClass = (active: boolean) =>
-  `w-8 h-8 rounded-full flex items-center justify-center relative transition-all ${
-    active ? 'bg-white/20 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/10'
-  }`;
 
 export const BottomDock: React.FC<BottomDockProps> = ({
   activeTab,
@@ -185,17 +175,6 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   const collapseComposer = () => {
     setIsTyping(false);
     inputRef.current?.blur();
-  };
-
-  const handleMenuClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (isTyping) {
-      // Typing mode: the menu button slides navigation back out.
-      collapseComposer();
-    } else {
-      // Nav mode (mobile only, see className): open the rooms drawer.
-      onToggleSidebarMobile?.();
-    }
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -351,85 +330,24 @@ export const BottomDock: React.FC<BottomDockProps> = ({
           isMultiline ? '!rounded-[22px]' : ''
         }`}
       >
-        {/* Left: navigation */}
-        <div className="flex items-center flex-shrink-0">
-          {/* Menu: collapses the composer; on mobile also opens the rooms drawer */}
-          <button
-            type="button"
-            onClick={handleMenuClick}
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 ${
-              isTyping ? 'flex bg-white/10 text-white hover:bg-white/20' : 'md:hidden text-neutral-400 hover:text-white hover:bg-white/10'
-            }`}
-            title={isTyping ? 'Show navigation' : 'Rooms & menu'}
-            aria-label={isTyping ? 'Show navigation' : 'Open rooms & menu'}
-          >
-            <Menu className="w-4 h-4" />
-          </button>
-
-          <div
-            className={`flex items-center gap-1 transition-all duration-300 ease-in-out overflow-hidden ${
-              isTyping
-                ? 'max-w-0 opacity-0 pointer-events-none -translate-x-2'
-                : 'max-w-[320px] opacity-100 translate-x-0 ml-1 md:ml-0'
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => onChangeTab('chat')}
-              className={navButtonClass(activeTab === 'chat')}
-              title="Chat"
-              aria-label="Chat"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onChangeTab('approvals')}
-              className={navButtonClass(activeTab === 'approvals')}
-              title={pendingApprovalsCount > 0 ? `Approvals (${pendingApprovalsCount} waiting)` : 'Approvals'}
-              aria-label="Approvals"
-            >
-              <Bell className="w-3.5 h-3.5" />
-              {pendingApprovalsCount > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-accent shadow-glow-white" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onChangeTab('apps')}
-              className={navButtonClass(activeTab === 'apps')}
-              title="Apps"
-              aria-label="Apps"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Narrow docks get these from the sidebar / drawer instead. */}
-            <button
-              type="button"
-              onClick={() => onChangeTab('bots')}
-              className={`${navButtonClass(activeTab === 'bots')} hidden lg:flex`}
-              title="Bots"
-              aria-label="Bots"
-            >
-              <Users className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onChangeTab('workflows')}
-              className={`${navButtonClass(activeTab === 'workflows')} hidden lg:flex`}
-              title="Workflows"
-              aria-label="Workflows"
-            >
-              <GitBranch className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="w-[1px] h-4 bg-white/15 mx-1.5 mb-2 flex-shrink-0" />
+        {/* Navigation lives in the sidebar only. On phones the sidebar is a
+            drawer, opened here; a dot says approvals are waiting. */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSidebarMobile?.();
+          }}
+          className="md:hidden relative w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+          title={pendingApprovalsCount > 0 ? `Rooms & menu (${pendingApprovalsCount} approvals waiting)` : 'Rooms & menu'}
+          aria-label="Open rooms & menu"
+        >
+          <Menu className="w-4 h-4" />
+          {pendingApprovalsCount > 0 && (
+            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-accent shadow-glow-white" />
+          )}
+        </button>
+        <div className="md:hidden w-[1px] h-4 bg-white/15 mx-1.5 mb-2 flex-shrink-0" />
 
         {/* Middle: Ask Bot input */}
         <div
