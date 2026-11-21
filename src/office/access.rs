@@ -443,6 +443,7 @@ async fn access_view(pool: &PgPool, office: Uuid, agent_id: Uuid) -> Result<Valu
             "granted": access.may_use_app(&slug),
         })).collect::<Vec<_>>(),
         "connections": tools,
+        "knows": crate::office::documents::knows(pool, office, agent_id).await,
     }))
 }
 

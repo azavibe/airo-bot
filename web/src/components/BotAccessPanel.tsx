@@ -24,6 +24,8 @@ interface AccessView {
   explicit: boolean;
   apps: AccessApp[];
   connections: AccessTool[];
+  /** The office's documents it answers from, and whether only from them. */
+  knows?: { documents: { id: string; title: string }[]; documents_only: boolean };
 }
 
 const call = async (url: string, method = 'GET', body?: unknown): Promise<AccessView> => {
@@ -77,6 +79,7 @@ export const BotAccessPanel: React.FC<{ botId: string; office: Office }> = ({ bo
   const toggle = (kind: 'app' | 'tool', key: string) => {
     if (!view) return;
     const next: AccessView = {
+      ...view,
       explicit: true,
       apps: view.apps.map((a) => (kind === 'app' && a.slug === key ? { ...a, granted: !a.granted } : a)),
       connections: view.connections.map((t) => (kind === 'tool' && t.key === key ? { ...t, granted: !t.granted } : t)),
@@ -88,6 +91,26 @@ export const BotAccessPanel: React.FC<{ botId: string; office: Office }> = ({ bo
         connections: next.connections.filter((t) => t.granted).map((t) => t.key),
       }),
       view
+    );
+  };
+
+  // "Answer only from documents" is one of the bot's own settings.
+  const toggleOnly = () => {
+    if (!view?.knows) return;
+    const on = !view.knows.documents_only;
+    const previous = view;
+    setView({ ...view, knows: { ...view.knows, documents_only: on } });
+    void save(
+      (async () => {
+        const res = await fetch(`/agents/${botId}/settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ documents_only: on, idempotency_key: `${botId}:documents_only:${on}` }),
+        }).catch(() => null);
+        if (!res?.ok) throw new Error('Could not save that. Please try again.');
+        return call(base);
+      })(),
+      previous
     );
   };
 
@@ -146,6 +169,37 @@ export const BotAccessPanel: React.FC<{ botId: string; office: Office }> = ({ bo
               ))
             )}
           </div>
+          {view.knows && (
+            <div className="space-y-1.5">
+              <div className="text-[11px] text-neutral-400">Documents: it answers from the office's documents</div>
+              {view.knows.documents.length === 0 ? (
+                <p className="text-[11px] text-neutral-500">
+                  No documents yet. Add a price list, FAQ or policies in Edit office → Documents.
+                </p>
+              ) : (
+                <p className="text-[12px] text-neutral-300">
+                  {view.knows.documents
+                    .slice(0, 6)
+                    .map((d) => d.title)
+                    .join(', ')}
+                  {view.knows.documents.length > 6 && ` and ${view.knows.documents.length - 6} more`}
+                </p>
+              )}
+              <label className="flex items-center gap-2.5 text-[13px] text-neutral-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className={box}
+                  checked={view.knows.documents_only}
+                  disabled={busy}
+                  onChange={toggleOnly}
+                />
+                <span>
+                  Answer only from documents{' '}
+                  <span className="text-neutral-500">· says it doesn't know instead of guessing</span>
+                </span>
+              </label>
+            </div>
+          )}
         </>
       )}
       {error && <p className="text-[11px] text-red-300">{error}</p>}

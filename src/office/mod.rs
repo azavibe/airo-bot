@@ -4,6 +4,7 @@ pub mod budget_gate;
 pub mod contacts;
 pub mod context;
 pub mod daily;
+pub mod documents;
 pub mod evolver;
 pub mod fsm_dispatcher;
 pub mod group;
