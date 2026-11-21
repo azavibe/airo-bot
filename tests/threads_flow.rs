@@ -387,6 +387,71 @@ async fn joined_agent_can_view_its_private_thread(pool: PgPool) {
     assert_eq!(res.status, StatusCode::OK);
 }
 
+#[sqlx::test]
+async fn json_thread_past_the_note_cap_returns_the_newest_notes_oldest_first(pool: PgPool) {
+    // The web app reloads a room through the JSON view. Past the 500-note
+    // cap it must get the room's newest notes, still in reading order, not
+    // its first 500.
+    let owner = sign_in(&pool, "owner@example.com", "owner").await;
+    let thread_id = create_private_thread(&pool, &owner, "busy room").await;
+    let thread_uuid = Uuid::parse_str(&thread_id).expect("thread uuid");
+    let owner_id: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE handle = 'owner'")
+        .fetch_one(&pool)
+        .await
+        .expect("owner id");
+
+    // Notes 1..=520, written in order so `seq` follows the number, then a
+    // newer soft-deleted one that must not take a place in the window.
+    sqlx::query(
+        "INSERT INTO notes (thread_id, author_user_id, body, kind)
+         SELECT $1, $2, 'note ' || i, 'comment'::note_kind
+         FROM generate_series(1, 520) AS i",
+    )
+    .bind(thread_uuid)
+    .bind(owner_id)
+    .execute(&pool)
+    .await
+    .expect("insert notes");
+    sqlx::query(
+        "INSERT INTO notes (thread_id, author_user_id, body, kind, deleted_at)
+         VALUES ($1, $2, 'deleted note', 'comment', now())",
+    )
+    .bind(thread_uuid)
+    .bind(owner_id)
+    .execute(&pool)
+    .await
+    .expect("insert deleted note");
+
+    let mut req = get_request(&format!("/threads/{thread_id}"), Some(&owner));
+    req.headers_mut()
+        .insert("accept", "application/json".parse().unwrap());
+    let res = send(pool, req).await;
+    assert_eq!(res.status, StatusCode::OK);
+
+    let notes = res.body["notes"].as_array().expect("notes array");
+    assert_eq!(notes.len(), 500);
+    let bodies: Vec<&str> = notes
+        .iter()
+        .map(|n| n["body"].as_str().expect("body"))
+        .collect();
+    assert_eq!(bodies.last(), Some(&"note 520"), "newest note is missing");
+    assert_eq!(
+        bodies.first(),
+        Some(&"note 21"),
+        "the window is the newest 500"
+    );
+    let seqs: Vec<i64> = notes
+        .iter()
+        .map(|n| n["seq"].as_i64().expect("seq"))
+        .collect();
+    assert!(
+        seqs.windows(2).all(|w| w[0] < w[1]),
+        "notes come oldest first"
+    );
+    assert_eq!(notes[499]["author_name"], "owner");
+    assert_eq!(notes[499]["author_kind"], "human");
+}
+
 // ---------- POST /threads/:id/notes -- the command rule ----------
 
 #[sqlx::test]
