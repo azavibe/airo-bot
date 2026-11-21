@@ -161,6 +161,9 @@ pub struct Note {
     pub deleted_at: Option<DateTime<Utc>>,
     /// One-tap buttons a bot offers with this note (see migration 0051).
     pub actions: Option<serde_json::Value>,
+    /// Live app record cards (references, see migration 0064).
+    #[sqlx(default)]
+    pub cards: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]

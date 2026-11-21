@@ -715,7 +715,8 @@ async fn bots_fill_the_office_apps_from_their_answers(pool: PgPool) {
     assert!(!prompt.contains("Small business"), "{prompt}");
 
     let answer = "Three groups to win this month.\nADD leads-pipeline {\"name\": \"Tour operator\", \"stage\": \"Qualified\", \"estimated_value\": 2400}\nADD leads-pipeline {\"name\": \"Wedding party\", \"estimated_value\": 5000}\nQuestion: Do you take group bookings over 20 rooms?";
-    let (shown, actions) = airobot::office::context::apply_records(&pool, room, bot, answer).await;
+    let (shown, actions, cards) =
+        airobot::office::context::apply_records(&pool, room, bot, answer).await;
     assert!(shown.contains("Added 2 to Lead Pipeline & CRM"), "{shown}");
     assert!(!shown.contains("ADD "), "{shown}");
     assert!(
@@ -723,6 +724,11 @@ async fn bots_fill_the_office_apps_from_their_answers(pool: PgPool) {
         "{shown}"
     );
     assert_eq!(actions.expect("button")[0]["target"], "apps");
+    // Each added record is also a live card in the message.
+    assert_eq!(cards.len(), 2);
+    assert!(cards
+        .iter()
+        .all(|c| c["type"] == "app_record_card" && c["action"] == "created"));
 
     let records = send(
         pool.clone(),
@@ -749,7 +755,7 @@ async fn bots_fill_the_office_apps_from_their_answers(pool: PgPool) {
     );
 
     // An answer without ADD lines is left alone.
-    let (plain, none) =
+    let (plain, none, _) =
         airobot::office::context::apply_records(&pool, room, bot, "Just advice.").await;
     assert_eq!(plain, "Just advice.");
     assert!(none.is_none());

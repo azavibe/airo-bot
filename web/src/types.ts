@@ -41,6 +41,39 @@ export interface Note {
   created_at: string;
   /** One-tap buttons a bot offers with this note. */
   actions?: NoteAction[] | null;
+  /** Live app record cards: references the app draws from the records. */
+  cards?: NoteCardRef[] | null;
+}
+
+/** A reference to an app record a message added or changed. The card is
+ *  drawn from the record as it is now, never from a copy. */
+export interface NoteCardRef {
+  type: 'app_record_card';
+  app_slug: string;
+  record_id: string;
+  /** `created`, `updated` (applied) or `proposed_update` (waits for OK). */
+  action: 'created' | 'updated' | 'proposed_update' | string;
+  /** The record's title when the message was written (for tombstones). */
+  title?: string;
+  changed_fields?: string[];
+  approval_id?: string;
+}
+
+/** A record as `GET /api/office/records` returns it: live, or a tombstone. */
+export interface RecordView {
+  id: string;
+  app_slug?: string;
+  app_title?: string;
+  record_type?: string;
+  status?: string;
+  data?: Record<string, any>;
+  contact?: { id: string; name: string | null } | null;
+  created_by_agent_id?: string | null;
+  updated_at?: string;
+  /** Set when the record is deleted, or its app archived or deleted. */
+  gone?: 'deleted' | 'archived' | null;
+  /** Changes a bot proposed that wait for the owner's OK. */
+  pending?: { approval_id: string; changes: Record<string, any> | null; requested_by: string; created_at: string }[];
 }
 
 /** `send`: sends `message` as your own message; `setup`: opens office

@@ -657,6 +657,8 @@ pub fn app(state: AppState) -> Router {
             "/api/office/records/{id}",
             patch(office::architect::patch_app_record),
         )
+        .route("/api/office/records", get(office::records::get_records))
+        .route("/api/office/events", get(office::records::office_events))
         .route(
             "/api/office/records/{id}/delete",
             post(office::architect::delete_app_record),

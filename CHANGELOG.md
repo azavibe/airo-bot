@@ -33,6 +33,11 @@ app and the desktop app share one version number. A release is tagged
   the Store Manager sees Shopify, the Sales Lead sees leads and Gmail. Change
   it in the bot's settings under "What it can use". Bots read fresh data from
   their tools before they answer; anything they send stays a draft.
+- **Live record cards in chat**: when a bot adds or changes a lead, invoice,
+  booking or ticket, its message shows the record as a card that stays up to
+  date, with its contact, key fields and a link into the app. A deleted
+  record says so. A change from an Ask first bot waits on its card with
+  Approve, Edit and Reject; a Trusted bot's applies at once.
 - **Recurring jobs from chat**: ask a bot "every Monday at 9, list overdue
   invoices" and it sets the schedule; it runs as one of its jobs, in your
   time. Manage them in the bot's settings.
