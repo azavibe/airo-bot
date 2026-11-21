@@ -12,6 +12,7 @@ pub mod group;
 pub mod kickoff;
 pub mod memory;
 pub mod outcome;
+pub mod recurring;
 pub mod spend;
 
 use sqlx::PgPool;

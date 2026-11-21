@@ -2199,6 +2199,10 @@ pub struct AgentSettingsRequest {
     /// The bot's own hard monthly spending cap in credits; 0 removes it.
     #[serde(default)]
     pub monthly_cap_credits: Option<i64>,
+    /// `ask_first` (its own schedules wait for the owner's Start) or
+    /// `trusted` (they start at once).
+    #[serde(default)]
+    pub permission_mode: Option<String>,
     #[serde(default)]
     pub idempotency_key: Option<String>,
 }
@@ -2214,6 +2218,7 @@ pub struct AgentSettingsView {
     pub provider_model: Option<String>,
     pub documents_only: bool,
     pub monthly_cap_credits: Option<i64>,
+    pub permission_mode: String,
 }
 
 /// Trims a setting; `None` = unchanged, `Some(None)` = clear.
@@ -2290,6 +2295,13 @@ pub async fn update_agent_settings(
     let ai_model = setting(body.ai_model);
     let provider_model = setting(body.provider_model);
     let cap = crate::office::spend::cap_setting(body.monthly_cap_credits)?;
+    if let Some(mode) = body.permission_mode.as_deref() {
+        if !matches!(mode, "ask_first" | "trusted") {
+            return Err(AppError::BadRequest(
+                "permission_mode is ask_first or trusted".to_string(),
+            ));
+        }
+    }
     for model in [&ai_model, &provider_model].into_iter().flatten().flatten() {
         if !model_name_ok(model) {
             return Err(AppError::BadRequest(
@@ -2309,10 +2321,11 @@ pub async fn update_agent_settings(
             documents_only = COALESCE($13, documents_only),
             monthly_cap_credits = CASE WHEN $14 THEN $15 ELSE monthly_cap_credits END,
             cap_notice_month = CASE WHEN $14 THEN NULL ELSE cap_notice_month END,
+            permission_mode = COALESCE($16, permission_mode),
             updated_at = now()
          WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND revoked_at IS NULL
          RETURNING id, name, handle, instructions, ai_engine, ai_model, provider_model,
-                   documents_only, monthly_cap_credits",
+                   documents_only, monthly_cap_credits, permission_mode",
     )
     .bind(agent_id)
     .bind(user_id)
@@ -2329,6 +2342,7 @@ pub async fn update_agent_settings(
     .bind(body.documents_only)
     .bind(cap.is_some())
     .bind(cap.flatten())
+    .bind(body.permission_mode.as_deref())
     .fetch_optional(&state.pool)
     .await?
     .ok_or(AppError::NotFound)?;

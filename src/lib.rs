@@ -473,6 +473,18 @@ pub fn app(state: AppState) -> Router {
         )
         .route("/agents/{id}/stats", get(office::spend::agent_stats))
         .route(
+            "/agents/{id}/schedules",
+            get(office::recurring::list_schedules).post(office::recurring::create_schedule),
+        )
+        .route(
+            "/api/schedules/{id}",
+            patch(office::recurring::update_schedule),
+        )
+        .route(
+            "/api/schedules/{id}/delete",
+            post(office::recurring::delete_schedule),
+        )
+        .route(
             "/agents/{id}/access/reset",
             post(office::access::reset_access),
         )

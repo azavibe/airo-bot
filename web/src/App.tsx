@@ -1008,6 +1008,12 @@ export const App: React.FC = () => {
     } else if (action.kind === 'setup') {
       const office = officeOfThread(activeThreadId) ?? offices.find((o) => o.primary);
       openOfficeSetup(office ? { mode: 'setup', office } : { mode: 'new' });
+    } else if ((action.kind === 'start_job' || action.kind === 'stop_job') && action.target) {
+      // Start a recurring job a bot proposed, or stop one it set.
+      const status = action.kind === 'start_job' ? 'active' : 'stopped';
+      postJson(`/api/schedules/${action.target}`, { status, idempotency_key: `${action.target}:${status}:${Date.now()}` }, 'PATCH')
+        .then(() => showOk(status === 'active' ? 'Started. It runs on schedule.' : 'Stopped.'))
+        .catch((e) => showError(e instanceof Error ? e.message : 'That did not work.'));
     } else if (action.kind === 'keep_milestone' && action.target) {
       // Keep a milestone the Architect proposed.
       postJson(`/api/milestones/${action.target}`, { status: 'active', idempotency_key: `keep:${action.target}` }, 'PATCH')

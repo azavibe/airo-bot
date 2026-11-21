@@ -33,6 +33,12 @@ app and the desktop app share one version number. A release is tagged
   the Store Manager sees Shopify, the Sales Lead sees leads and Gmail. Change
   it in the bot's settings under "What it can use". Bots read fresh data from
   their tools before they answer; anything they send stays a draft.
+- **Recurring jobs from chat**: ask a bot "every Monday at 9, list overdue
+  invoices" and it sets the schedule; it runs as one of its jobs, in your
+  time. Manage them in the bot's settings.
+- **Permission modes per bot**: Ask first (the default) means a schedule a
+  bot sets waits for your Start; Trusted starts it at once. Anything sent
+  outside still needs your approval.
 - **Goals that move**: set the office's goal under Edit office → Goal, and
   the Architect proposes measurable milestones for you to keep (or add your
   own, with dates). Every bot works toward the open ones. Turn on check-ins

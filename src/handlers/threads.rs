@@ -1585,6 +1585,25 @@ async fn deliver_reply(
         crate::office::memory::apply_remember(pool, thread_id, architect.id, &body).await;
     // `[doc 1a2b3c4d]` citations become "(from “Price list”)".
     let body = crate::office::documents::cite(pool, thread_id, &body).await;
+    // Recurring jobs it set (`EVERY ...:` lines): proposed, or started for
+    // a Trusted bot.
+    let (body, schedules) =
+        crate::office::recurring::apply_schedules(pool, thread_id, architect.id, &body).await;
+    let (body, actions) = if schedules.is_empty() {
+        (body, actions)
+    } else {
+        let (line, buttons) = crate::office::recurring::schedules_note(&schedules);
+        let mut all = actions
+            .and_then(|a| a.as_array().cloned())
+            .unwrap_or_default();
+        all.extend(buttons);
+        let body = if body.is_empty() {
+            line
+        } else {
+            format!("{body}\n\n{line}")
+        };
+        (body, Some(serde_json::Value::Array(all)))
+    };
     // Milestones it proposed (`MILESTONE:` lines) wait for the owner's
     // Keep.
     let (body, proposed) =
@@ -1791,6 +1810,8 @@ pub(crate) async fn run_agent_reply(
                     &crate::office::contacts::context_block(&pool, business.workspace_id, &history)
                         .await,
                 );
+                // How to set a recurring job, and the ones it has.
+                sys.push_str(&crate::office::recurring::prompt_block(&pool, agent_id).await);
                 // The passages of the office's documents that fit this
                 // conversation, and whether to answer only from them.
                 sys.push_str(
