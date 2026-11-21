@@ -49,7 +49,7 @@ export interface Note {
  *  `forget`: forgets the memory whose id is `target` (a bot's Undo). */
 export interface NoteAction {
   label: string;
-  kind: 'send' | 'setup' | 'open' | 'forget' | 'keep_milestone';
+  kind: 'send' | 'setup' | 'open' | 'forget' | 'keep_milestone' | 'start_job' | 'stop_job';
   message?: string;
   target?: string;
 }
