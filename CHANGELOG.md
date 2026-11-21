@@ -15,6 +15,13 @@ app and the desktop app share one version number. A release is tagged
   a soft delete; nothing is erased.
 - Right-click menus on offices, rooms and messages. The desktop app no longer
   shows the webview's Back / Reload / Save as menu.
+- **Office memory**: facts every bot in the office (or one bot) always knows,
+  managed under Edit office → Memory. A bot saves a fact by itself and says
+  "Remembered: …" in the chat, with Undo.
+- **Goal** and **About the business** for each office; every bot works from
+  them.
+- Rooms share context: each bot sees the latest messages from the office's
+  other rooms, and the lessons learned from your approval decisions.
 
 ### Changed
 - Rooms no longer show `#`. A room with one bot is shown as that bot, with

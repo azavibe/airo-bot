@@ -384,12 +384,12 @@ ${a}`)
                             disabled={done}
                             title={action.message}
                             onClick={() => {
-                              if (action.kind === 'send') setPressed((p) => [...p, key]);
+                              if (action.kind === 'send' || action.kind === 'forget') setPressed((p) => [...p, key]);
                               onAction(action);
                             }}
                             className="h-7 px-3 rounded-full border border-white/15 text-[12px] text-neutral-200 hover:text-white hover:border-white/30 hover:bg-white/[0.05] transition-colors disabled:opacity-40 disabled:cursor-default"
                           >
-                            {done ? 'Sent' : action.label}
+                            {done ? (action.kind === 'forget' ? 'Forgotten' : 'Sent') : action.label}
                           </button>
                         );
                       })}

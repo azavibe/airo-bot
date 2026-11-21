@@ -104,7 +104,7 @@ type Dialog =
   | { kind: 'newRoom'; office: Office }
   | { kind: 'renameRoom'; thread: Thread }
   | { kind: 'deleteRoom'; thread: Thread }
-  | { kind: 'editOffice'; office: Office }
+  | { kind: 'editOffice'; office: Office; memory?: boolean }
   | { kind: 'renameBot'; agent: Agent }
   | { kind: 'deleteBot'; agent: Agent }
   | { kind: 'deleteNote'; note: Note }
@@ -844,6 +844,8 @@ export const App: React.FC = () => {
         business_type: values.business_type,
         website: values.website,
         focus: values.focus,
+        goal: values.goal,
+        about: values.about,
         daily_plan: values.daily_plan,
         idempotency_key: newKey(),
       },
@@ -858,6 +860,8 @@ export const App: React.FC = () => {
               business_type: saved.business_type,
               website: saved.website,
               focus: saved.focus,
+              goal: saved.goal,
+              about: saved.about,
               daily_plan: saved.daily_plan,
             }
           : o
@@ -939,6 +943,11 @@ export const App: React.FC = () => {
     } else if (action.kind === 'setup') {
       const office = officeOfThread(activeThreadId) ?? offices.find((o) => o.primary);
       openOfficeSetup(office ? { mode: 'setup', office } : { mode: 'new' });
+    } else if (action.kind === 'forget' && action.target) {
+      // A bot's "Remembered: ..." Undo.
+      postJson(`/api/memories/${action.target}/delete`)
+        .then(() => showOk('Forgotten.'))
+        .catch((e) => showError(e instanceof Error ? e.message : 'That did not work.'));
     } else if (action.kind === 'open' && action.target) {
       const tabs: Tab[] = ['chat', 'apps', 'approvals', 'bots', 'workflows'];
       if (action.target === 'connections' || action.target === 'account') openSettings(action.target);
@@ -1010,7 +1019,7 @@ export const App: React.FC = () => {
     onDeleteOffice: (office: Office) => setDialog({ kind: 'deleteOffice', office }),
     onRenameRoom: (thread: Thread) => setDialog({ kind: 'renameRoom', thread }),
     onDeleteRoom: (thread: Thread) => setDialog({ kind: 'deleteRoom', thread }),
-    onEditOffice: (office: Office) => setDialog({ kind: 'editOffice', office }),
+    onEditOffice: (office: Office, memory?: boolean) => setDialog({ kind: 'editOffice', office, memory }),
     onArchiveRoom: (thread: Thread) => setRoomArchived(thread, true),
     onUnarchiveRoom: (thread: Thread) => setRoomArchived(thread, false),
     agents,
@@ -1419,11 +1428,18 @@ export const App: React.FC = () => {
       )}
       {dialog?.kind === 'editOffice' && (
         <EditOfficeDialog
+          officeId={dialog.office.id}
+          agents={agents.filter((a) =>
+            roomsOf(dialog.office, threads, offices).some((t) => t.agent_ids?.includes(a.id))
+          )}
+          startOnMemory={!!dialog.memory}
           initial={{
             name: dialog.office.name,
             business_type: dialog.office.business_type ?? '',
             website: dialog.office.website ?? '',
             focus: dialog.office.focus ?? '',
+            goal: dialog.office.goal ?? '',
+            about: dialog.office.about ?? '',
             daily_plan: dialog.office.daily_plan !== false,
           }}
           onSubmit={(values) => editOffice(dialog.office, values)}

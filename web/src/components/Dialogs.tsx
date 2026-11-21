@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
-import { Agent } from '../types';
+import { X, Pin, Trash2 } from 'lucide-react';
+import { Agent, Lesson, Memory } from '../types';
 import { useEscape, closeOnBackdrop } from '../utils/useEscape';
 
 // Small dialogs for naming, renaming and deleting offices and rooms. Each
@@ -15,8 +15,10 @@ const Shell: React.FC<{
   submitLabel: string;
   danger?: boolean;
   disabled?: boolean;
+  /** A wider dialog (Edit office). */
+  wide?: boolean;
   children?: React.ReactNode;
-}> = ({ title, onClose, onSubmit, busy, error, submitLabel, danger, disabled, children }) => {
+}> = ({ title, onClose, onSubmit, busy, error, submitLabel, danger, disabled, wide, children }) => {
   useEscape(true, onClose);
   return (
     <div
@@ -28,7 +30,7 @@ const Shell: React.FC<{
           e.preventDefault();
           onSubmit();
         }}
-        className="glass-panel w-full max-w-sm p-5 space-y-4 border-white/15"
+        className={`glass-panel w-full ${wide ? 'max-w-lg max-h-[90vh] overflow-y-auto' : 'max-w-sm'} p-5 space-y-4 border-white/15`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -142,18 +144,231 @@ export interface OfficeEdit {
   business_type: string;
   website: string;
   focus: string;
+  goal: string;
+  about: string;
   daily_plan: boolean;
 }
+
+/** One request to the server; throws its short message on failure. */
+const request = async (url: string, body: Record<string, unknown> | null, method = 'POST'): Promise<any> => {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: body === null ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new Error('Could not reach Airobot. Check your connection and try again.');
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || 'That did not work. Please try again.');
+  return data;
+};
+
+/** What an office remembers: facts every bot (or one bot) always knows,
+ *  and the rules learned from the owner's approval decisions. Changes are
+ *  saved at once. */
+const MemoryPanel: React.FC<{ officeId: string; agents: Agent[] }> = ({ officeId, agents }) => {
+  const [memories, setMemories] = useState<Memory[] | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [limit, setLimit] = useState(200);
+  const [draft, setDraft] = useState('');
+  const [forBot, setForBot] = useState('');
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = React.useCallback(async () => {
+    try {
+      const data = await request(`/api/offices/${officeId}/memory`, null, 'GET');
+      setMemories(data.memories ?? []);
+      setLessons(data.lessons ?? []);
+      setLimit(data.limit ?? 200);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load the memory.');
+      setMemories([]);
+    }
+  }, [officeId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const add = () =>
+    run(async () => {
+      const body = draft.trim();
+      if (!body) return;
+      await request(`/api/offices/${officeId}/memory`, {
+        body,
+        agent_id: forBot || undefined,
+        idempotency_key: `${officeId}:${body}:${forBot}`,
+      });
+      setDraft('');
+    });
+  const botName = (id?: string | null) => agents.find((a) => a.id === id)?.name;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[12px] text-neutral-400 leading-relaxed">
+        Every bot in this office knows these and follows them. Pinned facts come first. A bot can save a fact too; it
+        tells you in the chat, with Undo.
+      </p>
+      <div className="space-y-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          maxLength={500}
+          rows={2}
+          placeholder="Something the team should always know, e.g. We close at 6pm on Saturdays."
+          className={`${inputClass} resize-none`}
+        />
+        <div className="flex items-center gap-2">
+          <select
+            value={forBot}
+            onChange={(e) => setForBot(e.target.value)}
+            aria-label="Who remembers it"
+            className="flex-1 min-w-0 h-8 px-2 rounded-lg bg-white/5 border border-white/10 text-[12px] text-neutral-200 outline-none"
+          >
+            <option value="">The whole office</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                Only {a.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={add}
+            disabled={busy || !draft.trim()}
+            className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold disabled:opacity-40"
+          >
+            Remember
+          </button>
+        </div>
+      </div>
+      {error && <p className="text-xs text-red-300">{error}</p>}
+      {memories === null ? (
+        <p className="text-[12px] text-neutral-500">Loading…</p>
+      ) : memories.length === 0 ? (
+        <p className="text-[12px] text-neutral-500">Nothing yet.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {memories.map((m) => (
+            <li key={m.id} className="group rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+              {editing?.id === m.id ? (
+                <input
+                  autoFocus
+                  value={editing.text}
+                  maxLength={500}
+                  onChange={(e) => setEditing({ id: m.id, text: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const text = editing.text.trim();
+                      void run(async () => {
+                        if (text && text !== m.body) await request(`/api/memories/${m.id}`, { body: text }, 'PATCH');
+                        setEditing(null);
+                      });
+                    } else if (e.key === 'Escape') {
+                      e.stopPropagation();
+                      setEditing(null);
+                    }
+                  }}
+                  onBlur={() => setEditing(null)}
+                  className={inputClass}
+                />
+              ) : (
+                <div className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditing({ id: m.id, text: m.body })}
+                    title="Edit"
+                    className="flex-1 min-w-0 text-left text-[13px] text-neutral-100 leading-snug"
+                  >
+                    {m.body}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => run(() => request(`/api/memories/${m.id}`, { pinned: !m.pinned }, 'PATCH'))}
+                    aria-label={m.pinned ? 'Unpin' : 'Pin'}
+                    aria-pressed={m.pinned}
+                    title={m.pinned ? 'Unpin' : 'Pin: always first'}
+                    className={`p-1 rounded-md transition-colors ${m.pinned ? 'text-white' : 'text-neutral-500 hover:text-white'}`}
+                  >
+                    <Pin className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => run(() => request(`/api/memories/${m.id}/delete`, {}))}
+                    aria-label="Forget"
+                    title="Forget"
+                    className="p-1 rounded-md text-neutral-500 hover:text-red-300 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="mt-1 text-[10.5px] text-neutral-500">
+                {m.agent_id ? `Only ${botName(m.agent_id) ?? 'one bot'}` : 'Whole office'}
+                {m.source === 'bot' && ` · saved by ${botName(m.created_by_agent_id) ?? 'a bot'}`}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {memories && memories.length >= limit && (
+        <p className="text-[11px] text-amber-300">This office remembers {limit} things already. Forget one to add more.</p>
+      )}
+      {lessons.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-[11px] uppercase tracking-wide text-neutral-500 pt-1">Learned from your decisions</div>
+          {lessons.map((l) => (
+            <div key={l.id} className="flex items-start gap-2 rounded-xl border border-white/10 px-3 py-2">
+              <span className="flex-1 text-[13px] text-neutral-200 leading-snug">{l.rule}</span>
+              <button
+                type="button"
+                onClick={() => run(() => request(`/api/lessons/${l.id}/delete`, {}))}
+                aria-label="Forget this rule"
+                title="Forget this rule"
+                className="p-1 rounded-md text-neutral-500 hover:text-red-300 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 /** The office's own settings in one place: its name, what the business
  *  is, its website and this month's focus (every bot works from them), and
  *  the morning plan. */
 export const EditOfficeDialog: React.FC<{
+  officeId: string;
+  /** The bots a fact can belong to. */
+  agents: Agent[];
   initial: OfficeEdit;
+  /** Open on the Memory tab. */
+  startOnMemory?: boolean;
   onSubmit: (values: OfficeEdit) => Promise<void>;
   onClose: () => void;
-}> = ({ initial, onSubmit, onClose }) => {
+}> = ({ officeId, agents, initial, startOnMemory = false, onSubmit, onClose }) => {
   const [values, setValues] = useState<OfficeEdit>(initial);
+  const [tab, setTab] = useState<'profile' | 'memory'>(startOnMemory ? 'memory' : 'profile');
   const set = (patch: Partial<OfficeEdit>) => setValues((v) => ({ ...v, ...patch }));
   const { busy, error, go } = useAction(
     () =>
@@ -163,19 +378,38 @@ export const EditOfficeDialog: React.FC<{
         business_type: values.business_type.trim(),
         website: values.website.trim(),
         focus: values.focus.trim(),
+        goal: values.goal.trim(),
+        about: values.about.trim(),
       }),
     onClose
   );
+  const tabClass = (on: boolean) =>
+    `px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-colors ${
+      on ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-white'
+    }`;
   return (
     <Shell
       title="Edit office"
       onClose={onClose}
-      onSubmit={go}
+      onSubmit={tab === 'profile' ? go : onClose}
       busy={busy}
-      error={error}
-      submitLabel="Save"
-      disabled={!values.name.trim()}
+      error={tab === 'profile' ? error : null}
+      submitLabel={tab === 'profile' ? 'Save' : 'Done'}
+      disabled={tab === 'profile' && !values.name.trim()}
+      wide
     >
+      <div role="tablist" className="flex gap-1 -mt-1">
+        <button type="button" role="tab" aria-selected={tab === 'profile'} onClick={() => setTab('profile')} className={tabClass(tab === 'profile')}>
+          Profile
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'memory'} onClick={() => setTab('memory')} className={tabClass(tab === 'memory')}>
+          Memory
+        </button>
+      </div>
+      {tab === 'memory' ? (
+        <MemoryPanel officeId={officeId} agents={agents} />
+      ) : (
+      <>
       <label className="block space-y-1.5">
         <span className="text-[11px] text-neutral-400">Office name</span>
         <input
@@ -223,6 +457,27 @@ export const EditOfficeDialog: React.FC<{
           <option value="Save time on admin" />
         </datalist>
       </label>
+      <label className="block space-y-1.5">
+        <span className="text-[11px] text-neutral-400">Goal: where the business is going</span>
+        <input
+          value={values.goal}
+          onChange={(e) => set({ goal: e.target.value })}
+          maxLength={300}
+          placeholder="Open a second shop by summer"
+          className={inputClass}
+        />
+      </label>
+      <label className="block space-y-1.5">
+        <span className="text-[11px] text-neutral-400">About the business: hours, prices, tone, policies</span>
+        <textarea
+          value={values.about}
+          onChange={(e) => set({ about: e.target.value })}
+          maxLength={4000}
+          rows={4}
+          placeholder={'Open 7am-6pm, closed Mondays.\nCakes need two days\' notice.\nFriendly, short replies.'}
+          className={`${inputClass} resize-y`}
+        />
+      </label>
       <label className="flex items-center gap-2.5 text-[13px] text-neutral-200 cursor-pointer">
         <input
           type="checkbox"
@@ -235,6 +490,8 @@ export const EditOfficeDialog: React.FC<{
       <p className="text-[11px] text-neutral-500 leading-relaxed">
         Every bot in this office reads these. Leave a field empty to clear it.
       </p>
+      </>
+      )}
     </Shell>
   );
 };
