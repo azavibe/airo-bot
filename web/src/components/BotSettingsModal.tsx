@@ -4,6 +4,7 @@ import { Agent, LocalEngineId, Office } from '../types';
 import { botModelLabel } from '../utils/format';
 import { useEscape, closeOnBackdrop } from '../utils/useEscape';
 import { BotAccessPanel } from './BotAccessPanel';
+import { BotSpendPanel } from './BotSpendPanel';
 
 // One bot's settings: its name, its character, and which AI it thinks
 // with. In the desktop app that is a tool on this computer (Claude Code,
@@ -343,6 +344,8 @@ export const BotSettingsModal: React.FC<Props> = ({
             </div>
           )}
         </div>
+
+        {bot && !localMode && <BotSpendPanel botId={bot.id} />}
 
         {bot && office && <BotAccessPanel botId={bot.id} office={office} />}
 

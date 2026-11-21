@@ -42,6 +42,13 @@ pub struct OfficeItem {
     pub focus: Option<String>,
     pub goal: Option<String>,
     pub about: Option<String>,
+    /// The office's hard monthly spending cap in credits, if any.
+    pub monthly_cap_credits: Option<i64>,
+    /// Credits its metered AI calls have cost this month.
+    pub month_spent_credits: i64,
+    /// The cap refused a call this month and hasn't been changed since:
+    /// its autonomous work waits.
+    pub cap_reached: bool,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -78,6 +85,13 @@ pub async fn list_for(pool: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<OfficeIt
     let rows = sqlx::query_as::<_, OfficeItem>(
         "SELECT w.id, w.name, (w.id = $2) AS primary, w.daily_plan, w.paused,
                 w.business_type, w.website, w.focus, w.goal, w.about,
+                w.monthly_cap_credits,
+                (SELECT COALESCE(SUM(l.credits_charged), 0)::bigint FROM credit_ledger l
+                  WHERE l.office_id = w.id AND l.created_at >= date_trunc('month', now())
+                ) AS month_spent_credits,
+                (w.monthly_cap_credits IS NOT NULL
+                  AND w.cap_notice_month IS NOT DISTINCT FROM date_trunc('month', now())::date
+                ) AS cap_reached,
                 (SELECT COUNT(*) FROM threads t
                   WHERE t.user_id = $1 AND t.deleted_at IS NULL AND t.kind = 'room'
                     AND (t.workspace_id = w.id OR (t.workspace_id IS NULL AND w.id = $2))
@@ -313,6 +327,10 @@ pub struct RenameOfficeRequest {
     pub goal: Option<String>,
     #[serde(default)]
     pub about: Option<String>,
+    /// The hard monthly spending cap in credits; 0 removes it. Changing it
+    /// lets work that waited on the old cap run again.
+    #[serde(default)]
+    pub monthly_cap_credits: Option<i64>,
     pub idempotency_key: Option<String>,
 }
 
@@ -370,11 +388,13 @@ pub async fn rename_office(
         ),
         None => None,
     };
+    let cap = crate::office::spend::cap_setting(body.monthly_cap_credits)?;
     let profile_changes = business_type.is_some()
         || focus.is_some()
         || website.is_some()
         || goal.is_some()
-        || about.is_some();
+        || about.is_some()
+        || cap.is_some();
     let name = match body.name.as_deref() {
         Some(raw) => clean_name(raw)?,
         None if body.daily_plan.is_some() || body.paused.is_some() || profile_changes => {
@@ -382,7 +402,8 @@ pub async fn rename_office(
         }
         None => {
             return Err(AppError::BadRequest(
-                "send a name, daily_plan, paused or a profile field".to_string(),
+                "send a name, daily_plan, paused, a profile field or monthly_cap_credits"
+                    .to_string(),
             ))
         }
     };
@@ -394,8 +415,9 @@ pub async fn rename_office(
         Option<String>,
         Option<String>,
         Option<String>,
+        Option<i64>,
     );
-    let (daily_plan, paused, business_type, website, focus, goal, about): Saved = sqlx::query_as(
+    let (daily_plan, paused, business_type, website, focus, goal, about, monthly_cap): Saved = sqlx::query_as(
         "UPDATE workspaces SET name = $1, daily_plan = COALESCE($3, daily_plan),
                 paused = COALESCE($4, paused),
                 business_type = CASE WHEN $5 THEN $6 ELSE business_type END,
@@ -403,9 +425,11 @@ pub async fn rename_office(
                 focus = CASE WHEN $9 THEN $10 ELSE focus END,
                 goal = CASE WHEN $11 THEN $12 ELSE goal END,
                 about = CASE WHEN $13 THEN $14 ELSE about END,
+                monthly_cap_credits = CASE WHEN $15 THEN $16 ELSE monthly_cap_credits END,
+                cap_notice_month = CASE WHEN $15 THEN NULL ELSE cap_notice_month END,
                 updated_at = now()
          WHERE id = $2
-         RETURNING daily_plan, paused, business_type, website, focus, goal, about",
+         RETURNING daily_plan, paused, business_type, website, focus, goal, about, monthly_cap_credits",
     )
     .bind(&name)
     .bind(ws.id)
@@ -421,8 +445,14 @@ pub async fn rename_office(
     .bind(goal.flatten())
     .bind(about.is_some())
     .bind(about.flatten())
+    .bind(cap.is_some())
+    .bind(cap.flatten())
     .fetch_one(&state.pool)
     .await?;
+    if cap.is_some() {
+        // Work that waited on the old cap may start again.
+        state.dispatcher_wake.notify_one();
+    }
     if wants_html(&headers) {
         return Ok(Redirect::to("/").into_response());
     }
@@ -437,6 +467,7 @@ pub async fn rename_office(
         "focus": focus,
         "goal": goal,
         "about": about,
+        "monthly_cap_credits": monthly_cap,
     }))
     .into_response())
 }

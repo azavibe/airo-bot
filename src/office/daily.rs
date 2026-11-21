@@ -51,6 +51,7 @@ pub async fn run_due(state: &AppState) -> Result<usize, sqlx::Error> {
            AND w.id IN (
              SELECT w2.id FROM workspaces w2
              WHERE w2.deleted_at IS NULL AND w2.daily_plan AND NOT w2.paused
+               AND w2.cap_notice_month IS DISTINCT FROM date_trunc('month', now())::date
                AND (w2.last_plan_at IS NULL OR w2.last_plan_at < now() - interval '20 hours')
                AND EXTRACT(HOUR FROM (now() AT TIME ZONE 'UTC') + make_interval(mins => w2.utc_offset_minutes)) >= $1
                AND (

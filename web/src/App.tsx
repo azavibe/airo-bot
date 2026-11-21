@@ -539,6 +539,25 @@ export const App: React.FC = () => {
       const res = await fetch('/api/office/wallet');
       if (res.ok) setWallet(await res.json());
     } catch {}
+    // Each office's spend this month (the header chip) moves with it.
+    try {
+      const res = await fetch('/api/offices', { headers: { Accept: 'application/json' } });
+      if (!res.ok) return;
+      const fresh: Office[] = (await res.json()).offices ?? [];
+      setOffices((prev) =>
+        prev.map((o) => {
+          const f = fresh.find((x) => x.id === o.id);
+          return f
+            ? {
+                ...o,
+                month_spent_credits: f.month_spent_credits,
+                monthly_cap_credits: f.monthly_cap_credits,
+                cap_reached: f.cap_reached,
+              }
+            : o;
+        })
+      );
+    } catch {}
   }, []);
 
   const handleSendMessage = async (text: string) => {
@@ -851,6 +870,10 @@ export const App: React.FC = () => {
         goal: values.goal,
         about: values.about,
         daily_plan: values.daily_plan,
+        // Sent only when changed: changing the cap restarts work it stopped.
+        ...(values.monthly_cap !== (office.monthly_cap_credits ? String(office.monthly_cap_credits) : '')
+          ? { monthly_cap_credits: values.monthly_cap ? Number(values.monthly_cap) : 0 }
+          : {}),
         idempotency_key: newKey(),
       },
       'PATCH'
@@ -867,6 +890,9 @@ export const App: React.FC = () => {
               goal: saved.goal,
               about: saved.about,
               daily_plan: saved.daily_plan,
+              monthly_cap_credits: saved.monthly_cap_credits ?? null,
+              cap_reached:
+                saved.monthly_cap_credits !== (o.monthly_cap_credits ?? null) ? false : o.cap_reached,
             }
           : o
       )
@@ -963,7 +989,13 @@ export const App: React.FC = () => {
         .catch((e) => showError(e instanceof Error ? e.message : 'That did not work.'));
     } else if (action.kind === 'open' && action.target) {
       const tabs: Tab[] = ['chat', 'apps', 'approvals', 'bots', 'contacts', 'workflows'];
-      if (action.target === 'connections' || action.target === 'account') openSettings(action.target);
+      const office = officeOfThread(activeThreadId) ?? offices.find((o) => o.primary);
+      const botId = action.target.startsWith('bot:') ? action.target.slice(4) : null;
+      if (action.target === 'office' && office) setDialog({ kind: 'editOffice', office });
+      else if (botId) {
+        const bot = agents.find((a) => a.id === botId);
+        if (bot) setEditingBot(bot);
+      } else if (action.target === 'connections' || action.target === 'account') openSettings(action.target);
       else if ((tabs as string[]).includes(action.target)) handleTabChange(action.target as Tab);
     }
   };
@@ -1123,6 +1155,19 @@ export const App: React.FC = () => {
                   onDeleteNote={isGuest ? undefined : (note) => setDialog({ kind: 'deleteNote', note })}
                   paused={!!activeOffice?.paused}
                   onToggleRun={isGuest || !activeOffice ? undefined : () => toggleRun(activeOffice)}
+                  spend={
+                    isGuest || userProfile?.local_mode || !activeOffice
+                      ? null
+                      : {
+                          spent: activeOffice.month_spent_credits ?? 0,
+                          cap: activeOffice.monthly_cap_credits ?? null,
+                          reached:
+                            !!activeOffice.cap_reached ||
+                            (!!activeOffice.monthly_cap_credits &&
+                              (activeOffice.month_spent_credits ?? 0) >= activeOffice.monthly_cap_credits),
+                        }
+                  }
+                  onOpenSpend={() => activeOffice && setDialog({ kind: 'editOffice', office: activeOffice })}
                   onOpenTeam={() => setIsTeamOpen(true)}
                   isGuest={isGuest}
                   onOpenOnboard={openOnboard}
@@ -1465,7 +1510,13 @@ export const App: React.FC = () => {
             goal: dialog.office.goal ?? '',
             about: dialog.office.about ?? '',
             daily_plan: dialog.office.daily_plan !== false,
+            monthly_cap: dialog.office.monthly_cap_credits ? String(dialog.office.monthly_cap_credits) : '',
           }}
+          spend={
+            userProfile?.local_mode
+              ? null
+              : { spent: dialog.office.month_spent_credits ?? 0, reached: !!dialog.office.cap_reached }
+          }
           onSubmit={(values) => editOffice(dialog.office, values)}
           onClose={() => setDialog(null)}
         />

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use crate::office::spend::Spender;
+
 /// What one metered AI call costs today: a flat rate, until pricing
 /// follows the real usage `record_usage` now records.
 pub const FLAT_CALL_CREDITS: i64 = 25;
@@ -70,6 +72,10 @@ pub enum LimitHit {
     Daily,
     /// The plan's credit balance is used up.
     Balance,
+    /// The office's monthly spending cap; resets on the 1st.
+    MonthlyOffice,
+    /// The bot's own monthly spending cap; resets on the 1st.
+    MonthlyBot,
 }
 
 /// Pure mathematical deterministic check on credit burn & workspace safety limits
@@ -130,7 +136,8 @@ pub fn evaluate_budget_gate(proposal: &ActionProposal, policy: &BudgetPolicy) ->
     }
 }
 
-/// Deducts credits atomically inside a Postgres transaction, logging to `credit_ledger`
+/// Deducts credits atomically inside a Postgres transaction, logging to
+/// `credit_ledger` with the office and bot the charge was for.
 #[allow(clippy::too_many_arguments)]
 pub async fn apply_credit_charge(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -141,6 +148,7 @@ pub async fn apply_credit_charge(
     credits: i64,
     raw_cost_micros: i64,
     idempotency_key: Option<&str>,
+    spender: Spender,
 ) -> Result<(i64, Uuid), sqlx::Error> {
     // 1. Update wallet balance and today's burn atomically
     let remaining_balance: i64 = sqlx::query_scalar(
@@ -163,9 +171,9 @@ pub async fn apply_credit_charge(
         r#"
         INSERT INTO credit_ledger (
             workspace_id, task_id, provider, model_or_tool,
-            credits_charged, raw_cost_micros, idempotency_key
+            credits_charged, raw_cost_micros, idempotency_key, office_id, agent_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, $1), $9)
         RETURNING id
         "#,
     )
@@ -176,6 +184,8 @@ pub async fn apply_credit_charge(
     .bind(credits)
     .bind(raw_cost_micros)
     .bind(idempotency_key)
+    .bind(spender.office)
+    .bind(spender.agent)
     .fetch_one(&mut **tx)
     .await?;
 
@@ -191,12 +201,15 @@ pub async fn apply_credit_charge(
 /// burn counter rolls over when the calendar day changes. `approved` means
 /// a human already approved this exact action, so the cost threshold does
 /// not ask again; nothing is charged while approval is still required.
+/// `spender` names the office and bot the call is for: their monthly caps
+/// are checked too (see `spend.rs`), and the charge is recorded for them.
 pub async fn check_and_deduct(
     pool: &sqlx::PgPool,
     workspace_id: Uuid,
     proposal: &ActionProposal,
     task_id: Option<Uuid>,
     approved: bool,
+    spender: Spender,
 ) -> Result<BudgetGateResult, crate::error::AppError> {
     let mut tx = pool.begin().await?;
 
@@ -233,6 +246,20 @@ pub async fn check_and_deduct(
     if approved {
         result.requires_approval = false;
     }
+    // A charge with no office named is for the workspace that pays it.
+    let spender = Spender {
+        office: spender.office.or(Some(workspace_id)),
+        ..spender
+    };
+    if result.passed {
+        if let Some((limit, reason)) =
+            crate::office::spend::cap_hit(&mut tx, spender, result.suggested_credit_charge).await?
+        {
+            result.passed = false;
+            result.limit = Some(limit);
+            result.reasons.push(reason);
+        }
+    }
     if result.passed && !result.requires_approval && result.suggested_credit_charge > 0 {
         let (_, ledger_id) = apply_credit_charge(
             &mut tx,
@@ -243,6 +270,7 @@ pub async fn check_and_deduct(
             result.suggested_credit_charge,
             proposal.raw_cost_micros,
             None,
+            spender,
         )
         .await?;
         result.ledger_id = Some(ledger_id);
@@ -293,6 +321,7 @@ pub async fn refund_credit_charge(
     workspace_id: Uuid,
     task_id: Option<Uuid>,
     proposal: &ActionProposal,
+    spender: Spender,
 ) -> Result<(), sqlx::Error> {
     if proposal.estimated_credits <= 0 {
         return Ok(());
@@ -310,14 +339,17 @@ pub async fn refund_credit_charge(
     .execute(&mut *tx)
     .await?;
     sqlx::query(
-        "INSERT INTO credit_ledger (workspace_id, task_id, provider, model_or_tool, credits_charged, raw_cost_micros)
-         VALUES ($1, $2, $3, $4, $5, 0)",
+        "INSERT INTO credit_ledger
+            (workspace_id, task_id, provider, model_or_tool, credits_charged, raw_cost_micros, office_id, agent_id)
+         VALUES ($1, $2, $3, $4, $5, 0, COALESCE($6, $1), $7)",
     )
     .bind(workspace_id)
     .bind(task_id)
     .bind(&proposal.provider)
     .bind(format!("refund:{}", proposal.model_or_tool))
     .bind(-proposal.estimated_credits)
+    .bind(spender.office)
+    .bind(spender.agent)
     .execute(&mut *tx)
     .await?;
     tx.commit().await

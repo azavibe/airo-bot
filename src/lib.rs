@@ -471,6 +471,7 @@ pub fn app(state: AppState) -> Router {
             "/agents/{id}/access",
             get(office::access::get_access).put(office::access::set_access),
         )
+        .route("/agents/{id}/stats", get(office::spend::agent_stats))
         .route(
             "/agents/{id}/access/reset",
             post(office::access::reset_access),
