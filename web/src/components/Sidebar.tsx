@@ -41,8 +41,9 @@ interface SidebarProps {
   /** Turns the Architect's morning plan on or off. */
   onToggleDailyPlan: (office: Office) => void;
   onDeleteOffice: (office: Office) => void;
-  /** Name, business, website, focus and daily plan in one dialog. */
-  onEditOffice: (office: Office) => void;
+  /** Name, business, website, focus, goal and daily plan in one dialog;
+   *  `memory` opens it on the office's memory. */
+  onEditOffice: (office: Office, memory?: boolean) => void;
   onRenameRoom: (thread: Thread) => void;
   onDeleteRoom: (thread: Thread) => void;
   onArchiveRoom: (thread: Thread) => void;
@@ -157,6 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showArchived, setShowArchived] = useState<string[]>([]);
   const officeItems = (office: Office): RowMenuItem[] => [
     { label: 'Edit office…', onSelect: () => onEditOffice(office) },
+    { label: 'Memory…', onSelect: () => onEditOffice(office, true) },
     { label: 'New bot', onSelect: () => onNewBot(office) },
     { label: 'New room', onSelect: () => onNewRoom(office) },
     { label: 'Set up for a business', onSelect: () => onSetUpOffice(office) },

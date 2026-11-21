@@ -40,6 +40,8 @@ pub struct OfficeItem {
     pub business_type: Option<String>,
     pub website: Option<String>,
     pub focus: Option<String>,
+    pub goal: Option<String>,
+    pub about: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -75,7 +77,7 @@ pub async fn list_for(pool: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<OfficeIt
     let primary = get_or_create_default_workspace(pool, user_id).await?;
     let rows = sqlx::query_as::<_, OfficeItem>(
         "SELECT w.id, w.name, (w.id = $2) AS primary, w.daily_plan, w.paused,
-                w.business_type, w.website, w.focus,
+                w.business_type, w.website, w.focus, w.goal, w.about,
                 (SELECT COUNT(*) FROM threads t
                   WHERE t.user_id = $1 AND t.deleted_at IS NULL AND t.kind = 'room'
                     AND (t.workspace_id = w.id OR (t.workspace_id IS NULL AND w.id = $2))
@@ -268,7 +270,7 @@ pub async fn create_office(
 }
 
 /// The office, if `user_id` owns it (renaming and deleting are the owner's).
-async fn owned_office(
+pub(crate) async fn owned_office(
     pool: &sqlx::PgPool,
     user_id: Uuid,
     id: Uuid,
@@ -305,6 +307,12 @@ pub struct RenameOfficeRequest {
     pub website: Option<String>,
     #[serde(default)]
     pub focus: Option<String>,
+    /// Where the business is going, and what it is like (hours, prices,
+    /// tone, policies). Every bot in the office reads both.
+    #[serde(default)]
+    pub goal: Option<String>,
+    #[serde(default)]
+    pub about: Option<String>,
     pub idempotency_key: Option<String>,
 }
 
@@ -341,6 +349,20 @@ pub async fn rename_office(
     let ws = owned_office(&state.pool, user.id, id).await?;
     let business_type = profile_field(body.business_type.as_deref(), "business_type", 100)?;
     let focus = profile_field(body.focus.as_deref(), "focus", 200)?;
+    let goal = profile_field(body.goal.as_deref(), "goal", 300)?;
+    let about = match body.about.as_deref() {
+        // Keeps its line breaks: a list of opening hours stays a list.
+        Some(raw) => {
+            let text = raw.trim().to_string();
+            if text.chars().count() > 4000 {
+                return Err(AppError::BadRequest(
+                    "about must be at most 4000 characters".to_string(),
+                ));
+            }
+            Some((!text.is_empty()).then_some(text))
+        }
+        None => None,
+    };
     let website = match body.website.as_deref() {
         Some(raw) => Some(
             crate::office::kickoff::clean_website(raw)
@@ -348,7 +370,11 @@ pub async fn rename_office(
         ),
         None => None,
     };
-    let profile_changes = business_type.is_some() || focus.is_some() || website.is_some();
+    let profile_changes = business_type.is_some()
+        || focus.is_some()
+        || website.is_some()
+        || goal.is_some()
+        || about.is_some();
     let name = match body.name.as_deref() {
         Some(raw) => clean_name(raw)?,
         None if body.daily_plan.is_some() || body.paused.is_some() || profile_changes => {
@@ -356,24 +382,30 @@ pub async fn rename_office(
         }
         None => {
             return Err(AppError::BadRequest(
-                "send a name, daily_plan, paused, business_type, website or focus".to_string(),
+                "send a name, daily_plan, paused or a profile field".to_string(),
             ))
         }
     };
-    let (daily_plan, paused, business_type, website, focus): (
+    type Saved = (
         bool,
         bool,
         Option<String>,
         Option<String>,
         Option<String>,
-    ) = sqlx::query_as(
+        Option<String>,
+        Option<String>,
+    );
+    let (daily_plan, paused, business_type, website, focus, goal, about): Saved = sqlx::query_as(
         "UPDATE workspaces SET name = $1, daily_plan = COALESCE($3, daily_plan),
                 paused = COALESCE($4, paused),
                 business_type = CASE WHEN $5 THEN $6 ELSE business_type END,
                 website = CASE WHEN $7 THEN $8 ELSE website END,
                 focus = CASE WHEN $9 THEN $10 ELSE focus END,
+                goal = CASE WHEN $11 THEN $12 ELSE goal END,
+                about = CASE WHEN $13 THEN $14 ELSE about END,
                 updated_at = now()
-         WHERE id = $2 RETURNING daily_plan, paused, business_type, website, focus",
+         WHERE id = $2
+         RETURNING daily_plan, paused, business_type, website, focus, goal, about",
     )
     .bind(&name)
     .bind(ws.id)
@@ -385,6 +417,10 @@ pub async fn rename_office(
     .bind(website.flatten())
     .bind(focus.is_some())
     .bind(focus.flatten())
+    .bind(goal.is_some())
+    .bind(goal.flatten())
+    .bind(about.is_some())
+    .bind(about.flatten())
     .fetch_one(&state.pool)
     .await?;
     if wants_html(&headers) {
@@ -399,6 +435,8 @@ pub async fn rename_office(
         "business_type": business_type,
         "website": website,
         "focus": focus,
+        "goal": goal,
+        "about": about,
     }))
     .into_response())
 }

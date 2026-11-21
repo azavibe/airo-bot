@@ -45,10 +45,11 @@ export interface Note {
 
 /** `send`: sends `message` as your own message; `setup`: opens office
  *  setup for this office; `open`: opens the screen named by `target`
- *  (a tab, or the `account` / `connections` section of Settings). */
+ *  (a tab, or the `account` / `connections` section of Settings);
+ *  `forget`: forgets the memory whose id is `target` (a bot's Undo). */
 export interface NoteAction {
   label: string;
-  kind: 'send' | 'setup' | 'open';
+  kind: 'send' | 'setup' | 'open' | 'forget';
   message?: string;
   target?: string;
 }
@@ -178,6 +179,33 @@ export interface Office {
   business_type?: string | null;
   website?: string | null;
   focus?: string | null;
+  /** Where the business is going; every bot works toward it. */
+  goal?: string | null;
+  /** What it is like: hours, prices, tone, policies. */
+  about?: string | null;
+}
+
+/** A fact an office remembers: the whole office's, or one bot's. */
+export interface Memory {
+  id: string;
+  workspace_id: string;
+  /** Set: only this bot knows it. */
+  agent_id?: string | null;
+  body: string;
+  /** Who saved it: the owner, or a bot (shown in chat with Undo). */
+  source: 'owner' | 'bot';
+  created_by_agent_id?: string | null;
+  pinned: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A rule learned from the owner's approval decisions. */
+export interface Lesson {
+  id: string;
+  rule: string;
+  source: string;
+  created_at: string;
 }
 
 export type LocalEngineId = 'claude_code' | 'codex' | 'opencode' | 'gemini' | 'ollama';

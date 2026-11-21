@@ -6,6 +6,7 @@ pub mod evolver;
 pub mod fsm_dispatcher;
 pub mod group;
 pub mod kickoff;
+pub mod memory;
 
 use sqlx::PgPool;
 use uuid::Uuid;

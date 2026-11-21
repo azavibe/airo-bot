@@ -335,11 +335,13 @@ async fn a_bot_is_deleted_with_its_own_room_only(pool: PgPool) {
     assert_eq!(team["agent_ids"], json!([assistant_id]));
 
     // The Architect runs the group chats and stays.
-    let architect: Uuid =
-        sqlx::query_scalar("SELECT id FROM agents WHERE name = 'Architect' AND deleted_at IS NULL")
-            .fetch_one(&pool)
-            .await
-            .expect("architect");
+    let architect: Uuid = sqlx::query_scalar(
+        "SELECT a.id FROM agents a JOIN users u ON u.id = a.user_id
+             WHERE u.email = 'bots@example.com' AND a.name = 'Architect' AND a.deleted_at IS NULL",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("architect");
     let (status, body) = call(
         &pool,
         "POST",

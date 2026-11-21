@@ -707,7 +707,7 @@ async fn bots_fill_the_office_apps_from_their_answers(pool: PgPool) {
     .expect("bot");
 
     // What a bot is told: this business, its apps, and how to write.
-    let prompt = airobot::office::context::prompt_for_thread(&pool, room)
+    let prompt = airobot::office::context::prompt_for_thread(&pool, room, bot)
         .await
         .expect("office prompt");
     assert!(prompt.contains("You work for Bamboo Hotel."), "{prompt}");
