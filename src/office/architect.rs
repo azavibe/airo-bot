@@ -198,9 +198,17 @@ fn blueprints(saas: &[String], default_when_empty: bool) -> Vec<AppBlueprint> {
                             { "key": "stage", "label": "Stage", "type": "badge" },
                             { "key": "estimated_value", "label": "Value ($)", "type": "currency" }
                         ]
+                    },
+                    {
+                        "id": "v_chart", "type": "chart", "title": "Pipeline value by stage", "record_type": "lead",
+                        "chart_type": "bar", "x_axis": "stage", "y_axis": "estimated_value",
+                        "order": ["New Lead", "Qualified", "Quote Sent", "Won"]
                     }
                 ],
-                "quick_actions": [{ "label": "Run Lead Scout Bot", "trigger_workflow_slug": "lead-scout" }]
+                "quick_actions": [
+                    { "label": "Find new leads", "ask": "Find 5 new leads that fit this business and add them to the Lead Pipeline." },
+                    { "label": "Follow up quiet leads", "ask": "Which leads in the Lead Pipeline have gone quiet? Draft a short follow-up for each." }
+                ]
             }),
         });
     }
@@ -225,7 +233,9 @@ fn blueprints(saas: &[String], default_when_empty: bool) -> Vec<AppBlueprint> {
                     "record_type": "video_post", "media_field": "video_url", "caption_field": "script_hook",
                     "metrics_fields": ["views", "retention_pct", "platform"]
                 }],
-                "quick_actions": [{ "label": "Generate Batch Videos", "trigger_workflow_slug": "wan-video-batch" }]
+                "quick_actions": [
+                    { "label": "Plan this week's posts", "ask": "Plan this week's social posts in the Social studio: a hook, a caption and the platform for each." }
+                ]
             }),
         });
     }
@@ -244,17 +254,26 @@ fn blueprints(saas: &[String], default_when_empty: bool) -> Vec<AppBlueprint> {
                 "header_metrics": [
                     { "id": "m1", "label": "Outstanding Invoices", "query_record_type": "invoice", "aggregation": "count" }
                 ],
-                "views": [{
-                    "id": "v_table", "type": "datatable", "title": "Invoices & Receivables", "record_type": "invoice",
-                    "columns": [
-                        { "key": "invoice_number", "label": "Invoice #", "type": "text" },
-                        { "key": "client_name", "label": "Client", "type": "text" },
-                        { "key": "amount", "label": "Amount ($)", "type": "currency" },
-                        { "key": "due_date", "label": "Due Date", "type": "date" },
-                        { "key": "status", "label": "Status", "type": "badge" }
-                    ]
-                }],
-                "quick_actions": []
+                "views": [
+                    {
+                        "id": "v_table", "type": "datatable", "title": "Invoices & Receivables", "record_type": "invoice",
+                        "columns": [
+                            { "key": "invoice_number", "label": "Invoice #", "type": "text" },
+                            { "key": "client_name", "label": "Client", "type": "text" },
+                            { "key": "amount", "label": "Amount ($)", "type": "currency" },
+                            { "key": "due_date", "label": "Due Date", "type": "date" },
+                            { "key": "status", "label": "Status", "type": "badge" }
+                        ]
+                    },
+                    {
+                        "id": "v_chart", "type": "chart", "title": "Invoiced by month", "record_type": "invoice",
+                        "chart_type": "bar", "x_axis": "due_date", "y_axis": "amount"
+                    }
+                ],
+                "quick_actions": [
+                    { "label": "Chase overdue invoices", "ask": "List the overdue invoices and draft a polite reminder for each. Drafts only." },
+                    { "label": "Cashflow this month", "ask": "Summarise this month's cashflow from Invoices & Cashflow: billed, paid, overdue, and what to do next." }
+                ]
             }),
         });
     }
@@ -288,9 +307,16 @@ fn blueprints(saas: &[String], default_when_empty: bool) -> Vec<AppBlueprint> {
                             { "key": "channel", "label": "Channel", "type": "text" },
                             { "key": "stage", "label": "Stage", "type": "badge" }
                         ]
+                    },
+                    {
+                        "id": "v_chart", "type": "chart", "title": "Tickets by stage", "record_type": "ticket",
+                        "chart_type": "bar", "x_axis": "stage",
+                        "order": ["New", "Waiting on us", "Waiting on customer", "Solved"]
                     }
                 ],
-                "quick_actions": []
+                "quick_actions": [
+                    { "label": "Draft replies", "ask": "Draft a reply to each new ticket in the Support Inbox. Drafts only." }
+                ]
             }),
         });
     }
@@ -309,17 +335,25 @@ fn blueprints(saas: &[String], default_when_empty: bool) -> Vec<AppBlueprint> {
                 "header_metrics": [
                     { "id": "m1", "label": "Upcoming", "query_record_type": "appointment", "aggregation": "count" }
                 ],
-                "views": [{
-                    "id": "v_table", "type": "datatable", "title": "Appointments", "record_type": "appointment",
-                    "columns": [
-                        { "key": "client", "label": "Client", "type": "text" },
-                        { "key": "service", "label": "Service", "type": "text" },
-                        { "key": "starts_at", "label": "When", "type": "date" },
-                        { "key": "phone", "label": "Phone", "type": "phone" },
-                        { "key": "status", "label": "Status", "type": "badge" }
-                    ]
-                }],
-                "quick_actions": []
+                "views": [
+                    {
+                        "id": "v_table", "type": "datatable", "title": "Appointments", "record_type": "appointment",
+                        "columns": [
+                            { "key": "client", "label": "Client", "type": "text" },
+                            { "key": "service", "label": "Service", "type": "text" },
+                            { "key": "starts_at", "label": "When", "type": "date" },
+                            { "key": "phone", "label": "Phone", "type": "phone" },
+                            { "key": "status", "label": "Status", "type": "badge" }
+                        ]
+                    },
+                    {
+                        "id": "v_chart", "type": "chart", "title": "Bookings by month", "record_type": "appointment",
+                        "chart_type": "spline", "x_axis": "starts_at"
+                    }
+                ],
+                "quick_actions": [
+                    { "label": "Confirm tomorrow", "ask": "List tomorrow's appointments and draft a confirmation message for each." }
+                ]
             }),
         });
     }
@@ -1145,6 +1179,28 @@ pub fn validate_mod_schema(schema: &serde_json::Value) -> Result<(), String> {
                 format!("View at index {idx} requires a non-empty 'record_type' string")
             })?;
 
+        if v_type == "chart" {
+            if let Some(kind) = v_obj.get("chart_type") {
+                if !matches!(kind.as_str(), Some("bar" | "spline")) {
+                    return Err(format!(
+                        "Chart view at index {idx} has 'chart_type' other than 'bar' or 'spline'"
+                    ));
+                }
+            }
+            for key in ["x_axis", "y_axis"] {
+                if let Some(field) = v_obj.get(key) {
+                    if !field
+                        .as_str()
+                        .is_some_and(|f| !f.trim().is_empty() && f.len() <= 64)
+                    {
+                        return Err(format!(
+                            "Chart view at index {idx} needs '{key}' to be a field name"
+                        ));
+                    }
+                }
+            }
+        }
+
         if v_type == "kanban" || v_type == "datatable" {
             let label = if v_type == "kanban" {
                 "Kanban"
@@ -1166,6 +1222,39 @@ pub fn validate_mod_schema(schema: &serde_json::Value) -> Result<(), String> {
     if let Some(metrics) = obj.get("header_metrics") {
         if !metrics.is_array() {
             return Err("'header_metrics' must be an array".to_string());
+        }
+    }
+
+    // Quick actions: each asks the office's team for one job (`ask`, or
+    // the label when absent) in the office chat.
+    if let Some(actions) = obj.get("quick_actions") {
+        let actions = actions
+            .as_array()
+            .ok_or_else(|| "'quick_actions' must be an array".to_string())?;
+        if actions.len() > 6 {
+            return Err("at most 6 quick actions are allowed".to_string());
+        }
+        for (idx, action) in actions.iter().enumerate() {
+            let label_ok = action
+                .get("label")
+                .and_then(|l| l.as_str())
+                .map(str::trim)
+                .is_some_and(|l| !l.is_empty() && l.chars().count() <= 60);
+            if !label_ok {
+                return Err(format!(
+                    "Quick action at index {idx} needs a 'label' of 1-60 characters"
+                ));
+            }
+            if let Some(ask) = action.get("ask") {
+                if !ask
+                    .as_str()
+                    .is_some_and(|a| !a.trim().is_empty() && a.chars().count() <= 500)
+                {
+                    return Err(format!(
+                        "Quick action at index {idx} has an 'ask' that is not 1-500 characters"
+                    ));
+                }
+            }
         }
     }
 
@@ -1314,6 +1403,55 @@ pub async fn create_workspace_lesson(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn every_blueprint_is_a_valid_schema_with_a_chart_and_actions() {
+        let all: Vec<String> = ["crm", "content", "invoice", "support", "booking"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let apps = blueprints(&all, false);
+        assert_eq!(apps.len(), 5);
+        for app in &apps {
+            validate_mod_schema(&app.schema).unwrap_or_else(|e| panic!("{}: {e}", app.slug));
+            let actions = app.schema["quick_actions"].as_array().expect("actions");
+            assert!(!actions.is_empty(), "{} has a quick action", app.slug);
+            assert!(actions.iter().all(|a| a["ask"].is_string()), "{}", app.slug);
+        }
+        let charts = apps
+            .iter()
+            .filter(|a| {
+                a.schema["views"]
+                    .as_array()
+                    .is_some_and(|v| v.iter().any(|v| v["type"] == "chart"))
+            })
+            .count();
+        assert_eq!(charts, 4, "every app but the media studio has a chart");
+    }
+
+    #[test]
+    fn charts_and_quick_actions_are_checked() {
+        let with = |view: Value, actions: Value| json!({ "version": "1.0", "layout": "split_view", "views": [view], "quick_actions": actions });
+        let chart = json!({ "id": "c", "type": "chart", "title": "T", "record_type": "lead", "chart_type": "bar", "x_axis": "stage" });
+        assert!(validate_mod_schema(&with(chart.clone(), json!([]))).is_ok());
+        let mut pie = chart.clone();
+        pie["chart_type"] = json!("pie");
+        assert!(validate_mod_schema(&with(pie, json!([]))).is_err());
+        let mut bad_axis = chart.clone();
+        bad_axis["x_axis"] = json!(3);
+        assert!(validate_mod_schema(&with(bad_axis, json!([]))).is_err());
+        assert!(validate_mod_schema(&with(chart.clone(), json!([{ "label": "" }]))).is_err());
+        assert!(
+            validate_mod_schema(&with(chart.clone(), json!([{ "label": "Go", "ask": "" }])))
+                .is_err()
+        );
+        assert!(validate_mod_schema(&with(chart.clone(), json!({}))).is_err());
+        let seven: Vec<Value> = (0..7)
+            .map(|i| json!({ "label": format!("A{i}") }))
+            .collect();
+        assert!(validate_mod_schema(&with(chart, json!(seven))).is_err());
+    }
 
     #[test]
     fn content_hash_is_stable_fnv1a() {

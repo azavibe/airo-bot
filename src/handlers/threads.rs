@@ -1531,7 +1531,9 @@ impl ReplyMode {
 }
 
 /// Posts an agent's answer. In routing mode, `@handle: task` lines in the
-/// Architect's answer start those bots instead of being shown.
+/// Architect's answer start those bots instead of being shown. `credits` is
+/// what the answer cost, kept with a job's outcome.
+#[allow(clippy::too_many_arguments)]
 async fn deliver_reply(
     state: &AppState,
     thread_id: Uuid,
@@ -1540,8 +1542,39 @@ async fn deliver_reply(
     mode: &ReplyMode,
     team: &[crate::office::group::Teammate],
     body: &str,
+    credits: i64,
 ) {
     let pool = &state.pool;
+    // A job (work the bot was given, not a chat message) ends with its
+    // outcome: the OUTCOME line becomes an italic line, and the job is kept.
+    let job_body;
+    let body = match mode.task_line.as_deref().filter(|_| !mode.route) {
+        Some(task_line) => {
+            let (text, outcome) = crate::office::outcome::take(body);
+            let (outcome, note) = match outcome {
+                Some((o, note)) => (Some(o), note),
+                None => (None, String::new()),
+            };
+            crate::office::outcome::record_job(
+                pool,
+                thread_id,
+                architect.id,
+                task_line,
+                outcome,
+                &note,
+                credits,
+            )
+            .await;
+            job_body = match outcome {
+                Some(o) => format!("{text}\n\n{}", crate::office::outcome::line(o, &note))
+                    .trim()
+                    .to_string(),
+                None => text,
+            };
+            job_body.as_str()
+        }
+        None => body,
+    };
     // Records the bot wrote (`ADD <app> {...}` lines) go into the office's
     // apps; the chat shows a short "Added ..." line instead.
     let (body, actions) =
@@ -1611,6 +1644,29 @@ async fn deliver_reply(
                 task_line: Some(format!("Architect (to {name}): {task}")),
             },
         );
+    }
+}
+
+/// A job that ended without an answer is kept too, with why.
+async fn record_unanswered_job(
+    pool: &sqlx::PgPool,
+    thread_id: Uuid,
+    agent_id: Uuid,
+    mode: &ReplyMode,
+    outcome: crate::office::outcome::Outcome,
+    note: &str,
+) {
+    if let Some(task_line) = mode.task_line.as_deref().filter(|_| !mode.route) {
+        crate::office::outcome::record_job(
+            pool,
+            thread_id,
+            agent_id,
+            task_line,
+            Some(outcome),
+            note,
+            0,
+        )
+        .await;
     }
 }
 
@@ -1732,6 +1788,9 @@ pub(crate) async fn run_agent_reply(
         if let Some(line) = &mode.task_line {
             history.push('\n');
             history.push_str(line);
+            if !mode.route {
+                sys.push_str(crate::office::outcome::INSTRUCTION);
+            }
         }
 
         // Local mode (desktop app): the AI tool chosen on this computer
@@ -1759,10 +1818,20 @@ pub(crate) async fn run_agent_reply(
                         &mode,
                         &team,
                         text.trim(),
+                        0,
                     )
                     .await;
                 }
                 other => {
+                    record_unanswered_job(
+                        &pool,
+                        thread_id,
+                        agent_id,
+                        &mode,
+                        crate::office::outcome::Outcome::Failed,
+                        "the AI on this computer didn't answer",
+                    )
+                    .await;
                     let body = match other {
                         Ok(_) => format!("{} had nothing to say. Try asking again.", agent.name),
                         Err(err) => format!(
@@ -1851,6 +1920,15 @@ pub(crate) async fn run_agent_reply(
                             return;
                         }
                         Ok(gate) if !gate.passed || gate.requires_approval => {
+                            record_unanswered_job(
+                                &pool,
+                                thread_id,
+                                agent_id,
+                                &mode,
+                                crate::office::outcome::Outcome::Blocked,
+                                "a spending limit was reached",
+                            )
+                            .await;
                             // A monthly cap posts its card once; the room
                             // that got it needs no second note.
                             let carded = match gate.limit {
@@ -1897,14 +1975,27 @@ pub(crate) async fn run_agent_reply(
                         }
                         let trimmed = completion.text.trim();
                         if !trimmed.is_empty() {
+                            let credits = charge
+                                .as_ref()
+                                .map(|(_, p, _, _)| p.estimated_credits)
+                                .unwrap_or(0);
                             deliver_reply(
-                                &state, thread_id, &agent, user_id, &mode, &team, trimmed,
+                                &state, thread_id, &agent, user_id, &mode, &team, trimmed, credits,
                             )
                             .await;
                         }
                     }
                     Err(err) => {
                         tracing::warn!(%err, agent = %agent.name, "agent reply failed");
+                        record_unanswered_job(
+                            &pool,
+                            thread_id,
+                            agent_id,
+                            &mode,
+                            crate::office::outcome::Outcome::Failed,
+                            "the AI provider didn't answer",
+                        )
+                        .await;
                         if let Some((workspace_id, proposal, _, spender)) = &charge {
                             let _ = budget_gate::refund_credit_charge(
                                 &pool,
@@ -1918,7 +2009,18 @@ pub(crate) async fn run_agent_reply(
                     }
                 }
             }
-            None => post_no_ai_note(&state, thread_id, agent_id, &agent.name).await,
+            None => {
+                record_unanswered_job(
+                    &pool,
+                    thread_id,
+                    agent_id,
+                    &mode,
+                    crate::office::outcome::Outcome::Blocked,
+                    "no AI is connected",
+                )
+                .await;
+                post_no_ai_note(&state, thread_id, agent_id, &agent.name).await
+            }
         }
     }
 }

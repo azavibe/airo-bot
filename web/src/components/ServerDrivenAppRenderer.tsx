@@ -1,4 +1,5 @@
 import { KanbanBoard } from './KanbanBoard';
+import { AppChart } from './AppChart';
 import { RowMenu } from './RowMenu';
 import { recordTitle } from '../utils/format';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -30,6 +31,8 @@ interface ServerDrivenAppRendererProps {
   headerLeft?: React.ReactNode;
   /** Extra buttons before "New record". */
   headerActions?: React.ReactNode;
+  /** Sends a quick action's message to the office chat; absent hides them. */
+  onQuickAction?: (message: string) => void;
 }
 
 export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = ({
@@ -47,6 +50,7 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
   bottomDock,
   headerLeft,
   headerActions,
+  onQuickAction,
 }) => {
   const [isResetting, setIsResetting] = useState(false);
 
@@ -92,6 +96,14 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
   );
 
   const headerMetrics = useMemo(() => effectiveSchema?.header_metrics || [], [effectiveSchema]);
+  const quickActions = useMemo(
+    () =>
+      (effectiveSchema?.quick_actions || []).filter(
+        // An older action that only names a workflow slug has no job to ask.
+        (a) => a && typeof a.label === 'string' && a.label.trim() && (a.ask || !a.trigger_workflow_slug)
+      ),
+    [effectiveSchema]
+  );
 
   const formFields = useMemo(() => {
     if (!activeView) return [{ key: 'name', label: 'Name / Title' }];
@@ -276,6 +288,35 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Quick actions: each asks the office's team for one job, in the
+            office chat, where the Architect hands it to the right bot. */}
+        {onQuickAction && quickActions.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] text-neutral-500">Ask the team:</span>
+            {quickActions.map((a, i) => (
+              <button
+                key={`${a.label}-${i}`}
+                type="button"
+                onClick={() => onQuickAction((a.ask || a.label).trim())}
+                title={a.ask || a.label}
+                className="h-7 px-3 rounded-full border border-white/10 text-[12px] text-neutral-200 hover:text-white hover:border-white/25 hover:bg-white/5 transition-colors"
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Chart view: one series from the records (see AppChart). */}
+        {activeView?.type === 'chart' && (
+          <div
+            onClick={() => designMode && handleWidgetClick(activeView.id)}
+            className={designMode ? 'ring-1 ring-amber-400/40 hover:ring-2 hover:ring-amber-400 cursor-pointer rounded-2xl p-2 transition-all' : ''}
+          >
+            <AppChart view={activeView} records={records} />
           </div>
         )}
 

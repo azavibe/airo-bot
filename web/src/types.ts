@@ -66,7 +66,7 @@ export interface AppSchema {
   }>;
   views: Array<{
     id: string;
-    type: 'kanban' | 'datatable' | 'media_gallery';
+    type: 'kanban' | 'datatable' | 'media_gallery' | 'chart';
     title: string;
     record_type: string;
     group_by_field?: string;
@@ -75,10 +75,19 @@ export interface AppSchema {
     media_field?: string;
     caption_field?: string;
     metrics_fields?: string[];
+    /** chart: `bar` or `spline`, the field along x, and the number summed
+     *  (or "count"). */
+    chart_type?: 'bar' | 'spline';
+    x_axis?: string;
+    y_axis?: string;
+    order?: string[];
   }>;
+  /** Buttons that ask the office's team to do a job; `ask` is the message
+   *  sent to the office chat (the label when absent). */
   quick_actions?: Array<{
     label: string;
-    trigger_workflow_slug: string;
+    ask?: string;
+    trigger_workflow_slug?: string;
   }>;
 }
 

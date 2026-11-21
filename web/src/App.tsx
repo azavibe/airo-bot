@@ -560,6 +560,31 @@ export const App: React.FC = () => {
     } catch {}
   }, []);
 
+  // An app's quick action: the job goes to the office's group chat, where
+  // the Architect hands it to the right bot, and the chat opens on it.
+  const askTeam = async (message: string) => {
+    const office = offices.find((o) => o.id === appsOfficeRef.current) ?? offices.find((o) => o.primary);
+    const chat = threads.find((t) => t.workspace_id === office?.id && t.kind === 'office');
+    if (!chat) {
+      showError('Open the office chat first; quick actions are sent there.');
+      return;
+    }
+    setActiveThreadId(chat.id);
+    handleTabChange('chat');
+    try {
+      const res = await fetch(`/threads/${chat.id}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ body: message, kind: 'status' }),
+      });
+      if (!res.ok) throw new Error();
+      refreshWallet();
+      window.setTimeout(refreshWallet, 4000);
+    } catch {
+      showError('Could not send that to your team. Try again.');
+    }
+  };
+
   const handleSendMessage = async (text: string) => {
     if (isGuest) {
       setIsAuthModalOpen(true);
@@ -1229,6 +1254,7 @@ export const App: React.FC = () => {
                 onDeleteRecord={isGuest ? undefined : (record) => setDialog({ kind: 'deleteRecord', record })}
                 officeName={(activeOffice ?? offices.find((o) => o.primary))?.name}
                 bottomDock={dockElement}
+                onQuickAction={isGuest ? undefined : askTeam}
               />
             </div>
           </div>
