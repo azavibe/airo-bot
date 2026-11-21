@@ -15,6 +15,8 @@ import { BottomDock } from './components/BottomDock';
 import { DesktopTitleBar, isDesktopApp } from './components/DesktopTitleBar';
 import { BotSettingsModal } from './components/BotSettingsModal';
 import { ContactsView } from './components/ContactsView';
+import { RecordsProvider } from './state/records';
+import type { RecordEventMessage } from './state/records';
 import { SearchPalette } from './components/SearchPalette';
 import { TeamModal } from './components/TeamModal';
 import { NameDialog, ConfirmDialog, NewRoomDialog, EditOfficeDialog } from './components/Dialogs';
@@ -437,6 +439,11 @@ export const App: React.FC = () => {
     if (agData) setAgents(agData.agents || []);
     if (prData) setProcedures(prData.procedures || []);
 
+    applyTasks(tskData);
+  }, [fetchAppRecords]);
+
+  // The task that is running or waiting, shown above the composer.
+  const applyTasks = (tskData: any) => {
     if (tskData) {
       const activeTask = (tskData.tasks || []).find(
         (t: any) => t.status === 'running' || t.status === 'queued' || t.status === 'waiting_approval'
@@ -454,7 +461,19 @@ export const App: React.FC = () => {
         setActiveAgentPlan(null);
       }
     }
-  }, [fetchAppRecords]);
+  };
+
+  // Approvals and tasks change when a card's change is decided or proposed.
+  const refreshWork = async () => {
+    try {
+      const [ap, tk] = await Promise.all([
+        fetch('/approvals', { headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)),
+        fetch('/tasks', { headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)),
+      ]);
+      if (ap) setApprovals(ap.approvals || []);
+      applyTasks(tk);
+    } catch {}
+  };
 
   // Initial Data Fetch
   useEffect(() => {
@@ -1116,7 +1135,19 @@ export const App: React.FC = () => {
     fn();
   };
 
+  // A record changed (by a bot, another tab, or an approval): the app that
+  // shows it reloads; cards refresh themselves from the shared store.
+  const onRecordEvent = (event: RecordEventMessage) => {
+    if (event.kind === 'pending' || event.kind === 'updated') void refreshWork();
+    if (event.kind === 'app') {
+      loadApps();
+    } else if (records[event.app_slug] || event.app_slug === activeAppSlug) {
+      fetchAppRecords(event.app_slug);
+    }
+  };
+
   return (
+    <RecordsProvider officeId={isGuest ? null : appsOfficeId} onRecordEvent={onRecordEvent}>
     <div
       className={`w-screen h-screen bg-transparent text-white flex flex-col overflow-hidden select-none p-3 md:p-4 box-border ${
         inDesktopApp ? '!pt-0' : ''
@@ -1189,6 +1220,8 @@ export const App: React.FC = () => {
                   roomBots={roomBots}
                   onOpenBot={isGuest ? undefined : setEditingBot}
                   onAction={isGuest ? undefined : handleNoteAction}
+                  apps={apps}
+                  onOpenRecord={(slug) => handleSelectApp(slug, true)}
                   onSend={isGuest ? undefined : handleSendMessage}
                   onDeleteNote={isGuest ? undefined : (note) => setDialog({ kind: 'deleteNote', note })}
                   paused={!!activeOffice?.paused}
@@ -1656,5 +1689,6 @@ export const App: React.FC = () => {
       />
 
     </div>
+    </RecordsProvider>
   );
 };

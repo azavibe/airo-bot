@@ -58,6 +58,7 @@ async fn main() {
         mailer: Arc::new(mailer),
         push: Arc::new(push),
         note_sender,
+        record_sender: tokio::sync::broadcast::channel(256).0,
         dispatcher_wake: Arc::new(tokio::sync::Notify::new()),
         local_ai: None,
     };

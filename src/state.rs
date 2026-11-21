@@ -54,6 +54,8 @@ pub struct AppState {
     pub mailer: Arc<Mailer>,
     pub push: Arc<PushSender>,
     pub note_sender: broadcast::Sender<NoteEvent>,
+    /// App records that changed, for each office's live listeners.
+    pub record_sender: broadcast::Sender<crate::office::records::RecordEvent>,
     /// Wakes the in-process FSM dispatcher immediately (webhook, approval,
     /// new server task) instead of waiting for its fallback poll. Air runs
     /// as a single replica, so an in-process signal is enough.

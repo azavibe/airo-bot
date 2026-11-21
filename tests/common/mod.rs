@@ -36,6 +36,7 @@ pub fn state(pool: PgPool) -> AppState {
         mailer: Arc::new(Mailer::new(None)),
         push: Arc::new(PushSender::new(None).expect("disabled push sender")),
         note_sender,
+        record_sender: tokio::sync::broadcast::channel(256).0,
         dispatcher_wake: Arc::new(tokio::sync::Notify::new()),
         local_ai: None,
     }

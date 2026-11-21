@@ -930,6 +930,7 @@ pub async fn create_app_record(
     .bind(record.id)
     .fetch_one(&state.pool)
     .await?;
+    crate::office::records::emit_for(&state, record.id, "created").await;
     Ok(Json(record))
 }
 
@@ -976,6 +977,7 @@ pub async fn patch_app_record(
     .fetch_optional(&state.pool)
     .await?
     .ok_or(AppError::NotFound)?;
+    crate::office::records::emit_for(&state, updated.id, "updated").await;
     Ok(Json(updated))
 }
 
@@ -1024,7 +1026,9 @@ pub async fn archive_office_app(
     body: Option<Json<IdempotentBody>>,
 ) -> Result<Json<OfficeApp>, AppError> {
     let body = body.map(|Json(b)| b);
-    set_app_archived(&state, &caller, office.office, &headers, &slug, body, true).await
+    let app = set_app_archived(&state, &caller, office.office, &headers, &slug, body, true).await?;
+    crate::office::records::emit(&state, app.workspace_id, Uuid::nil(), &app.slug, "app");
+    Ok(app)
 }
 
 /// POST /api/office/apps/{slug}/unarchive
@@ -1037,7 +1041,10 @@ pub async fn unarchive_office_app(
     body: Option<Json<IdempotentBody>>,
 ) -> Result<Json<OfficeApp>, AppError> {
     let body = body.map(|Json(b)| b);
-    set_app_archived(&state, &caller, office.office, &headers, &slug, body, false).await
+    let app =
+        set_app_archived(&state, &caller, office.office, &headers, &slug, body, false).await?;
+    crate::office::records::emit(&state, app.workspace_id, Uuid::nil(), &app.slug, "app");
+    Ok(app)
 }
 
 /// POST /api/office/apps/{slug}/delete -- soft-deletes the app and its
@@ -1067,6 +1074,7 @@ pub async fn delete_office_app(
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
+    crate::office::records::emit(&state, workspace_id, Uuid::nil(), &app.slug, "app");
     Ok(Json(
         json!({ "status": "deleted", "id": app.id, "slug": app.slug }),
     ))
@@ -1094,6 +1102,7 @@ pub async fn delete_app_record(
     .fetch_optional(&state.pool)
     .await?;
     let id = deleted.ok_or(AppError::NotFound)?;
+    crate::office::records::emit_for(&state, id, "deleted").await;
     Ok(Json(json!({ "status": "deleted", "id": id })))
 }
 

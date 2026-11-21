@@ -100,7 +100,7 @@ impl AppInfo {
 
     /// The status a new record gets: its stage when that is a board stage
     /// (the board groups by status), else its own status, else "active".
-    fn status_for(&self, data: &Map<String, Value>) -> String {
+    pub(crate) fn status_for(&self, data: &Map<String, Value>) -> String {
         let named = |key: &str| data.get(key).and_then(Value::as_str).map(str::trim);
         if let Some(stage) = named("stage").or_else(|| named("status")) {
             if let Some(s) = self.stages.iter().find(|s| s.eq_ignore_ascii_case(stage)) {
@@ -218,7 +218,9 @@ pub fn prompt(business: &Business, apps: &[AppInfo]) -> String {
         }
         out.push_str(&format!(
             "To add records, write one line per record, exactly: ADD <app> {{json object with those fields}}. At most {MAX_RECORDS_PER_ANSWER} per message. \
-             Use realistic values that fit this business. The lines are saved into the app and hidden from the chat, so also say in one short sentence what you added.\n",
+             Use realistic values that fit this business. The lines are saved into the app and hidden from the chat, so also say in one short sentence what you added.\n\
+             To change a record listed under \"Records in your apps\", write: UPDATE <app> <its 8-character id> {{json object with only the fields to change}}. \
+             The owner may need to OK the change; it shows in the chat as a card either way.\n",
         ));
     }
     out.push_str(
@@ -320,17 +322,17 @@ pub async fn apply_records(
     thread_id: Uuid,
     agent_id: Uuid,
     text: &str,
-) -> (String, Option<Value>) {
+) -> (String, Option<Value>, Vec<Value>) {
     if !text.lines().any(|l| {
         l.trim()
             .trim_start_matches(['-', '*', '`', ' '])
             .to_ascii_lowercase()
             .starts_with("add ")
     }) {
-        return (text.to_string(), None);
+        return (text.to_string(), None, Vec::new());
     }
     let Some(business) = business_of_thread(pool, thread_id).await else {
-        return (text.to_string(), None);
+        return (text.to_string(), None, Vec::new());
     };
     // Records go only into apps this bot may use; others stay as text.
     let access = super::access::effective(pool, business.workspace_id, agent_id).await;
@@ -341,9 +343,10 @@ pub async fn apply_records(
         .collect();
     let (records, rest) = parse_records(text, &apps);
     if records.is_empty() {
-        return (text.to_string(), None);
+        return (text.to_string(), None, Vec::new());
     }
     let mut added: Vec<(String, usize)> = Vec::new();
+    let mut cards: Vec<Value> = Vec::new();
     for (index, data) in records {
         let app = &apps[index];
         let status = app.status_for(&data);
@@ -377,6 +380,14 @@ pub async fn apply_records(
                     Some(agent_id),
                 )
                 .await;
+                cards.push(super::records::card(
+                    &app.slug,
+                    record_id,
+                    "created",
+                    &super::records::title_of(&data),
+                    &[],
+                    None,
+                ));
                 match added.iter_mut().find(|(t, _)| *t == app.title) {
                     Some(entry) => entry.1 += 1,
                     None => added.push((app.title.clone(), 1)),
@@ -386,7 +397,7 @@ pub async fn apply_records(
         }
     }
     if added.is_empty() {
-        return (rest, None);
+        return (rest, None, Vec::new());
     }
     let summary = added
         .iter()
@@ -401,6 +412,7 @@ pub async fn apply_records(
     (
         body,
         Some(json!([{ "label": "Open apps", "kind": "open", "target": "apps" }])),
+        cards,
     )
 }
 
