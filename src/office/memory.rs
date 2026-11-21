@@ -95,7 +95,8 @@ pub async fn prompt_block(
 
     let facts: Vec<(String, bool)> = sqlx::query_as(
         "SELECT body, pinned FROM memories
-         WHERE workspace_id = $1 AND deleted_at IS NULL AND (agent_id IS NULL OR agent_id = $2)
+         WHERE workspace_id = $1 AND deleted_at IS NULL AND contact_id IS NULL
+           AND (agent_id IS NULL OR agent_id = $2)
          ORDER BY pinned DESC, created_at DESC
          LIMIT 100",
     )
@@ -238,21 +239,33 @@ pub async fn apply_remember(
     };
     let mut saved = Vec::new();
     for fact in facts {
+        // `REMEMBER about <contact>: <fact>` is kept on that contact.
+        let (contact, body) = match about_contact(&fact) {
+            Some((name, rest)) => {
+                match super::contacts::named(pool, business.workspace_id, name).await {
+                    Some(contact) => (Some(contact), rest.to_string()),
+                    None => (None, fact.clone()),
+                }
+            }
+            None => (None, fact.clone()),
+        };
         let id: Option<Uuid> = sqlx::query_scalar(
-            "INSERT INTO memories (workspace_id, body, source, created_by_agent_id, thread_id)
-             SELECT $1, $2, 'bot', $3, $4
+            "INSERT INTO memories (workspace_id, body, source, created_by_agent_id, thread_id, contact_id)
+             SELECT $1, $2, 'bot', $3, $4, $6
              WHERE NOT EXISTS (SELECT 1 FROM memories
                                WHERE workspace_id = $1 AND deleted_at IS NULL
+                                 AND contact_id IS NOT DISTINCT FROM $6
                                  AND lower(body) = lower($2))
-               AND (SELECT COUNT(*) FROM memories
-                    WHERE workspace_id = $1 AND deleted_at IS NULL) < $5
+               AND ($6 IS NOT NULL OR (SELECT COUNT(*) FROM memories
+                    WHERE workspace_id = $1 AND deleted_at IS NULL AND contact_id IS NULL) < $5)
              RETURNING id",
         )
         .bind(business.workspace_id)
-        .bind(&fact)
+        .bind(&body)
         .bind(agent_id)
         .bind(thread_id)
         .bind(MAX_MEMORIES)
+        .bind(contact)
         .fetch_optional(pool)
         .await
         .unwrap_or_else(|error| {
@@ -264,6 +277,17 @@ pub async fn apply_remember(
         }
     }
     (rest, saved)
+}
+
+/// `about <name>: <fact>` as (name, fact).
+fn about_contact(fact: &str) -> Option<(&str, &str)> {
+    let rest = fact
+        .get(..6)
+        .filter(|p| p.eq_ignore_ascii_case("about "))
+        .map(|_| &fact[6..])?;
+    let (name, body) = rest.split_once(':')?;
+    let (name, body) = (name.trim(), body.trim());
+    (!name.is_empty() && !body.is_empty()).then_some((name, body))
 }
 
 /// The "Remembered: ..." lines and Undo buttons for saved facts.
@@ -310,7 +334,7 @@ pub async fn list_memory(
     crate::handlers::offices::owned_office(&state.pool, user.id, office_id).await?;
     let memories = sqlx::query_as::<_, Memory>(&format!(
         "SELECT {MEMORY_COLUMNS} FROM memories
-         WHERE workspace_id = $1 AND deleted_at IS NULL
+         WHERE workspace_id = $1 AND deleted_at IS NULL AND contact_id IS NULL
          ORDER BY pinned DESC, created_at DESC
          LIMIT $2"
     ))
@@ -382,7 +406,8 @@ pub async fn create_memory(
         }
     }
     let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM memories WHERE workspace_id = $1 AND deleted_at IS NULL",
+        "SELECT COUNT(*) FROM memories
+         WHERE workspace_id = $1 AND deleted_at IS NULL AND contact_id IS NULL",
     )
     .bind(office_id)
     .fetch_one(&state.pool)

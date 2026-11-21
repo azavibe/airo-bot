@@ -178,6 +178,7 @@ fn is_spa_route(path: &str) -> bool {
         "/procedures",
         "/approvals",
         "/bots",
+        "/contacts",
         "/inbox",
         "/signin",
         "/admin",
@@ -473,6 +474,26 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/agents/{id}/access/reset",
             post(office::access::reset_access),
+        )
+        .route(
+            "/api/offices/{id}/contacts",
+            get(office::contacts::list_contacts).post(office::contacts::create_contact),
+        )
+        .route(
+            "/api/offices/{id}/contacts/import",
+            post(office::contacts::import_contacts),
+        )
+        .route(
+            "/api/contacts/{id}",
+            get(office::contacts::get_contact).patch(office::contacts::update_contact),
+        )
+        .route(
+            "/api/contacts/{id}/delete",
+            post(office::contacts::delete_contact),
+        )
+        .route(
+            "/api/contacts/{id}/memory",
+            post(office::contacts::add_contact_memory),
         )
         .route(
             "/settings/agents/{id}/rename",

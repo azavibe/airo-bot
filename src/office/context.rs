@@ -350,9 +350,10 @@ pub async fn apply_records(
         if !app.stages.is_empty() && app.fields.iter().any(|f| f == "stage") {
             data["stage"] = json!(status);
         }
-        let saved = sqlx::query(
+        let saved: Result<Uuid, sqlx::Error> = sqlx::query_scalar(
             "INSERT INTO office_records (workspace_id, app_id, record_type, status, data, created_by_agent_id)
-             VALUES ($1, $2, $3, $4, $5, $6)",
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id",
         )
         .bind(business.workspace_id)
         .bind(app.id)
@@ -360,13 +361,26 @@ pub async fn apply_records(
         .bind(&status)
         .bind(&data)
         .bind(agent_id)
-        .execute(pool)
+        .fetch_one(pool)
         .await;
         match saved {
-            Ok(_) => match added.iter_mut().find(|(t, _)| *t == app.title) {
-                Some(entry) => entry.1 += 1,
-                None => added.push((app.title.clone(), 1)),
-            },
+            Ok(record_id) => {
+                // The person it names becomes (or joins) a contact.
+                super::contacts::link_record(
+                    pool,
+                    business.workspace_id,
+                    record_id,
+                    &app.record_type,
+                    &data,
+                    "bot",
+                    Some(agent_id),
+                )
+                .await;
+                match added.iter_mut().find(|(t, _)| *t == app.title) {
+                    Some(entry) => entry.1 += 1,
+                    None => added.push((app.title.clone(), 1)),
+                }
+            }
             Err(error) => tracing::warn!(?error, app = %app.slug, "bot record not saved"),
         }
     }

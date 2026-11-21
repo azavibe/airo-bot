@@ -1699,6 +1699,11 @@ pub(crate) async fn run_agent_reply(
                     &crate::office::access::tools_block(&state, business.workspace_id, agent_id)
                         .await,
                 );
+                // The contacts this conversation names, with their facts.
+                sys.push_str(
+                    &crate::office::contacts::context_block(&pool, business.workspace_id, &history)
+                        .await,
+                );
             }
         }
         if let Some(line) = &mode.task_line {

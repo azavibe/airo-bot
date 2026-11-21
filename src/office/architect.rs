@@ -19,7 +19,7 @@ use crate::models::{OfficeApp, OfficeRecord, WorkspaceLesson, WorkspaceWallet};
 use crate::state::AppState;
 
 const APP_COLUMNS: &str = "id, workspace_id, slug, title, icon, category, replaces_saas, ui_schema, default_schema, last_valid_schema, archived_at, created_at, updated_at";
-const RECORD_COLUMNS: &str = "id, workspace_id, app_id, record_type, status, data, content_hash, created_by_agent_id, created_at, updated_at";
+const RECORD_COLUMNS: &str = "id, workspace_id, app_id, record_type, status, data, content_hash, created_by_agent_id, contact_id, created_at, updated_at";
 const WALLET_SELECT: &str = "SELECT workspace_id, plan_tier, credit_balance, max_daily_credit_burn,
         CASE WHEN burn_day < CURRENT_DATE THEN 0 ELSE credits_burned_today END AS credits_burned_today,
         dedicated_phone_number, updated_at
@@ -873,6 +873,27 @@ pub async fn create_app_record(
     .bind(content_hash)
     .bind(created_by_agent)
     .bind(key)
+    .fetch_one(&state.pool)
+    .await?;
+    // The person it names becomes (or joins) a contact.
+    super::contacts::link_record(
+        &state.pool,
+        workspace_id,
+        record.id,
+        &record.record_type,
+        &record.data,
+        if created_by_agent.is_some() {
+            "bot"
+        } else {
+            "owner"
+        },
+        created_by_agent,
+    )
+    .await;
+    let record = sqlx::query_as::<_, OfficeRecord>(&format!(
+        "SELECT {RECORD_COLUMNS} FROM office_records WHERE id = $1"
+    ))
+    .bind(record.id)
     .fetch_one(&state.pool)
     .await?;
     Ok(Json(record))
