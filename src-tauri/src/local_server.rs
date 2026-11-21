@@ -234,6 +234,7 @@ pub async fn start(paths: &LocalPaths, local_ai: LocalAi) -> Result<LocalServer,
             airobot::push::PushSender::new(None).map_err(|e| format!("push setup failed: {e}"))?,
         ),
         note_sender,
+        record_sender: tokio::sync::broadcast::channel(256).0,
         dispatcher_wake: Arc::new(tokio::sync::Notify::new()),
         local_ai: Some(local_ai),
     };
