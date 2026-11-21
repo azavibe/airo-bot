@@ -48,14 +48,31 @@ their work in simple built-in apps (a lead pipeline, appointments, a support
 inbox, invoices), and **ask before anything risky**: payments and outgoing
 messages wait for your OK.
 
+## Who it's for
+
+- **Agencies and freelancers** who set up and run AI teams for their clients'
+  businesses.
+- **Indie operators** running one or more small businesses themselves.
+- **Technical founders** who want an open base they can self-host and
+  extend: an HTTP API, a CLI and agent skill for outside agents, and apps
+  defined as JSON.
+
+Not technical, and just want the team working for your business?
+[**Airobot Cloud**](https://airo-bot.com) runs it for you: no server, no keys
+to manage.
+
 ## Features
 
 |  |  |
 |---|---|
 | 💬 **One team chat** | The Architect routes every message to the right bot; `@name` talks to one bot directly. Bots reply with one-tap buttons and answer boxes. |
 | 🚀 **Starts on its own** | After setup every bot posts a first-week plan and starts working. Each morning the Architect hands out the day's tasks. |
-| 📋 **Built-in apps** | Kanban pipelines and tables for leads, appointments, tickets, invoices and posts, shared by you and the bots. |
-| ✅ **Approvals** | Risky actions (payments, outgoing messages) wait in an approval inbox until a person decides. |
+| 📋 **Built-in apps** | Kanban pipelines, tables and charts for leads, appointments, tickets, invoices and posts, shared by you and the bots, with one-tap "Ask the team" jobs. |
+| 🧠 **Memory, contacts and documents** | The office remembers facts and your decisions; one contact per customer with its own memory and timeline; bots answer from your price lists, FAQs, policies and website pages and say which one they used. |
+| 🎯 **Goals that move** | A goal with milestones the Architect proposes and you keep, opt-in check-ins, and a weekly report counted from your data. |
+| 🔁 **Recurring jobs** | "Every Monday at 9, list overdue invoices": set it in chat, and the bot does it on schedule and says honestly how it went. |
+| ✅ **Approvals and permissions** | Risky actions (payments, outgoing messages) wait in an approval inbox. Each bot sees only its own apps and tools, and starts in **Ask first** mode. |
+| 💸 **Spend you control** | Hard monthly caps per office and per bot, checked before every paid AI call, with spend shown per bot. |
 | 🔌 **Connections** | Gmail, Google Calendar and Sheets, Stripe, Shopify and webhooks. |
 | 🧠 **Any AI** | Use your own OpenRouter key, or on the desktop the AI you already pay for: **Claude Code**, **Codex**, **OpenCode**, **Gemini CLI**, or a free local **Ollama** model. |
 | 🤖 **Outside agents welcome** | Any AI agent can join an office with a device-code sign-in through `airobot-cli` or the [agent skill](skills/airobot), then take tasks and post results. |
@@ -68,6 +85,18 @@ messages wait for your OK.
 
 ## Get started
 
+Which one fits depends on whether your bots should keep working when your
+computer is off:
+
+|  | Desktop app | Self-host (Docker) | Airobot Cloud |
+|---|---|---|---|
+| Runs | While your computer is on and Airobot is open | 24/7 on your server | 24/7, hosted for you |
+| Morning plans, check-ins, recurring jobs | Only while it's open | Yes | Yes |
+| Webhooks in (Stripe, Shopify, your own) | No: it listens on this computer only | Yes, at your public address | Yes |
+| Reach it from | This computer | Anywhere you publish it | Anywhere |
+| AI | Your AI tools on this computer, or Ollama | OpenRouter: your key or a shared one | Included credits, or your OpenRouter key |
+| Account and cost | None, free | Your own, free (you pay for the server) | Your own, paid plan |
+
 ### 1. Desktop app (easiest)
 
 Download Airobot for **macOS** (Apple Silicon or Intel) or **Windows** from the
@@ -75,6 +104,11 @@ Download Airobot for **macOS** (Apple Silicon or Intel) or **Windows** from the
 entirely on your computer with its own built-in database: no account, no
 server, no credits. Pick the AI to use in **Connect Devices → AI on this
 computer**.
+
+The desktop app listens on your computer's loopback address only, so nothing
+on the internet can reach it: outside webhooks can't arrive, and scheduled work
+runs only while the app is open. For bots that work around the clock, use
+Docker or Airobot Cloud.
 
 > The builds are not code-signed yet. On macOS, right-click Airobot and choose
 > **Open** the first time; on Windows, choose **More info → Run anyway** if
@@ -123,6 +157,21 @@ docker compose up postgres -d            # or point DATABASE_URL at your own Pos
 cargo run                                # http://127.0.0.1:8081 with the example .env
 ```
 
+## Choosing an AI
+
+- **For work that runs on its own** (morning plans, check-ins, recurring jobs,
+  work started by a webhook), use an AI that needs nobody at the keyboard: an
+  **OpenRouter API key** on a server or in Airobot Cloud (any model it offers),
+  or a local **Ollama** model in the desktop app (free and private, as fast as
+  your computer).
+- **Local coding CLIs** (**Claude Code**, **Codex**, **OpenCode**, **Gemini
+  CLI**) let you chat with your bots on the desktop using the subscription you
+  already have. They are interactive tools signed in on your computer: great
+  while you're there, not meant as a 24/7 engine. Check each tool's terms
+  before using it for unattended work.
+- Whatever you choose, each bot can use its own model, and paid calls on
+  included credits are capped per office and per bot.
+
 ## FAQ
 
 **Is it free?** Yes. The desktop app and self-hosted Airobot are free and open
@@ -131,14 +180,24 @@ with a local Ollama model. Airobot Cloud is the paid, hosted option.
 
 **Which AI models does it use?** Your choice: any model on OpenRouter (Claude,
 GPT, Gemini, Llama and more), or on the desktop the AI coding tools you already
-have (Claude Code, Codex, OpenCode, Gemini CLI) or Ollama.
+have (Claude Code, Codex, OpenCode, Gemini CLI) or Ollama. See
+[Choosing an AI](#choosing-an-ai).
+
+**Does it keep working when my computer is off?** Not the desktop app: it runs
+only while it's open. Self-host it with Docker or use Airobot Cloud for
+schedules and webhooks around the clock.
 
 **Where is my data?** In your own PostgreSQL database. With the desktop app,
 it never leaves your computer.
 
 **Can bots do things without asking?** Bots work inside your office's apps on
 their own, but payments, outgoing messages and other risky actions wait for
-your approval.
+your approval. Each bot sees only the apps and tools you give it, and starts in
+**Ask first** mode: a recurring job it sets waits for your Start.
+
+**Can it run up a bill?** Not past the caps you set: each office and each bot
+can have a hard monthly limit on included AI credits, checked before every
+paid call.
 
 **Can I connect my own agent?** Yes. Agents sign in with a device code and use
 the HTTP API, `airobot-cli`, or the Python skill in [`skills/airobot`](skills/airobot).
