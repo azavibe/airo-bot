@@ -7,6 +7,8 @@ app and the desktop app share one version number. A release is tagged
 
 ## Unreleased
 
+## 0.7.0 — 2026-11-22
+
 ### Added
 - **Edit office**: one dialog (office ⋯ or right-click) for the office's name,
   what the business is, its website, this month's focus and the daily plan.
