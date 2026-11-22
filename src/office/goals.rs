@@ -215,7 +215,8 @@ pub async fn prompt_block(pool: &PgPool, office: Uuid, is_architect: bool) -> St
     }
     if is_architect {
         out.push_str(
-            "\nTo propose a milestone toward the goal, write it on its own line as: MILESTONE: <something measurable> by YYYY-MM-DD. The owner decides whether to keep it.\n",
+            "\nTo propose a milestone toward the goal, write it on its own line as: MILESTONE: <something measurable> by YYYY-MM-DD. The owner decides whether to keep it.\n\
+             When the owner tells you something lasting about the business (what it sells and at what prices, hours, area served, who the customers are, policies, tone), save each fact on its own line as: ABOUT: <the fact>. It goes into \"About the business\", which every bot reads.\n",
         );
     }
     out

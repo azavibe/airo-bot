@@ -231,7 +231,7 @@ pub fn prompt(business: &Business, apps: &[AppInfo]) -> String {
         }
         out.push_str(&format!(
             "To add records, write one line per record, exactly: ADD <app> {{json object with those fields}}. At most {MAX_RECORDS_PER_ANSWER} per message. \
-             Use realistic values that fit this business. The lines are saved into the app and hidden from the chat, so also say in one short sentence what you added.\n\
+             Add only real records: ones the owner gave you, that come from this conversation, the office's data or connected tools, or that you found on the web. Never invent placeholder customers, people or amounts; if you have nothing real yet, ask the owner for the first one instead. The lines are saved into the app and hidden from the chat, so also say in one short sentence what you added.\n\
              To change a record listed under \"Records in your apps\", write: UPDATE <app> <its 8-character id> {{json object with only the fields to change}}. \
              The owner may need to OK the change; it shows in the chat as a card either way.\n",
         ));

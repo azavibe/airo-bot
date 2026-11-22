@@ -58,32 +58,32 @@ pub fn starter_tasks(bot_name: &str, p: &Profile) -> Option<[String; 3]> {
     let ctx = p.context();
     let tasks = match bot_name {
         "Sales Lead" => [
-            format!("Fill the Lead Pipeline with 5 realistic leads {biz} should win this month (the kinds of customers who buy from a business like this), each with a stage, an estimated value and the next step.{ctx}"),
+            format!("Start the Lead Pipeline for {biz} with real leads only: add the ones I've mentioned or that are in the office's tools (at most 2), never made-up ones. If there are none yet, ask me for the first one in one question, saying what you need (name, how to reach them, what they want).{ctx}"),
             "Write a short, warm reply to a new enquiry and a follow-up to send 3 days later.".to_string(),
             "Pick the 3 leads most likely to buy and say what to do with each today.".to_string(),
         ],
         "Studio Producer" => [
-            format!("Plan 5 posts for {biz} this week and add each one to the studio as a draft with its hook and platform.{ctx}"),
+            format!("Add 2 post ideas for {biz} this week to the studio as drafts, each with its hook and platform, built from what you know about the business; ask me one question if you need a real detail (a product, an offer, a photo).{ctx}"),
             format!("Write a 30-second video script about what makes {biz} special."),
             "Say when and where to post over the next two weeks, in a short list.".to_string(),
         ],
         "Finance Manager" => [
-            format!("Set up Invoices & Cashflow for {biz}: add the invoices a business like this would send this month, with realistic clients, amounts and due dates.{ctx}"),
+            format!("Start Invoices & Cashflow for {biz} with real invoices only: add the ones I've mentioned or that are in Stripe (at most 2), never made-up clients or amounts. If there are none yet, ask me for the first one in one question (client, amount, due date).{ctx}"),
             "Write a friendly payment reminder and a firmer second one.".to_string(),
             format!("Name the 5 numbers {biz} should check every week, one line each."),
         ],
         "Support Agent" => [
-            format!("Add the 3 customer requests {biz} most likely gets this week to the Support Inbox, each with a ready-to-send reply in its note.{ctx}"),
+            format!("Ask me the question customers of {biz} ask most, then add it to the Support Inbox as a real ticket with a ready-to-send reply in its note. Don't invent customers.{ctx}"),
             "Write a reply for an unhappy customer that keeps them.".to_string(),
             format!("Write short answers to the 5 questions customers of {biz} ask most."),
         ],
         "Scheduler" => [
-            format!("Add the next few typical bookings for {biz} to Appointments, and set its booking rules (hours, buffers, cancellations, reminders) in 4 short lines.{ctx}"),
+            format!("Set the booking rules for {biz} (hours, buffers, cancellations, reminders) in 4 short lines, and add any real bookings I've mentioned to Appointments (never made-up ones). Ask me for our opening hours if you don't know them.{ctx}"),
             "Write the booking confirmation and the reminder message.".to_string(),
             "Write a no-show policy that is fair but firm, in 3 lines.".to_string(),
         ],
         "Project Manager" => [
-            format!("Add the 2 or 3 client projects {biz} most likely has on right now to Projects & Tasks, each with its client, due date, value and next milestone.{ctx}"),
+            format!("Start Projects & Tasks for {biz} with real projects only: add the ones I've mentioned (at most 2), with client, due date and next milestone. If there are none yet, ask me what we're working on right now, in one question.{ctx}"),
             "Write a short weekly update a client would be glad to get.".to_string(),
             "Say which project is most at risk and the one thing that would get it back on track.".to_string(),
         ],
@@ -164,6 +164,8 @@ pub async fn start(state: &AppState, user_id: Uuid, office_chat: Uuid, profile: 
     intro.push_str(" The team is starting on its first tasks now, and each bot posts what it finds here. Tap a button to give a bot its next task.");
     if profile.website.is_some() {
         intro.push_str(" First I'll read your website so everyone works from the same picture.");
+    } else {
+        intro.push_str(" First, a few quick questions so everyone works from the same picture.");
     }
     insert_bot_note(
         pool,
@@ -197,7 +199,22 @@ pub async fn start(state: &AppState, user_id: Uuid, office_chat: Uuid, profile: 
     tokio::spawn(async move {
         if let Some(site) = profile.website.clone() {
             let task = format!(
-                "Read {site} and sum up in 5 short bullets what {} sells, to whom, how, and what makes it different. End by asking me to correct anything you got wrong.",
+                "Read {site} and sum up in 5 short bullets what {} sells, to whom, how, and what makes it different. Save each lasting fact (prices, hours, area served, customers, tone) with an ABOUT: line. End by asking me to correct anything you got wrong.",
+                profile.name
+            );
+            run_agent_reply(
+                state.clone(),
+                office_chat,
+                architect,
+                user_id,
+                ReplyMode::task(super::group::ARCHITECT_NAME, &task),
+            )
+            .await;
+        } else {
+            // No website: the Architect asks what the team needs to know,
+            // and saves the owner's answers into "About the business".
+            let task = format!(
+                "Ask me the 3 questions about {} that would most help the whole team (what we sell and at what prices, who our customers are, our hours or area), each on its own line starting with \"Question: \". Keep it short and friendly.",
                 profile.name
             );
             run_agent_reply(
@@ -272,6 +289,8 @@ mod tests {
         };
         for (_, name, _, _) in crate::office::OFFICE_ROLES {
             let tasks = starter_tasks(name, &p).unwrap_or_else(|| panic!("{name} has a plan"));
+            // Real records only: no bot is asked to make up sample data.
+            assert!(!tasks[0].contains("realistic"), "{name}: {}", tasks[0]);
             assert!(
                 tasks[0].contains("Bright Smiles (Dental clinic)"),
                 "{name}: {}",

@@ -151,10 +151,11 @@ async fn set_up_office(state: &AppState, cookie: &str, pool: &PgPool) -> Uuid {
             .fetch_one(pool)
             .await
             .expect("the office's group chat");
-    // Let the kickoff finish (intro, two plans, two first tasks) so the
-    // tests below see only their own messages.
-    let kicked_off = wait_for(pool, chat, 5).await;
-    assert_eq!(kicked_off.len(), 5, "{kicked_off:?}");
+    // Let the kickoff finish (intro, two plans, the Architect's questions
+    // since there is no website, two first tasks) so the tests below see
+    // only their own messages.
+    let kicked_off = wait_for(pool, chat, 6).await;
+    assert_eq!(kicked_off.len(), 6, "{kicked_off:?}");
     chat
 }
 

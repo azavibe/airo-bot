@@ -1610,6 +1610,9 @@ async fn deliver_reply(
     // the message says so, with an Undo button each.
     let (body, saved) =
         crate::office::memory::apply_remember(pool, thread_id, architect.id, &body).await;
+    // What it learned about the business (`ABOUT: ...` lines) goes into
+    // "About the business", which every bot reads.
+    let (body, about) = crate::office::memory::apply_about(pool, thread_id, &body).await;
     // `[doc 1a2b3c4d]` citations become "(from “Price list”)".
     let body = crate::office::documents::cite(pool, thread_id, &body).await;
     // Recurring jobs it set (`EVERY ...:` lines): proposed, or started for
@@ -1639,6 +1642,21 @@ async fn deliver_reply(
         (body, actions)
     } else {
         let (line, buttons) = crate::office::goals::proposed_note(&proposed);
+        let mut all = actions
+            .and_then(|a| a.as_array().cloned())
+            .unwrap_or_default();
+        all.extend(buttons);
+        let body = if body.is_empty() {
+            line
+        } else {
+            format!("{body}\n\n{line}")
+        };
+        (body, Some(serde_json::Value::Array(all)))
+    };
+    let (body, actions) = if about.is_empty() {
+        (body, actions)
+    } else {
+        let (line, buttons) = crate::office::memory::about_note(&about);
         let mut all = actions
             .and_then(|a| a.as_array().cloned())
             .unwrap_or_default();

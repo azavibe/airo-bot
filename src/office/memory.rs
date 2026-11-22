@@ -222,6 +222,88 @@ pub fn parse_remember(text: &str) -> (Vec<String>, String) {
     (facts, kept.join("\n").trim().to_string())
 }
 
+/// "About the business" holds at most this many characters.
+const MAX_ABOUT_CHARS: usize = 4000;
+
+/// Takes `ABOUT: <fact>` lines out of an answer and adds each fact to the
+/// office's "About the business" (what every bot reads: prices, hours,
+/// area, customers, tone), skipping ones already there and stopping when
+/// it is full. Returns the answer without the lines and the facts added.
+pub async fn apply_about(pool: &PgPool, thread_id: Uuid, text: &str) -> (String, Vec<String>) {
+    if !text.contains("ABOUT:") {
+        return (text.to_string(), Vec::new());
+    }
+    let mut facts = Vec::new();
+    let mut kept = Vec::new();
+    for line in text.lines() {
+        let trimmed = line
+            .trim()
+            .trim_start_matches(['-', '*', ' '])
+            .trim_matches('*');
+        match trimmed.strip_prefix("ABOUT:") {
+            Some(fact) if !fact.trim().is_empty() => {
+                facts.push(cut(fact.trim().trim_end_matches('.'), 300))
+            }
+            _ => kept.push(line),
+        }
+    }
+    if facts.is_empty() {
+        return (text.to_string(), Vec::new());
+    }
+    let Some(office) = crate::office::context::business_of_thread(pool, thread_id)
+        .await
+        .map(|b| b.workspace_id)
+    else {
+        return (text.to_string(), Vec::new());
+    };
+    let about: Option<String> = sqlx::query_scalar("SELECT about FROM workspaces WHERE id = $1")
+        .bind(office)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+        .flatten();
+    let mut about = about.unwrap_or_default();
+    let mut added = Vec::new();
+    for fact in facts {
+        if about.to_lowercase().contains(&fact.to_lowercase()) {
+            continue;
+        }
+        let line = format!("{}- {fact}.", if about.is_empty() { "" } else { "\n" });
+        if about.chars().count() + line.chars().count() > MAX_ABOUT_CHARS {
+            break;
+        }
+        about.push_str(&line);
+        added.push(fact);
+    }
+    if !added.is_empty() {
+        if let Err(error) =
+            sqlx::query("UPDATE workspaces SET about = $2, updated_at = now() WHERE id = $1")
+                .bind(office)
+                .bind(&about)
+                .execute(pool)
+                .await
+        {
+            tracing::warn!(?error, "could not add to About the business");
+            return (text.to_string(), Vec::new());
+        }
+    }
+    (kept.join("\n").trim().to_string(), added)
+}
+
+/// The line and button a reply gets for what it added to About.
+pub fn about_note(added: &[String]) -> (String, Vec<Value>) {
+    let text = added
+        .iter()
+        .map(|fact| format!("*Added to About the business: {fact}*"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    (
+        text,
+        vec![json!({ "label": "Edit About", "kind": "open", "target": "office" })],
+    )
+}
+
 /// Saves the facts a bot wrote, skipping ones the office already knows.
 /// Returns the answer without the lines, and (id, fact) for each saved one.
 pub async fn apply_remember(

@@ -325,7 +325,7 @@ async fn the_architect_plans_each_morning_and_the_team_starts(pool: PgPool) {
     let res = set_up(&state, &cookie, "").await;
     let workspace = res.body["workspace_id"].as_str().expect("id").to_string();
     let chat = office_chat(&pool, &workspace).await;
-    let after_kickoff = wait_for(&pool, chat, 5).await.len();
+    let after_kickoff = wait_for(&pool, chat, 6).await.len();
 
     // Just after kickoff nothing is due: today's work was the kickoff.
     assert_eq!(
@@ -397,7 +397,7 @@ async fn a_stopped_office_starts_no_work_until_it_runs_again(pool: PgPool) {
     let res = set_up(&state, &cookie, "").await;
     let workspace = res.body["workspace_id"].as_str().expect("id").to_string();
     let chat = office_chat(&pool, &workspace).await;
-    let before = wait_for(&pool, chat, 5).await.len();
+    let before = wait_for(&pool, chat, 6).await.len();
 
     let stop = call(
         &state,

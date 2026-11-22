@@ -33,6 +33,13 @@ app and the desktop app share one version number. A release is tagged
   the Store Manager sees Shopify, the Sales Lead sees leads and Gmail. Change
   it in the bot's settings under "What it can use". Bots read fresh data from
   their tools before they answer; anything they send stays a draft.
+- **Faster, more honest setup**: pick your business model (local service,
+  agency, e-commerce, solo) to pre-select the right areas; areas and tools
+  are checkboxes; Google Workspace, Stripe, Shopify and QuickBooks/Xero
+  (through a webhook) are offered, with Microsoft 365 marked as planned.
+  The team no longer fills your apps with made-up examples: bots add only
+  real records or ask you for the first one, and the Architect asks a few
+  questions whose answers go into "About the business".
 - **Projects, Quotes and Reviews apps**: Projects & Tasks (with a new
   Project Manager bot), Quotes & Proposals and Reviews & Reputation, each
   with a board, a table, a chart and one-tap jobs. An approved quote turns

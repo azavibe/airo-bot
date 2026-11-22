@@ -150,7 +150,8 @@ struct AppBlueprint {
 pub const TEAMS: &[(&str, &str, &str)] = &[
     ("sales", "leads-crm", "crm"),
     ("marketing", "social-video", "social"),
-    ("finance", "finance-ops", "finance"),
+    // Finance brings Quotes too: a quote becomes an invoice.
+    ("finance", "finance-ops", "finance quotes"),
     ("support", "support-desk", "support"),
     ("bookings", "bookings", "scheduling"),
     // Projects get their own room and Project Manager; quotes and reviews
