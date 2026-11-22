@@ -87,7 +87,7 @@ pub const ASSISTANT_ROOM: &str = "#assistant";
 const ASSISTANT_INSTRUCTIONS: &str = "You are Assistant, a friendly general-purpose AI helper. Answer any question clearly and helpfully: writing, research, planning, coding, ideas or everyday questions. Keep answers concise unless asked for detail.";
 
 /// Who answers in each office channel (channel, bot name, handle, character).
-pub const OFFICE_ROLES: [(&str, &str, &str, &str); 6] = [
+pub const OFFICE_ROLES: [(&str, &str, &str, &str); 7] = [
     (
         "#leads-crm",
         "Sales Lead",
@@ -117,6 +117,12 @@ pub const OFFICE_ROLES: [(&str, &str, &str, &str); 6] = [
         "Scheduler",
         "scheduler",
         "You run bookings for this office: appointments, reminders, reschedules and the calendar. Confirm times clearly and keep answers short.",
+    ),
+    (
+        "#projects",
+        "Project Manager",
+        "pm",
+        "You run client projects for this office: plans, milestones, deadlines and what each client is waiting on. Keep every project moving, say plainly what is late, and keep answers short.",
     ),
     (
         "#store-ops",

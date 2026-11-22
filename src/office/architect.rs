@@ -150,9 +150,15 @@ struct AppBlueprint {
 pub const TEAMS: &[(&str, &str, &str)] = &[
     ("sales", "leads-crm", "crm"),
     ("marketing", "social-video", "social"),
-    ("finance", "finance-ops", "finance"),
+    // Finance brings Quotes too: a quote becomes an invoice.
+    ("finance", "finance-ops", "finance quotes"),
     ("support", "support-desk", "support"),
     ("bookings", "bookings", "scheduling"),
+    // Projects get their own room and Project Manager; quotes and reviews
+    // are apps for the sales and support rooms' bots.
+    ("projects", "projects", "projects"),
+    ("quotes", "leads-crm", "quotes"),
+    ("reviews", "support-desk", "reviews"),
     // TODO(air): no store app yet; Shopify's own admin is the store, and
     // bots reach it through the Shopify connection.
     ("store", "store-ops", ""),
@@ -357,6 +363,160 @@ fn blueprints(saas: &[String], default_when_empty: bool) -> Vec<AppBlueprint> {
             }),
         });
     }
+    if any(&["project", "asana", "trello", "monday", "tasks"]) {
+        out.push(AppBlueprint {
+            slug: "projects-tasks",
+            title: "Projects & Tasks",
+            icon: "FolderKanban",
+            category: "operations",
+            replaces: "Asana / Trello",
+            label: "Projects & Tasks",
+            schema: json!({
+                "version": "1.0",
+                "layout": "split_view",
+                "header_metrics": [
+                    { "id": "m1", "label": "Projects", "query_record_type": "project", "aggregation": "count" },
+                    { "id": "m2", "label": "Project value", "query_record_type": "project", "aggregation": "sum", "field": "value" }
+                ],
+                "views": [
+                    {
+                        "id": "v_kanban", "type": "kanban", "title": "Projects", "record_type": "project",
+                        "group_by_field": "stage",
+                        "columns": ["Backlog", "In Progress", "Waiting on Client", "Done"],
+                        "card_fields": ["name", "client", "due_date", "next_milestone"]
+                    },
+                    {
+                        "id": "v_table", "type": "datatable", "title": "All projects", "record_type": "project",
+                        "columns": [
+                            { "key": "name", "label": "Project", "type": "text" },
+                            { "key": "client", "label": "Client", "type": "text" },
+                            { "key": "due_date", "label": "Due", "type": "date" },
+                            { "key": "value", "label": "Value ($)", "type": "currency" },
+                            { "key": "next_milestone", "label": "Next milestone", "type": "text" },
+                            { "key": "stage", "label": "Stage", "type": "badge" }
+                        ]
+                    },
+                    {
+                        "id": "v_chart", "type": "chart", "title": "Projects by stage", "record_type": "project",
+                        "chart_type": "bar", "x_axis": "stage",
+                        "order": ["Backlog", "In Progress", "Waiting on Client", "Done"]
+                    }
+                ],
+                "quick_actions": [
+                    { "label": "What's late?", "ask": "Which projects in Projects & Tasks are late or at risk? Say what each one needs next." },
+                    { "label": "Client updates", "ask": "Draft a short status update for each client with a project in progress. Drafts only." }
+                ]
+            }),
+        });
+    }
+
+    if any(&["quote", "proposal", "estimate", "pandadoc"]) {
+        out.push(AppBlueprint {
+            slug: "quotes-proposals",
+            title: "Quotes & Proposals",
+            icon: "FileSignature",
+            category: "sales",
+            replaces: "PandaDoc / Proposify",
+            label: "Quotes & Proposals",
+            schema: json!({
+                "version": "1.0",
+                "layout": "split_view",
+                "header_metrics": [
+                    { "id": "m1", "label": "Quotes", "query_record_type": "quote", "aggregation": "count" },
+                    { "id": "m2", "label": "Quoted value", "query_record_type": "quote", "aggregation": "sum", "field": "total" }
+                ],
+                "views": [
+                    {
+                        "id": "v_kanban", "type": "kanban", "title": "Quotes", "record_type": "quote",
+                        "group_by_field": "stage",
+                        "columns": ["Draft", "Sent", "Approved", "Declined"],
+                        "card_fields": ["title", "client_name", "total", "expires_on"]
+                    },
+                    {
+                        "id": "v_table", "type": "datatable", "title": "All quotes", "record_type": "quote",
+                        "columns": [
+                            { "key": "title", "label": "Quote", "type": "text" },
+                            { "key": "client_name", "label": "Client", "type": "text" },
+                            { "key": "total", "label": "Total ($)", "type": "currency" },
+                            { "key": "expires_on", "label": "Expires", "type": "date" },
+                            { "key": "stage", "label": "Stage", "type": "badge" }
+                        ]
+                    },
+                    {
+                        "id": "v_chart", "type": "chart", "title": "Quoted value by stage", "record_type": "quote",
+                        "chart_type": "bar", "x_axis": "stage", "y_axis": "total",
+                        "order": ["Draft", "Sent", "Approved", "Declined"]
+                    }
+                ],
+                // Sending a quote always waits for the owner's OK.
+                "approval_stages": ["Sent"],
+                "convert": [
+                    {
+                        "label": "Convert to invoice", "to_app": "invoices-cashflow", "when_stage": "Approved",
+                        "map": { "client_name": "client_name", "amount": "total", "description": "title" },
+                        "set": { "status": "Draft", "invoice_number": "INV-{ref}", "due_date": "{today+14}" }
+                    },
+                    {
+                        "label": "Start a project", "to_app": "projects-tasks", "when_stage": "Approved",
+                        "map": { "name": "title", "client": "client_name", "value": "total" },
+                        "set": { "stage": "Backlog" }
+                    }
+                ],
+                "quick_actions": [
+                    { "label": "Draft a quote", "ask": "Draft a quote with line items for the most promising lead and add it to Quotes & Proposals as a Draft." },
+                    { "label": "Chase open quotes", "ask": "Which quotes in Quotes & Proposals were sent but not answered? Draft a friendly follow-up for each. Drafts only." }
+                ]
+            }),
+        });
+    }
+
+    if any(&["review", "reputation", "birdeye", "trustpilot"]) {
+        out.push(AppBlueprint {
+            slug: "reviews-reputation",
+            title: "Reviews & Reputation",
+            icon: "Star",
+            category: "marketing",
+            replaces: "Birdeye / Podium",
+            label: "Reviews & Reputation",
+            schema: json!({
+                "version": "1.0",
+                "layout": "split_view",
+                "header_metrics": [
+                    { "id": "m1", "label": "Reviews", "query_record_type": "review", "aggregation": "count" }
+                ],
+                "views": [
+                    {
+                        "id": "v_kanban", "type": "kanban", "title": "Reviews", "record_type": "review",
+                        "group_by_field": "stage",
+                        "columns": ["To request", "Requested", "Reviewed", "Replied"],
+                        "card_fields": ["customer", "source", "rating", "review_text"]
+                    },
+                    {
+                        "id": "v_table", "type": "datatable", "title": "All reviews", "record_type": "review",
+                        "columns": [
+                            { "key": "customer", "label": "Customer", "type": "text" },
+                            { "key": "source", "label": "Where", "type": "text" },
+                            { "key": "rating", "label": "Rating", "type": "text" },
+                            { "key": "review_text", "label": "Review", "type": "text" },
+                            { "key": "reply_draft", "label": "Reply", "type": "text" },
+                            { "key": "stage", "label": "Stage", "type": "badge" }
+                        ]
+                    },
+                    {
+                        "id": "v_chart", "type": "chart", "title": "Reviews by rating", "record_type": "review",
+                        "chart_type": "bar", "x_axis": "rating",
+                        "order": ["1", "2", "3", "4", "5"]
+                    }
+                ],
+                // A review request or a public reply goes out only with the owner's OK.
+                "approval_stages": ["Requested", "Replied"],
+                "quick_actions": [
+                    { "label": "Ask for reviews", "ask": "Pick the 3 happiest recent customers and add a review request for each to Reviews & Reputation (stage To request), with a short, personal message." },
+                    { "label": "Draft replies", "ask": "Draft a reply to each review in Reviews & Reputation that has none yet, thankful and specific." }
+                ]
+            }),
+        });
+    }
     out
 }
 
@@ -387,7 +547,7 @@ pub async fn onboard_workspace(
                 .collect();
             if chosen.len() != asked.len() {
                 return Err(AppError::BadRequest(
-                    "teams must be among sales, marketing, finance, support, bookings, store"
+                    "teams must be among sales, marketing, finance, support, bookings, projects, quotes, reviews, store"
                         .into(),
                 ));
             }
@@ -1234,6 +1394,67 @@ pub fn validate_mod_schema(schema: &serde_json::Value) -> Result<(), String> {
         }
     }
 
+    // Stages a bot may only move a record into with the owner's OK.
+    if let Some(stages) = obj.get("approval_stages") {
+        let ok = stages.as_array().is_some_and(|s| {
+            s.len() <= 10
+                && s.iter().all(|v| {
+                    v.as_str()
+                        .is_some_and(|t| !t.trim().is_empty() && t.len() <= 64)
+                })
+        });
+        if !ok {
+            return Err("'approval_stages' must be a list of at most 10 stage names".to_string());
+        }
+    }
+
+    // Conversions: a record of this app becomes one in another app (a
+    // quote into an invoice), mapping fields by name.
+    if let Some(rules) = obj.get("convert") {
+        let rules = rules
+            .as_array()
+            .ok_or_else(|| "'convert' must be an array".to_string())?;
+        if rules.len() > 4 {
+            return Err("at most 4 conversions are allowed".to_string());
+        }
+        for (idx, rule) in rules.iter().enumerate() {
+            let text_ok = |key: &str, max: usize| {
+                rule.get(key)
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|t| !t.trim().is_empty() && t.chars().count() <= max)
+            };
+            if !text_ok("label", 40) || !text_ok("to_app", 64) {
+                return Err(format!(
+                    "Conversion at index {idx} needs a 'label' and a 'to_app'"
+                ));
+            }
+            if rule.get("when_stage").is_some() && !text_ok("when_stage", 64) {
+                return Err(format!(
+                    "Conversion at index {idx} has an invalid 'when_stage'"
+                ));
+            }
+            let map_ok = rule.get("map").is_none_or(|m| {
+                m.as_object().is_some_and(|m| {
+                    m.len() <= 20
+                        && m.values()
+                            .all(|v| v.as_str().is_some_and(|s| !s.is_empty()))
+                })
+            });
+            let set_ok = rule.get("set").is_none_or(|s| {
+                s.as_object().is_some_and(|s| {
+                    s.len() <= 10
+                        && s.values()
+                            .all(|v| v.is_string() || v.is_number() || v.is_boolean())
+                })
+            });
+            if !map_ok || !set_ok {
+                return Err(format!(
+                    "Conversion at index {idx} needs 'map' as field names and 'set' as plain values"
+                ));
+            }
+        }
+    }
+
     // Quick actions: each asks the office's team for one job (`ask`, or
     // the label when absent) in the office chat.
     if let Some(actions) = obj.get("quick_actions") {
@@ -1440,6 +1661,60 @@ mod tests {
     }
 
     #[test]
+    fn the_new_apps_are_valid_and_carry_their_rules() {
+        let all: Vec<String> = ["projects", "quotes", "reviews"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let apps = blueprints(&all, false);
+        let slugs: Vec<&str> = apps.iter().map(|a| a.slug).collect();
+        assert_eq!(
+            slugs,
+            ["projects-tasks", "quotes-proposals", "reviews-reputation"]
+        );
+        for app in &apps {
+            validate_mod_schema(&app.schema).unwrap_or_else(|e| panic!("{}: {e}", app.slug));
+        }
+        let quotes = &apps[1].schema;
+        assert_eq!(quotes["approval_stages"][0], "Sent");
+        assert_eq!(quotes["convert"][0]["to_app"], "invoices-cashflow");
+        assert_eq!(quotes["convert"][1]["to_app"], "projects-tasks");
+        assert_eq!(
+            apps[2].schema["approval_stages"],
+            json!(["Requested", "Replied"])
+        );
+    }
+
+    #[test]
+    fn conversions_and_approval_stages_are_checked() {
+        let base = |extra: (&str, Value)| {
+            let mut s = json!({ "version": "1.0", "layout": "split_view",
+                "views": [{ "id": "k", "type": "kanban", "title": "Q", "record_type": "quote",
+                            "columns": ["Draft", "Sent"], "card_fields": ["title"] }] });
+            s[extra.0] = extra.1;
+            s
+        };
+        let ok = json!([{ "label": "To invoice", "to_app": "invoices-cashflow", "when_stage": "Sent",
+                          "map": { "amount": "total" }, "set": { "status": "Draft" } }]);
+        assert!(validate_mod_schema(&base(("convert", ok))).is_ok());
+        for bad in [
+            json!({}),
+            json!([{ "label": "x" }]),
+            json!([{ "label": "x", "to_app": "y", "map": { "a": 1 } }]),
+            json!([{ "label": "x", "to_app": "y", "set": { "a": { "deep": 1 } } }]),
+            json!([{ "label": "x", "to_app": "y", "when_stage": "" }]),
+        ] {
+            assert!(
+                validate_mod_schema(&base(("convert", bad.clone()))).is_err(),
+                "{bad}"
+            );
+        }
+        assert!(validate_mod_schema(&base(("approval_stages", json!(["Sent"])))).is_ok());
+        assert!(validate_mod_schema(&base(("approval_stages", json!("Sent")))).is_err());
+        assert!(validate_mod_schema(&base(("approval_stages", json!([""])))).is_err());
+    }
+
+    #[test]
     fn charts_and_quick_actions_are_checked() {
         let with = |view: Value, actions: Value| json!({ "version": "1.0", "layout": "split_view", "views": [view], "quick_actions": actions });
         let chart = json!({ "id": "c", "type": "chart", "title": "T", "record_type": "lead", "chart_type": "bar", "x_axis": "stage" });
@@ -1486,12 +1761,22 @@ mod tests {
 
 #[derive(Debug, Deserialize)]
 pub struct InstallAppRequest {
-    /// `crm`, `social`, `finance`, `support` or `scheduling`.
+    /// `crm`, `social`, `finance`, `support`, `scheduling`, `projects`,
+    /// `quotes` or `reviews`.
     pub kind: String,
     pub idempotency_key: Option<String>,
 }
 
-const INSTALLABLE: [&str; 5] = ["crm", "social", "finance", "support", "scheduling"];
+const INSTALLABLE: [&str; 8] = [
+    "crm",
+    "social",
+    "finance",
+    "support",
+    "scheduling",
+    "projects",
+    "quotes",
+    "reviews",
+];
 
 /// POST /api/office/apps/install?office= -- adds one ready-made app to an
 /// office. Unlike office setup it renames nothing, makes no rooms or bots
@@ -1507,7 +1792,8 @@ pub async fn install_office_app(
     let kind = payload.kind.trim().to_ascii_lowercase();
     if !INSTALLABLE.contains(&kind.as_str()) {
         return Err(AppError::BadRequest(
-            "kind must be one of crm, social, finance, support, scheduling".into(),
+            "kind must be one of crm, social, finance, support, scheduling, projects, quotes, reviews"
+                .into(),
         ));
     }
     let workspace_id = app_workspace(&state, &caller, office.office).await?;

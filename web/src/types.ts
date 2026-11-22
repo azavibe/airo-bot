@@ -45,6 +45,14 @@ export interface Note {
   cards?: NoteCardRef[] | null;
 }
 
+/** A conversion rule of an app: a record in `when_stage` can become a
+ *  record in `to_app` (`POST /api/office/records/:id/convert`). */
+export interface Conversion {
+  label: string;
+  to_app: string;
+  when_stage?: string;
+}
+
 /** A reference to an app record a message added or changed. The card is
  *  drawn from the record as it is now, never from a copy. */
 export interface NoteCardRef {
@@ -115,6 +123,10 @@ export interface AppSchema {
     y_axis?: string;
     order?: string[];
   }>;
+  /** Stages a bot may only move a record into with the owner's OK. */
+  approval_stages?: string[];
+  /** Ways a record becomes one in another app (a quote into an invoice). */
+  convert?: Conversion[];
   /** Buttons that ask the office's team to do a job; `ask` is the message
    *  sent to the office chat (the label when absent). */
   quick_actions?: Array<{

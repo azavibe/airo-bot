@@ -193,7 +193,11 @@ async fn each_bot_sees_and_fills_only_its_own_apps(pool: PgPool) {
             .filter_map(|a| a["slug"].as_str().map(str::to_string))
             .collect()
     };
-    assert_eq!(granted(&view), vec!["invoices-cashflow"]);
+    // The finance area brings Quotes with Invoices; the Finance Manager has both.
+    assert_eq!(
+        granted(&view),
+        vec!["invoices-cashflow", "quotes-proposals"]
+    );
 
     let told = |room: Uuid, bot: Uuid| {
         let pool = pool.clone();

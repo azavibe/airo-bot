@@ -21,6 +21,8 @@ interface Store {
   refresh: (ids: string[]) => Promise<void>;
   /** Decides a bot's proposed change, with the owner's edits if any. */
   decide: (approvalId: string, recordId: string, decision: 'approve' | 'reject', changes?: Record<string, unknown>) => Promise<void>;
+  /** Makes a record in another app from this one (a quote into an invoice). */
+  convert: (recordId: string, toApp: string) => Promise<void>;
 }
 
 const RecordsContext = createContext<Store | null>(null);
@@ -105,6 +107,23 @@ export const RecordsProvider: React.FC<{
     [load]
   );
 
+  const convert = useCallback(
+    async (recordId: string, toApp: string) => {
+      if (!officeId) return;
+      const res = await fetch(`/api/office/records/${recordId}/convert?office=${officeId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ to_app: toApp, idempotency_key: `convert:${recordId}:${toApp}` }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'That did not work. Please try again.');
+      }
+      await load([recordId]);
+    },
+    [officeId, load]
+  );
+
   // A new office: a fresh cache (ids are only read through their office).
   useEffect(() => {
     setById({});
@@ -134,7 +153,10 @@ export const RecordsProvider: React.FC<{
     return () => source.close();
   }, [officeId, load]);
 
-  const value = useMemo(() => ({ byId, request, refresh, decide }), [byId, request, refresh, decide]);
+  const value = useMemo(
+    () => ({ byId, request, refresh, decide, convert }),
+    [byId, request, refresh, decide, convert]
+  );
   return <RecordsContext.Provider value={value}>{children}</RecordsContext.Provider>;
 };
 

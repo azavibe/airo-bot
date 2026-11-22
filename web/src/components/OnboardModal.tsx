@@ -28,21 +28,40 @@ interface OnboardModalProps {
   onComplete: (data: OfficeSetup) => Promise<void>;
 }
 
-/** The areas an office can handle; ids match `TEAMS` in architect.rs. */
-const TEAMS = [
+/** The areas an office can handle; ids match `TEAMS` in architect.rs.
+ *  (`quotes` exists there too; here Quotes come with the finance area.) */
+const TEAMS: {
+  id: string;
+  name: string;
+  bot: string;
+  app: string | null;
+  replaces: string | null;
+  connect?: string;
+  note?: string;
+}[] = [
   { id: 'sales', name: 'Sales & leads', bot: 'Sales Lead', app: 'Lead pipeline', replaces: 'HubSpot, GoHighLevel', connect: 'google' },
-  { id: 'marketing', name: 'Marketing & social', bot: 'Studio Producer', app: 'Social & video studio', replaces: 'Buffer, Hootsuite', connect: 'webhook' },
-  { id: 'finance', name: 'Invoices & money', bot: 'Finance Manager', app: 'Invoices & cashflow', replaces: 'Xero, QuickBooks', connect: 'stripe' },
-  { id: 'support', name: 'Customer support', bot: 'Support Agent', app: 'Support inbox', replaces: 'Zendesk, Freshdesk', connect: 'google' },
+  { id: 'finance', name: 'Quotes, invoices & cashflow', bot: 'Finance Manager', app: 'Quotes & invoices', replaces: 'Xero, QuickBooks', connect: 'stripe', note: 'syncs with your accounting' },
   { id: 'bookings', name: 'Bookings', bot: 'Scheduler', app: 'Appointments', replaces: 'Calendly, Acuity', connect: 'google' },
+  { id: 'support', name: 'Customer support', bot: 'Support Agent', app: 'Support inbox', replaces: 'Zendesk, Freshdesk', connect: 'google' },
+  { id: 'projects', name: 'Client projects', bot: 'Project Manager', app: 'Projects & tasks', replaces: 'Asana, Trello', connect: 'google' },
+  { id: 'reviews', name: 'Reviews & reputation', bot: 'Support Agent', app: 'Reviews', replaces: 'Birdeye, Podium' },
+  { id: 'marketing', name: 'Marketing & social', bot: 'Studio Producer', app: 'Social & video studio', replaces: 'Buffer, Hootsuite', connect: 'webhook' },
   { id: 'store', name: 'Online store', bot: 'Store Manager', app: null, replaces: null, connect: 'shopify' },
+];
+
+/** Business models: each picks the areas that business usually needs. */
+const MODELS: { id: string; name: string; hint: string; teams: string[] }[] = [
+  { id: 'local', name: 'Local service', hint: 'Clinic, salon, trades', teams: ['sales', 'bookings', 'support', 'finance', 'reviews'] },
+  { id: 'agency', name: 'Agency', hint: 'Design, marketing, consulting', teams: ['sales', 'finance', 'projects'] },
+  { id: 'ecommerce', name: 'E-commerce', hint: 'Online shop', teams: ['store', 'support', 'marketing', 'reviews'] },
+  { id: 'solo', name: 'Solo', hint: 'Freelancer, one-person business', teams: ['sales', 'finance'] },
 ];
 
 /** This month's focus; the team plans around it. */
 const FOCUS = ['More customers', 'Get paid faster', 'Save time on admin'];
 
 const TOOL_NAMES: Record<string, string> = {
-  google: 'Gmail, Calendar & Sheets',
+  google: 'Google Workspace',
   stripe: 'Stripe',
   shopify: 'Shopify',
   webhook: 'Zapier, Make or n8n',
@@ -56,10 +75,12 @@ const pickClass = (on: boolean) =>
     on ? 'bg-white/10 border-white/40 text-white' : 'bg-white/[0.03] border-white/10 text-neutral-400 hover:border-white/20'
   }`;
 
+/** A checkbox: these choices add up, they don't exclude each other. */
 const Tick: React.FC<{ on: boolean }> = ({ on }) => (
   <span
-    className={`w-4 h-4 mt-0.5 rounded-full flex items-center justify-center flex-shrink-0 ${
-      on ? 'bg-accent text-accent-fg' : 'border border-neutral-600'
+    aria-hidden="true"
+    className={`w-4 h-4 mt-0.5 rounded-[5px] flex items-center justify-center flex-shrink-0 ${
+      on ? 'bg-accent text-accent-fg' : 'border border-neutral-500'
     }`}
   >
     {on && <Check className="w-3 h-3 stroke-[3]" />}
@@ -234,6 +255,39 @@ export const OnboardModal: React.FC<OnboardModalProps> = ({ isOpen, mode, office
           )}
 
           <div className="space-y-1.5">
+            <span className="text-[11px] text-neutral-400">What kind of business is it?</span>
+            <div className="grid gap-2 grid-cols-2 sm:grid-cols-4" role="group" aria-label="Business model">
+              {MODELS.map((m) => {
+                const on = m.teams.length === teams.length && m.teams.every((t) => teams.includes(t));
+                return (
+                  <button
+                    type="button"
+                    key={m.id}
+                    aria-pressed={on}
+                    onClick={() => {
+                      setTeams(m.teams);
+                      // Suggest the tools those areas work with.
+                      const tools = new Set(connect);
+                      for (const id of m.teams) {
+                        const c = TEAMS.find((t) => t.id === id)?.connect;
+                        if (c && available.includes(c)) tools.add(c);
+                      }
+                      setConnect([...tools]);
+                    }}
+                    className={`text-left px-3 py-2 rounded-xl border transition-colors ${
+                      on ? 'bg-white/10 border-white/40 text-white' : 'bg-white/[0.03] border-white/10 text-neutral-300 hover:border-white/20'
+                    }`}
+                  >
+                    <span className="block text-xs font-medium">{m.name}</span>
+                    <span className="block text-[10.5px] text-neutral-500">{m.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10.5px] text-neutral-500">Picks the usual areas below; change any of them.</p>
+          </div>
+
+          <div className="space-y-1.5">
             <span className="text-[11px] text-neutral-400">What should this office handle?</span>
             <div className="grid gap-2 sm:grid-cols-2">
               {/* "Blank" and the areas exclude each other: picking an area
@@ -265,6 +319,7 @@ export const OnboardModal: React.FC<OnboardModalProps> = ({ isOpen, mode, office
                       <span className="block text-xs font-medium">{t.name}</span>
                       <span className="block text-[10.5px] text-neutral-500">
                         {t.bot} bot{t.app ? ` · ${t.app} app` : ' · works with your store'}
+                        {t.note ? ` · ${t.note}` : ''}
                       </span>
                       {t.replaces && <span className="block text-[10.5px] text-neutral-600">instead of {t.replaces}</span>}
                     </span>
@@ -303,9 +358,34 @@ export const OnboardModal: React.FC<OnboardModalProps> = ({ isOpen, mode, office
                     </button>
                   );
                 })}
+                {available.includes('webhook') && (
+                  <button
+                    type="button"
+                    aria-pressed={connect.includes('webhook')}
+                    onClick={() =>
+                      setConnect(connect.includes('webhook') ? connect.filter((c) => c !== 'webhook') : [...connect, 'webhook'])
+                    }
+                    title="Through a webhook with Zapier, Make or n8n until a direct connection is ready"
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs transition-colors ${
+                      connect.includes('webhook')
+                        ? 'bg-white/10 border-white/40 text-white'
+                        : 'border-white/10 text-neutral-400 hover:border-white/20'
+                    }`}
+                  >
+                    <Tick on={connect.includes('webhook')} />
+                    QuickBooks / Xero <span className="text-neutral-500">via webhook</span>
+                  </button>
+                )}
+                <span
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-dashed border-white/10 text-xs text-neutral-500"
+                  title="Not connected yet; planned"
+                >
+                  Microsoft 365 <span className="text-[10px] uppercase tracking-wide">planned</span>
+                </span>
               </div>
               <p className="text-[10.5px] text-neutral-500">
-                After the office is ready you sign in to each one; bots then read and draft through them.
+                After the office is ready you sign in to each one; bots then read and draft through them. Contacts and
+                Documents are always there: every bot shares the office's customers and your price lists, FAQs and policies.
               </p>
             </div>
           )}

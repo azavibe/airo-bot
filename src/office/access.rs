@@ -49,10 +49,23 @@ pub fn role_defaults(
     &'static [(&'static str, &'static str)],
 ) {
     match bot_name {
-        "Sales Lead" => (&["leads-pipeline"], &[("google", "gmail")]),
+        "Sales Lead" => (
+            &["leads-pipeline", "quotes-proposals"],
+            &[("google", "gmail")],
+        ),
         "Studio Producer" => (&["social-video-studio"], &[]),
-        "Finance Manager" => (&["invoices-cashflow"], &[("stripe", "stripe")]),
-        "Support Agent" => (&["support-inbox"], &[("google", "gmail")]),
+        "Finance Manager" => (
+            &["invoices-cashflow", "quotes-proposals"],
+            &[("stripe", "stripe")],
+        ),
+        "Support Agent" => (
+            &["support-inbox", "reviews-reputation"],
+            &[("google", "gmail")],
+        ),
+        "Project Manager" => (
+            &["projects-tasks", "quotes-proposals"],
+            &[("google", "calendar")],
+        ),
         "Scheduler" => (&["appointments"], &[("google", "calendar")]),
         "Store Manager" => (&[], &[("shopify", "shopify")]),
         _ => (&[], &[]),
@@ -555,8 +568,11 @@ mod tests {
     #[test]
     fn finance_sees_money_and_the_store_bot_sees_the_shop() {
         let (apps, tools) = role_defaults("Finance Manager");
-        assert_eq!(apps, &["invoices-cashflow"]);
+        // Quotes too: an approved quote becomes an invoice.
+        assert_eq!(apps, &["invoices-cashflow", "quotes-proposals"]);
         assert_eq!(tools, &[("stripe", "stripe")]);
+        let (apps, _) = role_defaults("Project Manager");
+        assert_eq!(apps, &["projects-tasks", "quotes-proposals"]);
         let (apps, tools) = role_defaults("Store Manager");
         assert!(apps.is_empty());
         assert_eq!(tools, &[("shopify", "shopify")]);

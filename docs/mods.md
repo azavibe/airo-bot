@@ -75,6 +75,29 @@ A valid Mod `ui_schema` JSON object consists of:
 | `media_gallery`| Video/image generation feeds (Wan 3.0 / social) | `media_field` (URL key), `caption_field`, `badge_field` |
 | `chart` | One series from the records, as bars or a line | `x_axis` (a field, or `status`; dates group by month), optional `y_axis` (a number field to sum; absent counts records), `chart_type` (`bar` or `spline`), optional `order` (the x values' order) |
 
+### Approval stages and conversions
+
+- `approval_stages`: stage names a bot may only move a record into with the
+  owner's OK, whatever its permission mode (a quote being sent). A bot that
+  adds a record in one of them starts it at the board's first stage.
+- `convert`: at most 4 rules that make a record of this app into one of
+  another app, used by `POST /api/office/records/{id}/convert`:
+
+```json
+"convert": [
+  {
+    "label": "Convert to invoice", "to_app": "invoices-cashflow", "when_stage": "Approved",
+    "map": { "client_name": "client_name", "amount": "total" },
+    "set": { "status": "Draft", "invoice_number": "INV-{ref}", "due_date": "{today+14}" }
+  }
+]
+```
+
+`map` copies fields (new field: source field); `set` fixes values, where
+`{ref}` is a short reference and `{today}` / `{today+N}` are dates. The
+record must be in `when_stage`, if given; the target app must be in the
+office; converting the same record again returns the same new record.
+
 ### Supported Column Types for `datatable`:
 - `text`: Plain text string
 - `phone`: Formatted telephone number with 1-click dial action
