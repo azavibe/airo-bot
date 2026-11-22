@@ -233,7 +233,7 @@ async fn each_bot_sees_and_fills_only_its_own_apps(pool: PgPool) {
     assert!(!architect_told.contains("Rosa's Cafe"), "{architect_told}");
 
     // A bot can't write into an app it may not use: the line stays text.
-    let (shown, _) = airobot::office::context::apply_records(
+    let (shown, _, _) = airobot::office::context::apply_records(
         &pool,
         sales_room,
         sales,

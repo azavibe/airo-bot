@@ -10,9 +10,8 @@
 //! the bot's jobs (so it reports an honest outcome and is metered and capped
 //! like any other), in the owner's time, at most once per slot.
 //! Anything sent to an outside tool still needs an approval in every mode.
-//! TODO(air): the modes only decide whether a bot's own schedules start
-//! without asking; applying them to app records a bot writes waits for
-//! approval-aware record cards.
+//! The modes also decide whether the bot's changes to existing app
+//! records apply at once or wait for an OK (see `records.rs`).
 
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;

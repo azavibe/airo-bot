@@ -12,6 +12,7 @@ pub mod group;
 pub mod kickoff;
 pub mod memory;
 pub mod outcome;
+pub mod records;
 pub mod recurring;
 pub mod spend;
 

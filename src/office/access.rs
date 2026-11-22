@@ -210,7 +210,8 @@ pub async fn records_block(
                     fields.push(format!("{key}: {text}"));
                 }
             }
-            let line = format!("- [{id}] {status} · {}\n", fields.join("; "));
+            let short = &id.simple().to_string()[..8];
+            let line = format!("- [{short}] {status} · {}\n", fields.join("; "));
             if block.len() + line.len() > APP_BLOCK_CHARS {
                 break;
             }

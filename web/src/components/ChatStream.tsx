@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ArrowLeft, Zap, X, Play, Square } from 'lucide-react';
-import { Thread, Note, Agent, NoteAction } from '../types';
+import { Thread, Note, Agent, NoteAction, OfficeApp } from '../types';
+import { AppRecordCard } from './AppRecordCard';
 import { formatCredits, roomName } from '../utils/format';
 import { Markdown, questionsIn } from '../utils/markdown';
 import { BotAvatar } from './BotAvatar';
@@ -81,6 +82,10 @@ interface ChatStreamProps {
   onOpenBot?: (agent: Agent) => void;
   /** A bot's one-tap button was pressed. */
   onAction?: (action: NoteAction) => void;
+  /** The office's apps, for record cards (their layout picks the fields). */
+  apps?: OfficeApp[];
+  /** Opens a record from a card in its app. */
+  onOpenRecord?: (appSlug: string, recordId: string) => void;
   /** Sends a message as the person (answers to a bot's questions). */
   onSend?: (text: string) => Promise<void>;
   /** Deletes one message (after the person confirms). */
@@ -114,6 +119,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   roomBots = [],
   onOpenBot,
   onAction,
+  apps,
+  onOpenRecord,
   onSend,
   onDeleteNote,
   paused = false,
@@ -403,6 +410,16 @@ ${a}`)
                       </>
                     );
                   })()}
+                  {note.cards?.map((card, n) =>
+                    card?.type === 'app_record_card' && card.record_id ? (
+                      <AppRecordCard
+                        key={`${note.id}:card:${n}`}
+                        card={card}
+                        app={apps?.find((a) => a.slug === card.app_slug)}
+                        onOpen={onOpenRecord}
+                      />
+                    ) : null
+                  )}
                   {note.actions && note.actions.length > 0 && onAction && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {note.actions.map((action, n) => {

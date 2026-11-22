@@ -1538,6 +1538,10 @@ pub struct DecideApprovalPayload {
     pub decision: String, // "approve" or "reject"
     pub reason: Option<String>,
     pub idempotency_key: Option<String>,
+    /// For a bot's proposed change to an app record: the field values the
+    /// owner edited, approved in place of the bot's.
+    #[serde(default)]
+    pub changes: Option<serde_json::Value>,
 }
 
 /// POST /approvals/:id/decide — Human approves or rejects a pending action
@@ -1578,6 +1582,17 @@ pub async fn decide_approval(
         }
     };
     let new_status = if is_approve { "approved" } else { "rejected" };
+    let edited = match &body.changes {
+        None | Some(serde_json::Value::Null) => None,
+        Some(serde_json::Value::Object(map)) if !map.is_empty() && map.len() <= 30 => {
+            Some(map.clone())
+        }
+        Some(_) => {
+            return Err(AppError::BadRequest(
+                "changes must be an object of at most 30 fields".to_string(),
+            ))
+        }
+    };
 
     // Atomic: only a still-pending approval can be decided, so two
     // simultaneous decisions cannot both apply.
@@ -1604,9 +1619,24 @@ pub async fn decide_approval(
         return Ok(Json(json!({ "status": "ok", "approval": current })).into_response());
     };
 
-    // Approved: re-queue, and record the approval on the task so the
-    // dispatcher does not ask for the same approval again.
-    if is_approve {
+    // A bot's proposed change to an app record: applied (with the owner's
+    // edits) or dropped, and its job ends here.
+    let record_change: Option<Uuid> =
+        sqlx::query_scalar("SELECT record_id FROM approvals WHERE id = $1")
+            .bind(approval.id)
+            .fetch_one(&state.pool)
+            .await?;
+    if record_change.is_some() {
+        crate::office::records::finish_record_change(
+            &state,
+            approval.id,
+            is_approve,
+            edited.as_ref(),
+        )
+        .await?;
+    } else if is_approve {
+        // Approved: re-queue, and record the approval on the task so the
+        // dispatcher does not ask for the same approval again.
         let _ = sqlx::query(
             "UPDATE tasks
              SET status = 'queued', fsm_state = 'QUEUED',

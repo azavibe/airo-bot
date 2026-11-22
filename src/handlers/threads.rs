@@ -1381,15 +1381,30 @@ pub(crate) async fn insert_bot_note(
     body: &str,
     actions: Option<serde_json::Value>,
 ) {
+    insert_bot_note_with_cards(pool, note_sender, thread_id, agent_id, body, actions, None).await;
+}
+
+/// [`insert_bot_note`] with live app record cards (references; the app
+/// draws each from the record as it is now).
+pub(crate) async fn insert_bot_note_with_cards(
+    pool: &sqlx::PgPool,
+    note_sender: &tokio::sync::broadcast::Sender<crate::state::NoteEvent>,
+    thread_id: Uuid,
+    agent_id: Uuid,
+    body: &str,
+    actions: Option<serde_json::Value>,
+    cards: Option<serde_json::Value>,
+) {
     let note = sqlx::query_as::<_, Note>(
-        "INSERT INTO notes (thread_id, author_agent_id, body, kind, actions)
-         VALUES ($1, $2, $3, 'status', $4)
+        "INSERT INTO notes (thread_id, author_agent_id, body, kind, actions, cards)
+         VALUES ($1, $2, $3, 'status', $4, $5)
          RETURNING *",
     )
     .bind(thread_id)
     .bind(agent_id)
     .bind(body)
     .bind(&actions)
+    .bind(&cards)
     .fetch_one(pool)
     .await;
     let Ok(reply_note) = note else {
@@ -1420,6 +1435,7 @@ pub(crate) async fn insert_bot_note(
                 "actions".to_string(),
                 reply_note.actions.unwrap_or_default(),
             );
+            obj.insert("cards".to_string(), reply_note.cards.unwrap_or_default());
         }
         let _ = note_sender.send(event);
     }
@@ -1577,8 +1593,19 @@ async fn deliver_reply(
     };
     // Records the bot wrote (`ADD <app> {...}` lines) go into the office's
     // apps; the chat shows a short "Added ..." line instead.
-    let (body, actions) =
+    let (body, actions, mut cards) =
         crate::office::context::apply_records(pool, thread_id, architect.id, body).await;
+    for c in &cards {
+        if let Some(id) = c["record_id"].as_str().and_then(|s| s.parse().ok()) {
+            crate::office::records::emit_for(state, id, "created").await;
+        }
+    }
+    // Records it changed (`UPDATE <app> <id> {...}`): applied for a Trusted
+    // bot, otherwise waiting for the owner's OK. Each shows as a live card.
+    let (body, updated) =
+        crate::office::records::apply_updates(state, thread_id, architect.id, &body).await;
+    cards.extend(updated);
+    let cards = (!cards.is_empty()).then_some(serde_json::Value::Array(cards));
     // Facts it saved (`REMEMBER: ...` lines) go into the office's memory and
     // the message says so, with an Undo button each.
     let (body, saved) =
@@ -1640,26 +1667,28 @@ async fn deliver_reply(
     };
     let body = body.as_str();
     if !mode.route || team.is_empty() {
-        insert_bot_note(
+        insert_bot_note_with_cards(
             pool,
             &state.note_sender,
             thread_id,
             architect.id,
             body,
             actions,
+            cards,
         )
         .await;
         return;
     }
     let (calls, own) = crate::office::group::parse_delegations(body, team);
     if calls.is_empty() {
-        insert_bot_note(
+        insert_bot_note_with_cards(
             pool,
             &state.note_sender,
             thread_id,
             architect.id,
             body,
             actions,
+            cards,
         )
         .await;
         return;
@@ -1670,7 +1699,16 @@ async fn deliver_reply(
     } else {
         own
     };
-    insert_reply_note(pool, &state.note_sender, thread_id, architect.id, &said).await;
+    insert_bot_note_with_cards(
+        pool,
+        &state.note_sender,
+        thread_id,
+        architect.id,
+        &said,
+        None,
+        cards,
+    )
+    .await;
     for (bot_id, name, task) in calls {
         spawn_agent_reply(
             state.clone(),
