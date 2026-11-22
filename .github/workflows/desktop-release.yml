@@ -2,9 +2,14 @@
 # publishes the installers on a GitHub Release.
 #
 # Run it from the Actions tab ("Run workflow"), or push a release tag
-# v<version> matching src-tauri/tauri.conf.json's "version" (the same tag
-# also publishes the server image, see ci.yml). Re-running for the same
-# version adds or replaces that release's assets.
+# v<version> (the same tag also publishes the server image, see ci.yml).
+# Re-running for the same version adds or replaces that release's assets.
+#
+# The release is named after the version in the app's files, so bump the
+# version (Cargo.toml, src-tauri/Cargo.toml, src-tauri/tauri.conf.json,
+# web/package.json) and merge it BEFORE tagging. The first step checks this
+# and stops the build when the tag and the files disagree, so installers
+# can never land in an older release.
 #
 # The builds are not code-signed yet: macOS shows an "unidentified
 # developer" warning (right-click the app, then Open) and Windows
@@ -60,6 +65,41 @@ jobs:
       POSTGRES_VERSION: "16.16.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The release is created or updated as v<version> from the app's own
+      # version. If that is not the tag being built, the installers would go
+      # into the wrong (older) release, so stop here.
+      - name: Check the version matches the release
+        shell: bash
+        run: |
+          set -eu
+          from_file() { sed -n "$2" "$1" | head -1; }
+          app=$(from_file src-tauri/tauri.conf.json 's/^ *"version": *"\([^"]*\)".*/\1/p')
+          tauri_crate=$(from_file src-tauri/Cargo.toml 's/^version *= *"\([^"]*\)".*/\1/p')
+          server=$(from_file Cargo.toml 's/^version *= *"\([^"]*\)".*/\1/p')
+          web=$(from_file web/package.json 's/^ *"version": *"\([^"]*\)".*/\1/p')
+          echo "tauri.conf.json=$app src-tauri/Cargo.toml=$tauri_crate Cargo.toml=$server web/package.json=$web"
+          if [ -z "$app" ] || [ "$app" != "$tauri_crate" ] || [ "$app" != "$server" ] || [ "$app" != "$web" ]; then
+            echo "::error::The version files disagree. Make them all the same version, merge that, then tag."
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            if [ "${GITHUB_REF_NAME}" != "v$app" ]; then
+              echo "::error::Tag ${GITHUB_REF_NAME} points at a commit whose version is $app, so this would publish into release v$app. Bump the version to ${GITHUB_REF_NAME#v}, merge it, and tag that commit."
+              exit 1
+            fi
+          else
+            # Run by hand from a branch: never add to a release whose tag is
+            # on another commit.
+            git fetch --quiet --tags origin
+            if tagged=$(git rev-parse --verify --quiet "refs/tags/v$app^{commit}"); then
+              if [ "$tagged" != "${GITHUB_SHA}" ]; then
+                echo "::error::Release v$app already exists on another commit ($tagged). Bump the version before running this."
+                exit 1
+              fi
+            fi
+          fi
+          echo "Publishing release v$app"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
