@@ -222,11 +222,11 @@ fn blueprints(saas: &[String], default_when_empty: bool) -> Vec<AppBlueprint> {
     if defaults || any(&["buffer", "content", "social", "video"]) {
         out.push(AppBlueprint {
             slug: "social-video-studio",
-            title: "AI Video & Social Studio",
+            title: "Social Studio",
             icon: "Video",
             category: "marketing",
             replaces: "Buffer / Hootsuite",
-            label: "AI Video & Social Studio (Buffer Replaced)",
+            label: "Social Studio (Buffer Replaced)",
             schema: json!({
                 "version": "1.0",
                 "layout": "split_view",

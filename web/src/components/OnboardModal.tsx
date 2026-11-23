@@ -45,7 +45,7 @@ const TEAMS: {
   { id: 'support', name: 'Customer support', bot: 'Support Agent', app: 'Support inbox', replaces: 'Zendesk, Freshdesk', connect: 'google' },
   { id: 'projects', name: 'Client projects', bot: 'Project Manager', app: 'Projects & tasks', replaces: 'Asana, Trello', connect: 'google' },
   { id: 'reviews', name: 'Reviews & reputation', bot: 'Support Agent', app: 'Reviews', replaces: 'Birdeye, Podium' },
-  { id: 'marketing', name: 'Marketing & social', bot: 'Studio Producer', app: 'Social & video studio', replaces: 'Buffer, Hootsuite', connect: 'webhook' },
+  { id: 'marketing', name: 'Marketing & social', bot: 'Studio Producer', app: 'Social Studio', replaces: 'Buffer, Hootsuite', connect: 'webhook' },
   { id: 'store', name: 'Online store', bot: 'Store Manager', app: null, replaces: null, connect: 'shopify' },
 ];
 

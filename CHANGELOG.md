@@ -13,6 +13,12 @@ app and the desktop app share one version number. A release is tagged
 - While a reply is read aloud, a bar above the message box shows which bot
   is speaking and where, with Stop. Only one voice plays at a time;
   messages wait their turn.
+- The left sidebar can shrink to icons (the button beside New office, or in
+  the desktop app's title bar).
+- The desktop app's title bar has an Approvals button with the number
+  waiting.
+- The menu in the message bar is back, on every screen: Approvals, Goal &
+  milestones, Memory and Documents (and the rooms on phones).
 
 ### Fixed
 - Dictation no longer stops at the first pause: click the mic to start and
@@ -21,6 +27,12 @@ app and the desktop app share one version number. A release is tagged
   Kokoro, Whisper, Moonshine and Parakeet now run in the background.
 - The voice Test button works again (it failed with "The play request was
   interrupted by a call to pause()").
+- Search names rooms the way the sidebar does ("Finance Manager", not
+  "finance-ops").
+- The app picker in Apps no longer opens underneath the post cards.
+- The "AI Video & Social Studio" app is now called "Social Studio".
+- Removed the right panel's "AI on this computer" footer in the desktop app;
+  it led nowhere.
 
 ## 0.7.0 — 2026-11-22
 

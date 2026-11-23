@@ -5,7 +5,9 @@ import {
   X,
   User,
   Settings,
-  Bell,
+  CircleDashedCheck,
+  PanelLeftClose,
+  PanelLeftOpen,
   LayoutGrid,
   Users,
   GitBranch,
@@ -24,6 +26,10 @@ interface SidebarProps {
   offices: Office[];
   threads: Thread[];
   activeThreadId: string | null;
+  /** Shrunk to a rail of icons (desktop widths only). */
+  rail?: boolean;
+  /** Shrinks the sidebar to icons or brings it back; absent hides the button. */
+  onToggleRail?: () => void;
   onSelectThread: (id: string) => void;
   /** Opens an office's group chat. */
   onOpenOffice: (office: Office) => void;
@@ -126,6 +132,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   offices,
   threads,
   activeThreadId,
+  rail = false,
+  onToggleRail,
   onSelectThread,
   onOpenOffice,
   onCloseMobile,
@@ -224,7 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       tab: 'approvals',
       label: 'Approvals',
-      icon: <Bell className="w-4 h-4" />,
+      icon: <CircleDashedCheck className="w-4 h-4" />,
       meta:
         pendingApprovalsCount > 0 ? (
           <span className="text-[11px] bg-white/15 text-white px-1.5 rounded-full font-mono">{pendingApprovalsCount}</span>
@@ -242,6 +250,110 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
   // Connections, devices and admin are sections of Settings (account row below).
 
+  if (rail) {
+    // Icons only: the same menu, each office as its initial and its rooms
+    // as their bots' pictures; names show on hover, right-click works.
+    const railButton = (active: boolean) =>
+      `relative w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center transition-colors ${
+        active ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/[0.06]'
+      }`;
+    return (
+      <aside className="w-full h-full flex flex-col items-center text-neutral-300 overflow-hidden select-none" aria-label="Sidebar">
+        {contextMenu.menu}
+        <div className="flex-1 min-h-0 w-full overflow-y-auto no-scrollbar flex flex-col items-center gap-1 pt-2.5 pb-3">
+          {onToggleRail && (
+            <button onClick={onToggleRail} className={railButton(false)} title="Show the sidebar" aria-label="Show the sidebar">
+              <PanelLeftOpen className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={isAuthenticated ? onNewOffice : onOpenAuth}
+            className={railButton(false)}
+            title="New office"
+            aria-label="New office"
+          >
+            <span className="w-6 h-6 rounded-full bg-accent text-accent-fg flex items-center justify-center">
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            </span>
+          </button>
+          <button onClick={onOpenSearch} className={railButton(false)} title={`Search (${isMac ? '⌘K' : 'Ctrl K'})`} aria-label="Search">
+            <Search className="w-4 h-4" />
+          </button>
+          {navItems.map((item) => (
+            <button
+              key={item.tab}
+              onClick={() => go(item.tab)}
+              aria-current={activeTab === item.tab ? 'page' : undefined}
+              className={railButton(activeTab === item.tab)}
+              title={item.tab === 'approvals' && pendingApprovalsCount > 0 ? `Approvals (${pendingApprovalsCount} waiting)` : item.label}
+              aria-label={item.label}
+            >
+              {item.icon}
+              {item.tab === 'approvals' && pendingApprovalsCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[15px] h-[15px] px-0.5 rounded-full bg-accent text-accent-fg text-[9px] font-semibold flex items-center justify-center">
+                  {pendingApprovalsCount > 9 ? '9+' : pendingApprovalsCount}
+                </span>
+              )}
+            </button>
+          ))}
+          {isAuthenticated &&
+            offices.map((office) => {
+              const all = roomsOf(office, threads, offices);
+              const chat = all.find((t) => t.kind === 'office');
+              const rooms = all.filter((t) => t.kind !== 'office' && !t.archived_at);
+              const chatActive = !!chat && chat.id === activeThreadId && activeTab === 'chat';
+              return (
+                <div key={office.id} className="w-full flex flex-col items-center gap-1 pt-2 mt-1 border-t border-white/[0.06]">
+                  <button
+                    onClick={() => onOpenOffice(office)}
+                    onContextMenu={(e) => contextMenu.open(e, officeItems(office))}
+                    className={railButton(chatActive)}
+                    title={`${office.name} · group chat`}
+                    aria-label={`${office.name} group chat`}
+                  >
+                    <span className="w-7 h-7 rounded-lg bg-white/10 border border-white/10 text-[12px] font-semibold text-white flex items-center justify-center">
+                      {office.name.trim().charAt(0).toUpperCase() || 'O'}
+                    </span>
+                  </button>
+                  {rooms.map((t) => {
+                    const label = roomLabel(t, agents);
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          onSelectThread(t.id);
+                          go('chat');
+                        }}
+                        onContextMenu={(e) => contextMenu.open(e, roomItems(t))}
+                        className={railButton(activeThreadId === t.id && activeTab === 'chat')}
+                        title={`${label} · ${office.name}`}
+                        aria-label={label}
+                      >
+                        <RoomIcon thread={t} agents={agents} size={22} />
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+        </div>
+        <div className="panel-footer w-full !px-0 justify-center">
+          <button
+            onClick={isAuthenticated ? onOpenSettings : onOpenAuth}
+            aria-current={activeTab === 'settings' ? 'page' : undefined}
+            className={railButton(activeTab === 'settings')}
+            title={isAuthenticated ? `@${displayHandle} · Account & settings` : 'Sign in'}
+            aria-label={isAuthenticated ? 'Account & settings' : 'Sign in'}
+          >
+            <span className="w-8 h-8 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-xs font-semibold text-white">
+              {isAuthenticated ? avatarLetter : <User className="w-4 h-4" />}
+            </span>
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="w-full h-full flex flex-col text-neutral-300 overflow-hidden select-none">
       {contextMenu.menu}
@@ -254,6 +366,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
             New office
           </button>
+          {onToggleRail && !onCloseMobile && (
+            <button
+              onClick={onToggleRail}
+              title="Shrink the sidebar to icons"
+              aria-label="Shrink the sidebar to icons"
+              className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center hover:bg-white/10 text-neutral-400 hover:text-white"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
+          )}
           {onCloseMobile && (
             <button
               onClick={onCloseMobile}
