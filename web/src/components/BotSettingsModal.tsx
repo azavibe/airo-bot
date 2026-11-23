@@ -79,6 +79,8 @@ interface Props {
   onClose: () => void;
   onSaved: (bot: Agent) => void;
   onCreated?: (bot: Agent, roomId: string | null) => void;
+  /** Shown inside the Bots page instead of as a dialog. */
+  inline?: boolean;
 }
 
 const newKey = () =>
@@ -95,6 +97,7 @@ export const BotSettingsModal: React.FC<Props> = ({
   onClose,
   onSaved,
   onCreated,
+  inline = false,
 }) => {
   const [name, setName] = useState('');
   const [character, setCharacter] = useState('');
@@ -108,7 +111,7 @@ export const BotSettingsModal: React.FC<Props> = ({
   const invoke = tauriInvoke();
   const open = !!bot || !!createIn;
 
-  useEscape(open, onClose);
+  useEscape(open && !inline, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -188,12 +191,14 @@ export const BotSettingsModal: React.FC<Props> = ({
   const field =
     'w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs outline-none focus:border-white/30';
 
-  return (
-    <div
-      onClick={closeOnBackdrop(onClose)}
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto"
-    >
-      <form onSubmit={save} className="glass-panel w-full max-w-lg p-6 space-y-5 border-white/20" role="dialog" aria-modal="true">
+  const form = (
+      <form
+        onSubmit={save}
+        className={inline ? 'w-full max-w-2xl space-y-5' : 'glass-panel w-full max-w-lg p-6 space-y-5 border-white/20'}
+        role={inline ? undefined : 'dialog'}
+        aria-modal={inline ? undefined : true}
+        aria-label={bot ? `${bot.name} settings` : 'New bot'}
+      >
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white tracking-tight">
@@ -205,9 +210,11 @@ export const BotSettingsModal: React.FC<Props> = ({
                 : 'It gets a room of its own in this office.'}
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-neutral-400 hover:text-white p-1">
-            <X className="w-5 h-5" />
-          </button>
+          {!inline && (
+            <button type="button" onClick={onClose} aria-label="Close" className="text-neutral-400 hover:text-white p-1">
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         <div className="space-y-1.5">
@@ -363,7 +370,7 @@ export const BotSettingsModal: React.FC<Props> = ({
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-xs font-medium bg-white/10 text-white hover:bg-white/15 transition-all"
             >
-              Cancel
+              {inline ? 'Close' : 'Cancel'}
             </button>
             <button
               type="submit"
@@ -375,6 +382,18 @@ export const BotSettingsModal: React.FC<Props> = ({
           </div>
         </div>
       </form>
+  );
+
+  if (inline) return form;
+  // The dialog scrolls as a whole, so a tall form is never cut off at the top.
+  return (
+    <div
+      onClick={closeOnBackdrop(onClose)}
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl overflow-y-auto"
+    >
+      <div onClick={closeOnBackdrop(onClose)} className="min-h-full flex items-center justify-center p-4">
+        {form}
+      </div>
     </div>
   );
 };

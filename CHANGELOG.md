@@ -19,6 +19,10 @@ app and the desktop app share one version number. A release is tagged
   waiting.
 - The menu in the message bar is back, on every screen: Approvals, Goal &
   milestones, Memory and Documents (and the rooms on phones).
+- The Bots page works like Workflows: bot cards on the left (with search,
+  New bot and right-click), the chosen bot's settings on the right in the
+  page instead of a dialog. Bot settings opened anywhere land here.
+- Workflow cards show the steps, version, runs and a success bar.
 
 ### Fixed
 - Dictation no longer stops at the first pause: click the mic to start and

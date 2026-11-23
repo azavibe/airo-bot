@@ -1039,13 +1039,31 @@ export const App: React.FC = () => {
     if (here && rooms.some((t) => officeOfThread(t.id)?.id === here.id)) return here;
     return rooms.length > 0 ? officeOfThread(rooms[0].id) ?? null : null;
   };
+  // A bot's settings, and a new bot, open in the Bots page (not a dialog).
   const openNewBot = (office?: Office) => {
     if (isGuest) {
       setIsAuthModalOpen(true);
       return;
     }
     const target = office ?? officeOfThread(activeThreadId) ?? offices.find((o) => o.primary) ?? null;
-    if (target) setNewBotOffice(target);
+    if (!target) return;
+    setEditingBot(null);
+    setNewBotOffice(target);
+    handleTabChange('bots');
+  };
+  const openBot = (agent: Agent | null) => {
+    setNewBotOffice(null);
+    setEditingBot(agent);
+    if (agent) handleTabChange('bots');
+  };
+  const openBotChat = (agent: Agent) => {
+    const room = threads.find(
+      (t) => t.kind !== 'office' && !t.archived_at && t.agent_ids?.length === 1 && t.agent_ids[0] === agent.id
+    );
+    if (room) {
+      setActiveThreadId(room.id);
+      handleTabChange('chat');
+    }
   };
 
   // Run / Stop: a stopped office's bots start no new work.
@@ -1092,7 +1110,7 @@ export const App: React.FC = () => {
       else if (action.target === 'goal' && office) setDialog({ kind: 'editOffice', office, tab: 'goal' });
       else if (botId) {
         const bot = agents.find((a) => a.id === botId);
-        if (bot) setEditingBot(bot);
+        if (bot) openBot(bot);
       } else if (action.target === 'connections' || action.target === 'account') openSettings(action.target);
       else if ((tabs as string[]).includes(action.target)) handleTabChange(action.target as Tab);
     }
@@ -1122,6 +1140,35 @@ export const App: React.FC = () => {
   const pendingApprovalsCount = approvals.filter((a) => a.status === 'pending').length;
   // Full-width pages fill what the sidebar leaves.
   const wideSpan = sidebarRail ? 'md:col-span-11' : 'md:col-span-9';
+
+  // One bot's settings (or a new bot), shown in the Bots page.
+  const botDetail =
+    editingBot || newBotOffice ? (
+      <BotSettingsModal
+        key={editingBot ? editingBot.id : `new-${newBotOffice?.id}`}
+        inline
+        bot={editingBot}
+        createIn={editingBot ? null : newBotOffice}
+        office={officeOfBot(editingBot) ?? newBotOffice}
+        localMode={!!userProfile?.local_mode}
+        localEngine={localEngine}
+        onClose={() => openBot(null)}
+        onSaved={(updated) => {
+          setAgents((prev) => prev.map((a) => (a.id === updated.id ? { ...a, ...updated } : a)));
+          setEditingBot((cur) => (cur && cur.id === updated.id ? { ...cur, ...updated } : cur));
+          showOk(`${updated.name} saved.`);
+          // The server works out which model now answers for it.
+          fetchInitialData();
+        }}
+        onCreated={async (bot) => {
+          // Stay on the new bot; its room is in the sidebar.
+          setNewBotOffice(null);
+          await fetchInitialData();
+          setEditingBot(bot);
+          showOk(`${bot.name} is ready in its own room.`);
+        }}
+      />
+    ) : null;
 
   const dockElement = (
     <BottomDock
@@ -1174,7 +1221,7 @@ export const App: React.FC = () => {
     onArchiveRoom: (thread: Thread) => setRoomArchived(thread, true),
     onUnarchiveRoom: (thread: Thread) => setRoomArchived(thread, false),
     agents,
-    onOpenBot: (agent: Agent) => setEditingBot(agent),
+    onOpenBot: (agent: Agent) => openBot(agent),
     onRenameBot: (agent: Agent) => setDialog({ kind: 'renameBot', agent }),
     onDeleteBot: (agent: Agent) => setDialog({ kind: 'deleteBot', agent }),
   };
@@ -1279,7 +1326,7 @@ export const App: React.FC = () => {
                   notes={notes}
                   onBackMobile={() => setIsMobileSidebarOpen(true)}
                   roomBots={roomBots}
-                  onOpenBot={isGuest ? undefined : setEditingBot}
+                  onOpenBot={isGuest ? undefined : openBot}
                   onAction={isGuest ? undefined : handleNoteAction}
                   apps={apps}
                   onOpenRecord={(slug) => handleSelectApp(slug, true)}
@@ -1386,13 +1433,18 @@ export const App: React.FC = () => {
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <BotsView
                 agents={agents}
-                procedures={procedures}
                 wallet={userProfile?.local_mode ? null : wallet}
                 isGuest={isGuest}
-                onOpenWorkflows={() => handleTabChange('workflows')}
                 onOpenOnboard={openOnboard}
-                onEditBot={setEditingBot}
+                selectedId={editingBot?.id ?? null}
+                creatingIn={editingBot ? null : newBotOffice}
+                onSelect={openBot}
                 onNewBot={() => openNewBot()}
+                detail={botDetail}
+                officeNameOf={(a) => officeOfBot(a)?.name}
+                onOpenChat={openBotChat}
+                onRenameBot={(agent) => setDialog({ kind: 'renameBot', agent })}
+                onDeleteBot={(agent) => setDialog({ kind: 'deleteBot', agent })}
                 localEngine={localEngine}
                 webUsage={
                   wallet && (wallet.web_runs_limit ?? 0) > 0
@@ -1543,7 +1595,7 @@ export const App: React.FC = () => {
         onClose={() => setIsTeamOpen(false)}
         onOpenBot={(agent) => {
           setIsTeamOpen(false);
-          setEditingBot(agent);
+          openBot(agent);
         }}
         onNewBot={
           activeOffice
@@ -1570,7 +1622,7 @@ export const App: React.FC = () => {
           setActiveThreadId(id);
           handleTabChange('chat');
         }}
-        onOpenBot={(a) => (isGuest ? setIsAuthModalOpen(true) : setEditingBot(a))}
+        onOpenBot={(a) => (isGuest ? setIsAuthModalOpen(true) : openBot(a))}
         onOpenApp={(slug) => handleSelectApp(slug, true)}
         onOpenWorkflow={(id) => {
           setFocusWorkflowId(id);
@@ -1721,34 +1773,6 @@ export const App: React.FC = () => {
         }}
       />
 
-      {/* One bot's name, character and AI */}
-      <BotSettingsModal
-        bot={editingBot}
-        createIn={editingBot ? null : newBotOffice}
-        office={officeOfBot(editingBot)}
-        localMode={!!userProfile?.local_mode}
-        localEngine={localEngine}
-        onClose={() => {
-          setEditingBot(null);
-          setNewBotOffice(null);
-        }}
-        onSaved={(updated) => {
-          setAgents((prev) => prev.map((a) => (a.id === updated.id ? { ...a, ...updated } : a)));
-          setEditingBot(null);
-          showOk(`${updated.name} saved.`);
-          // The server works out which model now answers for it.
-          fetchInitialData();
-        }}
-        onCreated={async (bot, roomId) => {
-          setNewBotOffice(null);
-          await fetchInitialData();
-          if (roomId) {
-            setActiveThreadId(roomId);
-            handleTabChange('chat');
-          }
-          showOk(`${bot.name} is ready in its own room.`);
-        }}
-      />
 
     </div>
     </RecordsProvider>
