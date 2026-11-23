@@ -1,9 +1,17 @@
 # Builds the Airobot desktop app (src-tauri) for Windows and macOS and
 # publishes the installers on a GitHub Release.
 #
-# Run it from the Actions tab ("Run workflow"), or push a release tag
-# v<version> (the same tag also publishes the server image, see ci.yml).
-# Re-running for the same version adds or replaces that release's assets.
+# It starts when a release tag v<version> is pushed (the same tag also
+# publishes the server image, see ci.yml), when a GitHub Release is
+# published, or from the Actions tab ("Run workflow"). Re-running for the
+# same version adds or replaces that release's assets.
+#
+# Publishing a release starts it even when the tag already existed, which
+# creating a release on an old tag does not do through a tag push. If the
+# tag is on a commit with another version, the run fails on purpose and says
+# so, instead of nothing happening. When a release is published on a brand
+# new tag both events fire; the runs share a group, so the second waits for
+# the first and then replaces the same files.
 #
 # The release is named after the version in the app's files, so bump the
 # version (Cargo.toml, src-tauri/Cargo.toml, src-tauri/tauri.conf.json,
@@ -27,6 +35,8 @@ on:
         default: "https://airo-bot.com"
   push:
     tags: ["v*"]
+  release:
+    types: [published]
 
 permissions:
   contents: write

@@ -58,6 +58,27 @@ For the web app with hot reload, run `npm run dev` in `web/` alongside
 AI-assisted contributions are fine. You are responsible for every line: read
 it, run it and be ready to explain it.
 
+## Releasing (maintainers)
+
+The server, the web app and the desktop app share one version, and the
+desktop installers are named and published from it.
+
+1. Open a pull request that sets the version in `Cargo.toml`,
+   `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and `web/package.json`
+   (and the lockfiles), and moves "Unreleased" in `CHANGELOG.md` under the
+   new version. Merge it.
+2. Publish a GitHub Release (or push a tag) named `v<version>` on that merged
+   commit. The Desktop Release workflow builds the installers and attaches
+   them to the release.
+3. If the run fails on "Check the version matches the release", the tag is on
+   an older commit. Deleting a release does **not** delete its tag, so a
+   release made again on the same tag keeps pointing at the old commit. Move
+   or delete the tag (`git push --delete origin v<version>`), then publish the
+   release again.
+
+A release with only "Source code" files has no installers: its build did not
+run or failed. Check the Actions tab.
+
 ## Contributor License Agreement
 
 The first time you open a pull request, a bot asks you to agree to the
