@@ -67,14 +67,15 @@ desktop installers are named and published from it.
    `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and `web/package.json`
    (and the lockfiles), and moves "Unreleased" in `CHANGELOG.md` under the
    new version. Merge it.
-2. Publish a GitHub Release (or push a tag) named `v<version>` on that merged
-   commit. The Desktop Release workflow builds the installers and attaches
-   them to the release.
-3. If the run fails on "Check the version matches the release", the tag is on
-   an older commit. Deleting a release does **not** delete its tag, so a
-   release made again on the same tag keeps pointing at the old commit. Move
-   or delete the tag (`git push --delete origin v<version>`), then publish the
-   release again.
+2. Create a GitHub Release named `v<version>` (the new tag, targeting `main`)
+   and publish it. The Desktop Release workflow builds the installers from
+   `main` and attaches them to that release. Nothing else to do.
+
+If the run fails on "Check the version matches the release", the version in
+the files is not the one you tagged: bump it, merge, and publish again. An old
+tag left over from an earlier attempt does no harm (deleting a release does
+not delete its tag): a published release is built from the branch it targets,
+and the run only warns that the tag is older.
 
 A release with only "Source code" files has no installers: its build did not
 run or failed. Check the Actions tab.
