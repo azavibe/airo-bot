@@ -1,15 +1,20 @@
 # Builds the Airobot desktop app (src-tauri) for Windows and macOS and
 # publishes the installers on a GitHub Release.
 #
-# Run it from the Actions tab ("Run workflow"), or push a release tag
-# v<version> (the same tag also publishes the server image, see ci.yml).
-# Re-running for the same version adds or replaces that release's assets.
+# Publish a GitHub Release named v<version> (or push that tag) and this
+# builds the installers for that version and attaches them to the release.
+# You can also start it from the Actions tab ("Run workflow").
 #
-# The release is named after the version in the app's files, so bump the
-# version (Cargo.toml, src-tauri/Cargo.toml, src-tauri/tauri.conf.json,
-# web/package.json) and merge it BEFORE tagging. The first step checks this
-# and stops the build when the tag and the files disagree, so installers
-# can never land in an older release.
+# A published release is built from the branch it targets (normally main),
+# not from whatever commit an old tag with the same name points at, so a tag
+# left over from an earlier attempt cannot make it build the wrong code. The
+# version in the app's files (Cargo.toml, src-tauri/Cargo.toml,
+# src-tauri/tauri.conf.json, web/package.json) must equal the release name
+# minus the "v"; the first step checks that and says what to bump.
+#
+# Publishing on a brand new tag fires both the tag push and the release
+# event. The runs share a group, so the second waits for the first and then
+# replaces the same files.
 #
 # The builds are not code-signed yet: macOS shows an "unidentified
 # developer" warning (right-click the app, then Open) and Windows
@@ -27,6 +32,8 @@ on:
         default: "https://airo-bot.com"
   push:
     tags: ["v*"]
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -65,12 +72,17 @@ jobs:
       POSTGRES_VERSION: "16.16.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A published release builds what it targets (main), not an old tag.
+          ref: ${{ github.event_name == 'release' && github.event.release.target_commitish || '' }}
 
-      # The release is created or updated as v<version> from the app's own
-      # version. If that is not the tag being built, the installers would go
-      # into the wrong (older) release, so stop here.
+      # The installers go to the release named v<version>, taken from the
+      # app's own version files. Make sure that is the release being built.
       - name: Check the version matches the release
         shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -eu
           from_file() { sed -n "$2" "$1" | head -1; }
@@ -80,26 +92,34 @@ jobs:
           web=$(from_file web/package.json 's/^ *"version": *"\([^"]*\)".*/\1/p')
           echo "tauri.conf.json=$app src-tauri/Cargo.toml=$tauri_crate Cargo.toml=$server web/package.json=$web"
           if [ -z "$app" ] || [ "$app" != "$tauri_crate" ] || [ "$app" != "$server" ] || [ "$app" != "$web" ]; then
-            echo "::error::The version files disagree. Make them all the same version, merge that, then tag."
+            echo "::error::The version files disagree. Make them all the same version, merge that, then release."
             exit 1
           fi
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            if [ "${GITHUB_REF_NAME}" != "v$app" ]; then
-              echo "::error::Tag ${GITHUB_REF_NAME} points at a commit whose version is $app, so this would publish into release v$app. Bump the version to ${GITHUB_REF_NAME#v}, merge it, and tag that commit."
-              exit 1
-            fi
-          else
-            # Run by hand from a branch: never add to a release whose tag is
+          case "$GITHUB_EVENT_NAME" in
+            release) want="$RELEASE_TAG" ;;
+            push) want="$GITHUB_REF_NAME" ;;
+            *) want="v$app" ;;
+          esac
+          if [ "$want" != "v$app" ]; then
+            echo "::error::Release $want would be built from files that say version $app. Bump the version to ${want#v} (in the four files above), merge it, then publish the release again."
+            exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]; then
+            # By hand from a side branch: never add to a release whose tag is
             # on another commit.
             git fetch --quiet --tags origin
             if tagged=$(git rev-parse --verify --quiet "refs/tags/v$app^{commit}"); then
-              if [ "$tagged" != "${GITHUB_SHA}" ]; then
-                echo "::error::Release v$app already exists on another commit ($tagged). Bump the version before running this."
+              if [ "$tagged" != "$(git rev-parse HEAD)" ]; then
+                echo "::error::Release v$app already exists on another commit ($tagged). Run this on $DEFAULT_BRANCH, or bump the version."
                 exit 1
               fi
             fi
           fi
-          echo "Publishing release v$app"
+          git fetch --quiet --tags origin 2>/dev/null || true
+          if tagged=$(git rev-parse --verify --quiet "refs/tags/v$app^{commit}") && [ "$tagged" != "$(git rev-parse HEAD)" ]; then
+            echo "::warning::Tag v$app points at ${tagged:0:7}, but the installers are built from $(git rev-parse --short HEAD) (what the release targets). The version is right; only the tag is older."
+          fi
+          echo "Building installers for v$app and attaching them to release v$app"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
