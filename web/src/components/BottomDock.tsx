@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { AgentTaskPlan } from '../types';
-import { VoiceSettings, Recording, startRecording, transcribe, groqKey } from '../utils/voice';
+import { VoiceSettings, Recording, startRecording, transcribe, groqKey, voice, speaker, stopSpeaking, KOKORO_MODEL } from '../utils/voice';
 import type { Tab } from '../App';
 import {
   Menu,
@@ -13,7 +13,55 @@ import {
   Loader2,
   Activity,
   ArrowRight,
+  Square,
 } from 'lucide-react';
+
+/** Who is reading a message aloud, with Stop. Only one voice plays at a time. */
+const SpeakingBar: React.FC = () => {
+  const [, tick] = useState(0);
+  useEffect(() => voice.subscribe(() => tick((n) => n + 1)), []);
+  const state = speaker.state;
+  if (!state) return null;
+  const progress = voice.progressFor(KOKORO_MODEL.id);
+  const preparing = state.phase === 'preparing';
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="absolute -top-11 left-1/2 -translate-x-1/2 max-w-[calc(100%-1rem)] flex items-center gap-2.5 pl-3 pr-1.5 py-1.5 rounded-full glass-panel border border-white/15 shadow-dock text-[11.5px] animate-fade-in z-40"
+    >
+      {preparing ? (
+        <Loader2 className="w-3.5 h-3.5 text-neutral-400 animate-spin flex-shrink-0" />
+      ) : (
+        <span className="flex items-end gap-[2px] h-3.5 flex-shrink-0" aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => (
+            <span
+              key={i}
+              className="w-[3px] rounded-full bg-accent animate-pulse"
+              style={{ height: `${[60, 100, 45, 80][i]}%`, animationDelay: `${i * 120}ms` }}
+            />
+          ))}
+        </span>
+      )}
+      <span className="truncate text-neutral-300">
+        <span className="text-white font-medium">{state.who}</span>
+        {preparing
+          ? ` · getting the voice ready${progress ? ` ${Math.round(progress.fraction * 100)}%` : '…'}`
+          : ' is speaking'}
+        {state.where ? <span className="text-neutral-500"> · {state.where}</span> : null}
+        {state.waiting > 0 ? <span className="text-neutral-500"> · {state.waiting} more waiting</span> : null}
+      </span>
+      <button
+        type="button"
+        onClick={stopSpeaking}
+        className="flex items-center gap-1 px-2 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white flex-shrink-0"
+        title="Stop reading aloud"
+      >
+        <Square className="w-2.5 h-2.5 fill-current" /> Stop
+      </button>
+    </div>
+  );
+};
 
 interface BottomDockProps {
   activeTab: Tab;
@@ -64,9 +112,20 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   const [isMultiline, setIsMultiline] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
+  // Dictation runs until the mic is clicked again, through pauses.
+  const keepListeningRef = useRef(false);
   const recordingRef = useRef<Recording | null>(null);
   const [recState, setRecState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [recElapsed, setRecElapsed] = useState(0);
+
+  // Leaving the page ends dictation.
+  useEffect(
+    () => () => {
+      keepListeningRef.current = false;
+      recognitionRef.current?.stop?.();
+    },
+    []
+  );
 
   // Recording timer, and the safety stop for very long dictations.
   useEffect(() => {
@@ -182,6 +241,11 @@ export const BottomDock: React.FC<BottomDockProps> = ({
     if (!inputText.trim() || isSending || !onSendMessage) return;
 
     const msg = inputText.trim();
+    // Sending ends dictation, so later words don't land in the next message.
+    if (keepListeningRef.current) {
+      keepListeningRef.current = false;
+      recognitionRef.current?.stop();
+    }
     setInputText('');
     onComposerChange?.('');
     setIsSending(true);
@@ -237,6 +301,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
 
 
     if (isListening) {
+      keepListeningRef.current = false;
       recognitionRef.current?.stop();
       setIsListening(false);
       return;
@@ -245,15 +310,44 @@ export const BottomDock: React.FC<BottomDockProps> = ({
     try {
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
-      recognition.continuous = false;
+      // Keep listening through pauses; only the mic button stops it.
+      // TODO(air): an optional auto-stop after silence, as a setting.
+      recognition.continuous = true;
       recognition.interimResults = false;
       recognition.lang = navigator.language || 'en-US';
+      keepListeningRef.current = true;
 
       recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
-      recognition.onerror = () => setIsListening(false);
+      recognition.onend = () => {
+        // The browser ends a session on its own after a while; carry on.
+        if (keepListeningRef.current) {
+          try {
+            recognition.start();
+            return;
+          } catch {
+            keepListeningRef.current = false;
+          }
+        }
+        setIsListening(false);
+      };
+      recognition.onerror = (event: any) => {
+        const blocked = event?.error === 'not-allowed' || event?.error === 'service-not-allowed' || event?.error === 'audio-capture';
+        if (blocked) {
+          keepListeningRef.current = false;
+          setIsListening(false);
+          onVoiceError?.(
+            event.error === 'audio-capture' ? 'No microphone is available.' : 'Microphone access was blocked. Allow it for this app and try again.'
+          );
+        }
+        // "no-speech" and network blips: onend restarts it.
+      };
       recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          if (event.results[i].isFinal) transcript += event.results[i][0].transcript;
+        }
+        transcript = transcript.trim();
+        if (!transcript) return;
         setInputText((prev) => {
           const next = prev ? `${prev} ${transcript}` : transcript;
           onComposerChange?.(next);
@@ -264,6 +358,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
 
       recognition.start();
     } catch {
+      keepListeningRef.current = false;
       setIsListening(false);
     }
   };
@@ -322,6 +417,8 @@ export const BottomDock: React.FC<BottomDockProps> = ({
           </button>
         </div>
       )}
+
+      <SpeakingBar />
 
       {/* Dynamic island dock */}
       <form

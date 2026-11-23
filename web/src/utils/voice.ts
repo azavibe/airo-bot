@@ -359,29 +359,9 @@ class VoiceEngine {
     if (pending) return pending;
     const job = (async () => {
       const onProgress = this.trackProgress(modelId);
-      let instance: any;
-      if (kind === 'stt' && isParakeet(modelId)) {
-        // int8 on WebAssembly: ~670 MB. (On WebGPU parakeet.js needs the
-        // 2.4 GB fp32 encoder, too big to download for dictation.)
-        const { fromHub } = await import('parakeet.js');
-        instance = await fromHub(PARAKEET_MODEL_ID, {
-          backend: 'wasm',
-          encoderQuant: 'int8',
-          decoderQuant: 'int8',
-          progress: (p: { loaded: number; total: number; file: string }) =>
-            onProgress({ status: 'progress', file: p.file, loaded: p.loaded, total: p.total }),
-        });
-      } else if (kind === 'stt') {
-        const { pipeline } = await import('@huggingface/transformers');
-        instance = await pipeline('automatic-speech-recognition', modelId, {
-          dtype: 'q8',
-          device: 'wasm',
-          progress_callback: onProgress,
-        });
-      } else {
-        const { KokoroTTS } = await import('kokoro-js');
-        instance = await KokoroTTS.from_pretrained(modelId, { dtype: 'q8', device: 'wasm', progress_callback: onProgress });
-      }
+      // In a worker, so loading and running a model never freeze the app.
+      const instance = new VoiceWorkerClient(kind, modelId, onProgress);
+      await instance.load();
       const entry: Loaded = { modelId, kind, instance, unloadAt: null, timer: null };
       this.loaded.set(modelId, entry);
       return instance;
@@ -479,23 +459,8 @@ export async function transcribe(blob: Blob, settings: VoiceSettings, seconds: n
   let text = '';
   if (settings.stt === 'local') {
     const samples = await toMono16k(blob);
-    const asr = await voice.get(settings.localModel, 'stt');
-    if (isParakeet(settings.localModel)) {
-      // Long recordings are windowed by the library itself.
-      const out =
-        seconds > 60 && typeof asr.transcribeLongAudio === 'function'
-          ? await asr.transcribeLongAudio(samples, 16000)
-          : await asr.transcribe(samples, 16000);
-      text = out?.utterance_text ?? out?.text ?? '';
-      voice.touch(settings.localModel);
-      text = text.trim();
-      const result = { text, seconds, tookMs: Math.round(performance.now() - started) };
-      if (text) history.add({ text, engine: 'local', model: settings.localModel, seconds, tookMs: result.tookMs });
-      return result;
-    }
-    const multilingual = !settings.localModel.endsWith('.en') && settings.localModel.includes('whisper');
-    const out = await asr(samples, multilingual ? { task: 'transcribe', chunk_length_s: 30 } : { chunk_length_s: 30 });
-    text = (Array.isArray(out) ? out.map((o: any) => o.text).join(' ') : out?.text) ?? '';
+    const asr: VoiceWorkerClient = await voice.get(settings.localModel, 'stt');
+    text = await asr.transcribe(samples, seconds);
     voice.touch(settings.localModel);
   } else if (settings.stt === 'groq') {
     const key = groqKey.get();
@@ -538,6 +503,63 @@ export async function transcribe(blob: Blob, settings: VoiceSettings, seconds: n
 
 // ---------- Speak-back ----------
 
+/** One voice model in a Web Worker (see voiceWorker.ts). */
+class VoiceWorkerClient {
+  private worker: Worker;
+  private seq = 0;
+  private waiting = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+
+  constructor(private kind: 'stt' | 'tts', private model: string, onProgress: (p: any) => void) {
+    this.worker = new Worker(new URL('./voiceWorker.ts', import.meta.url), { type: 'module' });
+    this.worker.onmessage = (e: MessageEvent) => {
+      const m = e.data ?? {};
+      if (m.type === 'progress') {
+        onProgress({ status: 'progress', file: m.file, loaded: m.loaded, total: m.total });
+        return;
+      }
+      const w = this.waiting.get(m.id);
+      if (!w) return;
+      this.waiting.delete(m.id);
+      if (m.type === 'error') w.reject(new Error(m.message || 'The voice model stopped working.'));
+      else w.resolve(m.result ?? null);
+    };
+    this.worker.onerror = (e) => {
+      const err = new Error(e.message || 'The voice model stopped working.');
+      this.waiting.forEach((w) => w.reject(err));
+      this.waiting.clear();
+    };
+  }
+
+  private call(msg: Record<string, unknown>, transfer: Transferable[] = []): Promise<any> {
+    const id = ++this.seq;
+    return new Promise((resolve, reject) => {
+      this.waiting.set(id, { resolve, reject });
+      this.worker.postMessage({ ...msg, id, kind: this.kind, model: this.model }, transfer);
+    });
+  }
+
+  load(): Promise<void> {
+    return this.call({ type: 'load' });
+  }
+
+  /** Speech for `text` as a WAV blob (Kokoro). */
+  speak(text: string, voiceId: string, speed: number): Promise<Blob> {
+    return this.call({ type: 'speak', text, voice: voiceId, speed });
+  }
+
+  /** Text for 16 kHz mono samples (Whisper, Moonshine, Parakeet). */
+  transcribe(samples: Float32Array, seconds: number): Promise<string> {
+    return this.call({ type: 'transcribe', samples, seconds }, [samples.buffer]);
+  }
+
+  dispose() {
+    this.worker.terminate();
+    const err = new Error('The voice model was unloaded.');
+    this.waiting.forEach((w) => w.reject(err));
+    this.waiting.clear();
+  }
+}
+
 /** Plain words for reading aloud: markdown, links and code fences removed. */
 export function speakableText(raw: string, max = 1200): string {
   return raw
@@ -551,16 +573,23 @@ export function speakableText(raw: string, max = 1200): string {
     .slice(0, max);
 }
 
-let currentAudio: HTMLAudioElement | null = null;
-
-export function stopSpeaking() {
-  try {
-    window.speechSynthesis?.cancel();
-  } catch {}
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio = null;
+/** Sentence-sized pieces, so the first words play while the rest is made. */
+export function speechChunks(text: string, size = 220): string[] {
+  const sentences = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) ?? [text];
+  const out: string[] = [];
+  let cur = '';
+  for (const raw of sentences) {
+    const sentence = raw.trim();
+    if (!sentence) continue;
+    if (cur && cur.length + sentence.length + 1 > size) {
+      out.push(cur);
+      cur = sentence;
+    } else {
+      cur = cur ? `${cur} ${sentence}` : sentence;
+    }
   }
+  if (cur) out.push(cur);
+  return out;
 }
 
 export function systemVoices(): SpeechSynthesisVoice[] {
@@ -571,25 +600,178 @@ export function systemVoices(): SpeechSynthesisVoice[] {
   }
 }
 
-export async function speak(raw: string, settings: VoiceSettings): Promise<void> {
-  const text = speakableText(raw);
-  if (!text || settings.tts === 'off') return;
-  stopSpeaking();
-  if (settings.tts === 'system') {
-    if (!('speechSynthesis' in window)) throw new Error('This browser has no built-in voices.');
-    const u = new SpeechSynthesisUtterance(text);
-    const v = systemVoices().find((x) => x.voiceURI === settings.systemVoice);
-    if (v) u.voice = v;
-    u.rate = settings.rate;
-    window.speechSynthesis.speak(u);
-    return;
+/** Who is speaking, shown above the message bar with a Stop button. */
+export interface SpeakMeta {
+  /** The bot, e.g. "Finance Manager". */
+  who?: string;
+  /** Where the message is, e.g. "Bright Smiles · #finance-ops". */
+  where?: string;
+}
+
+export interface SpeakingState {
+  who: string;
+  where: string;
+  /** Getting the voice ready (first use downloads it) or talking. */
+  phase: 'preparing' | 'speaking';
+  /** Messages waiting their turn. */
+  waiting: number;
+}
+
+interface SpeechJob {
+  text: string;
+  settings: VoiceSettings;
+  meta: SpeakMeta;
+  done: () => void;
+  fail: (e: Error) => void;
+}
+
+const MAX_WAITING = 5;
+
+/**
+ * One voice at a time: messages are read one after another, never over
+ * each other. Stop silences the current one and clears the queue.
+ */
+class Speaker {
+  private queue: SpeechJob[] = [];
+  private running = false;
+  /** Bumped by stop(); work started under an older value goes quiet. */
+  private turn = 0;
+  private audio: HTMLAudioElement | null = null;
+  state: SpeakingState | null = null;
+
+  private set(state: SpeakingState | null) {
+    this.state = state;
+    voice.emit();
   }
-  const tts = await voice.get(KOKORO_MODEL.id, 'tts');
-  const audio = await tts.generate(text, { voice: settings.kokoroVoice, speed: settings.rate });
-  voice.touch(KOKORO_MODEL.id);
-  const url = URL.createObjectURL(audio.toBlob());
-  const el = new Audio(url);
-  currentAudio = el;
-  el.onended = () => URL.revokeObjectURL(url);
-  await el.play();
+
+  /** Adds a message to read. `interrupt` stops whatever is playing first. */
+  say(raw: string, settings: VoiceSettings, meta: SpeakMeta = {}, interrupt = false): Promise<void> {
+    const text = speakableText(raw);
+    if (!text || settings.tts === 'off') return Promise.resolve();
+    if (interrupt) this.stop();
+    return new Promise<void>((done, fail) => {
+      this.queue.push({ text, settings, meta, done, fail });
+      // A long backlog is old news: keep the newest few.
+      while (this.queue.length > MAX_WAITING) this.queue.shift()?.done();
+      if (this.running) this.set(this.state && { ...this.state, waiting: this.queue.length });
+      else void this.run();
+    });
+  }
+
+  stop() {
+    this.turn += 1;
+    for (const job of this.queue.splice(0)) job.done();
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {}
+    if (this.audio) {
+      this.audio.onended = null;
+      this.audio.pause();
+      this.audio = null;
+    }
+    this.set(null);
+  }
+
+  private async run() {
+    this.running = true;
+    try {
+      while (this.queue.length) {
+        const job = this.queue.shift()!;
+        const turn = this.turn;
+        this.set({
+          who: job.meta.who || 'A bot',
+          where: job.meta.where || '',
+          phase: 'preparing',
+          waiting: this.queue.length,
+        });
+        try {
+          if (job.settings.tts === 'system') await this.system(job, turn);
+          else await this.kokoro(job, turn);
+          job.done();
+        } catch (err) {
+          // Stopped on purpose: not an error.
+          if (turn !== this.turn) job.done();
+          else job.fail(err instanceof Error ? err : new Error('Could not speak.'));
+        }
+      }
+    } finally {
+      this.running = false;
+      this.set(null);
+    }
+  }
+
+  private speaking(job: SpeechJob) {
+    this.set({ who: job.meta.who || 'A bot', where: job.meta.where || '', phase: 'speaking', waiting: this.queue.length });
+  }
+
+  private system(job: SpeechJob, turn: number): Promise<void> {
+    if (!('speechSynthesis' in window)) return Promise.reject(new Error('This browser has no built-in voices.'));
+    return new Promise((resolve, reject) => {
+      const u = new SpeechSynthesisUtterance(job.text);
+      const v = systemVoices().find((x) => x.voiceURI === job.settings.systemVoice);
+      if (v) u.voice = v;
+      u.rate = job.settings.rate;
+      u.onstart = () => turn === this.turn && this.speaking(job);
+      u.onend = () => resolve();
+      u.onerror = (e) => (e.error === 'interrupted' || e.error === 'canceled' ? resolve() : reject(new Error('The voice could not speak.')));
+      window.speechSynthesis.speak(u);
+    });
+  }
+
+  private async kokoro(job: SpeechJob, turn: number) {
+    const tts: VoiceWorkerClient = await voice.get(KOKORO_MODEL.id, 'tts');
+    const chunks = speechChunks(job.text);
+    const make = (i: number) => tts.speak(chunks[i], job.settings.kokoroVoice, job.settings.rate);
+    let next: Promise<Blob> | null = make(0);
+    for (let i = 0; i < chunks.length; i += 1) {
+      const blob = await next!;
+      // Make the next piece while this one plays.
+      next = i + 1 < chunks.length ? make(i + 1) : null;
+      next?.catch(() => {});
+      if (turn !== this.turn) return;
+      voice.touch(KOKORO_MODEL.id);
+      this.speaking(job);
+      await this.play(blob, turn);
+      if (turn !== this.turn) return;
+    }
+  }
+
+  private play(blob: Blob, turn: number): Promise<void> {
+    const url = URL.createObjectURL(blob);
+    const el = new Audio(url);
+    this.audio = el;
+    return new Promise<void>((resolve, reject) => {
+      const finish = () => {
+        URL.revokeObjectURL(url);
+        if (this.audio === el) this.audio = null;
+        resolve();
+      };
+      el.onended = finish;
+      el.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('The voice could not play.'));
+      };
+      el.play().catch((err) => {
+        // Stop pressed while it was starting: that pause is expected.
+        if (turn !== this.turn || err?.name === 'AbortError') return finish();
+        URL.revokeObjectURL(url);
+        reject(
+          err?.name === 'NotAllowedError'
+            ? new Error('The app is not allowed to play sound yet. Click anywhere in the app, then try again.')
+            : new Error('The voice could not play.')
+        );
+      });
+    });
+  }
+}
+
+export const speaker = new Speaker();
+
+/** Reads a message aloud after any that are already being read. */
+export function speak(raw: string, settings: VoiceSettings, meta?: SpeakMeta, interrupt = false): Promise<void> {
+  return speaker.say(raw, settings, meta, interrupt);
+}
+
+export function stopSpeaking() {
+  speaker.stop();
 }

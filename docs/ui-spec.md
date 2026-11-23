@@ -169,7 +169,7 @@ The bottom dock is an interactive floating pill centered inside the bottom canva
 ## 4.0 Appearance
 
 - Every colour comes from CSS variables set by `web/src/utils/theme.ts`. Tailwind's `white` (text), `neutral-*` (mixed from text and background), `black` (overlays), border and `accent` colours point at them, so components use ordinary classes and still follow the theme. Primary actions use `bg-accent text-accent-fg`; never hard-code `bg-white text-black`.
-- Settings → Appearance (the only place for it; guests reach Settings from the gear beside Sign In): presets (Obsidian, Midnight, Forest, Ember, Violet, Paper, Daylight), dark/light mode, accent, background (solid or accent glow), panels, borders, text, your chat bubbles, corner radius and glass blur. Changes preview live; Discard or closing reverts.
+- Settings → Appearance (the only place for it; guests reach Settings from the gear beside Sign In): presets (Obsidian, Midnight, Forest, Ember, Violet, Paper, Daylight), mode **Dark / Light / System** (System keeps the theme's colours in its own mode and, when the computer or phone switches to the other mode, uses that mode's default neutrals with the same accent, corners and blur; it repaints live on the switch; stored as `followSystem`), accent, background (solid or accent glow), panels, borders, text, your chat bubbles, corner radius and glass blur. Changes preview live; Discard or closing reverts.
 - Signed-in people keep their theme on their account (`PUT /api/me/theme`, returned by `/api/me` as `ui_theme`), so it follows them to every browser and the desktop app; the last theme is cached locally only to paint before `/api/me` loads. Guests save on the device.
 - The server accepts only known keys with `#rrggbb` colours and bounded numbers, so a stored theme can never inject CSS.
 
@@ -177,8 +177,11 @@ The bottom dock is an interactive floating pill centered inside the bottom canva
 
 - Settings → Voice. Speech to text for the message-bar mic: **On this device** (Whisper / Moonshine via transformers.js, or NVIDIA **Parakeet TDT v3** via parakeet.js, int8 on WebAssembly, ≈670 MB, 25 European languages with punctuation; models download once from Hugging Face and stay on the device, audio never leaves the machine; ONNX Runtime's WebAssembly loads from the CDN on first use instead of shipping in `dist/`), **Groq** (Whisper Large v3 / Turbo with the person's own key, stored on the device and sent only to Groq), or the **Browser** recognizer.
 - Models show Download / Load / Unload / Delete and a live "Unloads in m:ss". **Keep models in memory** releases a model after 0 s / 2 / 5 / 15 / 60 minutes idle, or never.
+- The mic is a toggle: one click starts dictation, the next click (or sending the message) stops it. The browser recognizer keeps listening through pauses (it restarts itself when the browser ends a session). Local models and Groq record until the second click (or 5 minutes).
+- Every local model (Whisper, Moonshine, Parakeet, Kokoro) loads and runs in a Web Worker (`voiceWorker.ts`), one per model, so downloading, loading, transcribing and speaking never freeze the page or the desktop window.
 - Dictation history (text, engine, audio length, time taken) is kept on the device, with copy and delete.
 - Speak replies: Off, the system's built-in voices (free), or Kokoro 82M (≈90 MB, local). "Read bot replies aloud" speaks new bot notes as they stream in.
+- **One voice at a time.** Messages read aloud queue and play one after another (at most 5 waiting; older ones are dropped), never over each other. While one plays, a bar above the message box says who and where ("Finance Manager is speaking · Bright Smiles", "getting the voice ready 40%" on first use, "2 more waiting") with **Stop**, which silences it and clears the queue. Kokoro speaks sentence by sentence, making the next piece while the current one plays. Test in Settings interrupts whatever is playing; a stop while a piece is starting is not an error.
 - The same code runs in the browser and the desktop app (which opens the hosted app); the voice engines load only on first use.
 
 ## 4.0.2 Desktop app: your office on your computer

@@ -426,6 +426,11 @@ fn normalise_theme(raw: &serde_json::Value) -> Result<serde_json::Value, AppErro
                 Some(m @ ("dark" | "light")) => json!(m),
                 _ => return Err(bad("mode must be dark or light")),
             },
+            // Follow the operating system's light or dark setting.
+            "followSystem" => match value.as_bool() {
+                Some(b) => json!(b),
+                None => return Err(bad("followSystem must be true or false")),
+            },
             "backgroundStyle" => match value.as_str() {
                 Some(m @ ("solid" | "glow")) => json!(m),
                 _ => return Err(bad("backgroundStyle must be solid or glow")),

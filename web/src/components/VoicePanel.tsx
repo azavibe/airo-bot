@@ -215,7 +215,12 @@ export const VoicePanel: React.FC<VoicePanelProps> = ({ settings, onChange }) =>
     setTestError(null);
     setTestState('speaking');
     try {
-      await speak("Hi, I'm your office bot. I'll read replies like this one.", { ...settings, tts: settings.tts === 'off' ? 'system' : settings.tts });
+      await speak(
+        "Hi, I'm your office bot. I'll read replies like this one.",
+        { ...settings, tts: settings.tts === 'off' ? 'system' : settings.tts },
+        { who: 'Voice test', where: 'Settings' },
+        true
+      );
       setTestState('idle');
     } catch (e) {
       setTestState('error');

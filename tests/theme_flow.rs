@@ -72,7 +72,8 @@ async fn a_theme_is_validated_kept_and_reset(pool: PgPool) {
                 "theme": {
                     "mode": "light", "accent": "#2563EB", "background": "#dfe7f5",
                     "backgroundStyle": "glow", "surface": "#ffffff", "border": "#1e3a8a",
-                    "text": "#0f172a", "userBubble": "#dbe7ff", "radius": 20, "blur": 0
+                    "text": "#0f172a", "userBubble": "#dbe7ff", "radius": 20, "blur": 0,
+                    "followSystem": true
                 },
                 "idempotency_key": "theme-1"
             }),
@@ -87,6 +88,8 @@ async fn a_theme_is_validated_kept_and_reset(pool: PgPool) {
     let profile = me(&pool, &cookie).await;
     assert_eq!(profile["ui_theme"]["mode"], "light");
     assert_eq!(profile["ui_theme"]["radius"], 20);
+    // "System" appearance: follow the operating system's light or dark mode.
+    assert_eq!(profile["ui_theme"]["followSystem"], true);
 
     // Anything that is not a known, well-formed setting is refused whole,
     // so the stored theme can never carry arbitrary CSS.
@@ -97,6 +100,7 @@ async fn a_theme_is_validated_kept_and_reset(pool: PgPool) {
         json!({ "radius": 99 }),
         json!({ "blur": -1 }),
         json!({ "mode": "neon" }),
+        json!({ "followSystem": "yes" }),
         json!({ "fontFamily": "Comic Sans" }),
         json!("dark"),
     ] {

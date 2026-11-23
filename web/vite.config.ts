@@ -25,6 +25,8 @@ export default defineConfig({
       '/signin': backendUrl,
     },
   },
+  // The Kokoro voice runs in a worker that loads its engine on demand.
+  worker: { format: 'es' },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
