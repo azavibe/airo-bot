@@ -95,9 +95,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
   return (
     <div
       onClick={closeOnBackdrop(close)}
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex p-4 overflow-y-auto"
     >
-      <div className="glass-panel w-full max-w-md p-7 space-y-6 border-white/20" role="dialog" aria-modal="true">
+      <div className="glass-panel m-auto w-full max-w-md p-7 space-y-6 border-white/20" role="dialog" aria-modal="true">
         <div className="flex items-start justify-between">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-semibold text-white mb-2">

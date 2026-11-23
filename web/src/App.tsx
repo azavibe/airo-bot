@@ -140,6 +140,8 @@ export const App: React.FC = () => {
   const [editingBot, setEditingBot] = useState<Agent | null>(null);
   const [newBotOffice, setNewBotOffice] = useState<Office | null>(null);
   const [isOnboardOpen, setIsOnboardOpen] = useState(false);
+  // While the office setup is open, the message bar answers it.
+  const setupSendRef = React.useRef<((text: string) => Promise<void>) | null>(null);
   const [onboardTarget, setOnboardTarget] = useState<{ mode: 'new' | 'setup'; office?: Office }>({ mode: 'new' });
   const [dialog, setDialog] = useState<Dialog>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -322,6 +324,8 @@ export const App: React.FC = () => {
   };
 
   const handleTabChange = (tab: Tab) => {
+    // Going anywhere closes the office setup shown in the main area.
+    setIsOnboardOpen(false);
     setActiveTab(tab);
     const path =
       tab === 'apps' && activeAppSlug
@@ -1176,7 +1180,14 @@ export const App: React.FC = () => {
       onChangeTab={handleTabChange}
       onToggleSidebarMobile={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
       pendingApprovalsCount={pendingApprovalsCount}
-      onSendMessage={handleSendMessage}
+      onSendMessage={
+        isOnboardOpen
+          ? async (text: string) => {
+              await setupSendRef.current?.(text);
+            }
+          : handleSendMessage
+      }
+      placeholder={isOnboardOpen ? 'Answer the Architect…' : undefined}
       composerText={composerText}
       onComposerChange={(text) => setComposerText(text)}
       activeAgentPlan={activeAgentPlan}
@@ -1314,8 +1325,27 @@ export const App: React.FC = () => {
           </div>
         </div>
 
+        {/* New office (or setting one up) happens here, like a chat with
+            the Architect, instead of in a dialog. */}
+        {isOnboardOpen && (
+          <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
+            <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
+              <OnboardModal
+                inline
+                isOpen
+                mode={onboardTarget.mode}
+                officeName={onboardTarget.office?.name}
+                onClose={() => setIsOnboardOpen(false)}
+                onComplete={handleOfficeSetup}
+                sendRef={setupSendRef}
+                bottomDock={dockElement}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Center / Main Column */}
-        {activeTab === 'chat' && (
+        {!isOnboardOpen && activeTab === 'chat' && (
           <>
             {/* Center Column: Chat Stream (col-span-5) */}
             <div className={`h-full min-h-0 col-span-12 overflow-hidden ${sidebarRail ? 'md:col-span-6' : 'md:col-span-5'}`}>
@@ -1386,7 +1416,7 @@ export const App: React.FC = () => {
         )}
 
         {/* Full-Width Tab Views (col-span-9 on desktop alongside sidebar) */}
-        {activeTab === 'apps' && (
+        {!isOnboardOpen && activeTab === 'apps' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <AppsHub
@@ -1415,7 +1445,7 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'approvals' && (
+        {!isOnboardOpen && activeTab === 'approvals' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <ApprovalsView
@@ -1428,7 +1458,7 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'bots' && (
+        {!isOnboardOpen && activeTab === 'bots' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <BotsView
@@ -1457,7 +1487,7 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'contacts' && (
+        {!isOnboardOpen && activeTab === 'contacts' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <ContactsView
@@ -1468,7 +1498,7 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'workflows' && (
+        {!isOnboardOpen && activeTab === 'workflows' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <WorkflowsView
@@ -1486,7 +1516,7 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'settings' && (
+        {!isOnboardOpen && activeTab === 'settings' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <SettingsView
@@ -1579,13 +1609,6 @@ export const App: React.FC = () => {
       />
 
       {/* SaaS Elimination Master Architect Onboarding Modal */}
-      <OnboardModal
-        isOpen={isOnboardOpen}
-        mode={onboardTarget.mode}
-        officeName={onboardTarget.office?.name}
-        onClose={() => setIsOnboardOpen(false)}
-        onComplete={handleOfficeSetup}
-      />
 
       <TeamModal
         open={isTeamOpen}

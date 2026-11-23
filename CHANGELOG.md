@@ -23,6 +23,10 @@ app and the desktop app share one version number. A release is tagged
   New bot and right-click), the chosen bot's settings on the right in the
   page instead of a dialog. Bot settings opened anywhere land here.
 - Workflow cards show the steps, version, runs and a success bar.
+- New office opens in the main area as a chat with the Architect instead of
+  a dialog: answer in the message bar (name, what the business does, what
+  the bots should do) and it creates the office; the full form is right
+  below.
 
 ### Fixed
 - Dictation no longer stops at the first pause: click the mic to start and
@@ -37,6 +41,8 @@ app and the desktop app share one version number. A release is tagged
 - The "AI Video & Social Studio" app is now called "Social Studio".
 - Removed the right panel's "AI on this computer" footer in the desktop app;
   it led nowhere.
+- Dialogs no longer run off the top of the screen on small windows; they
+  scroll as a whole.
 
 ## 0.7.0 — 2026-11-22
 
