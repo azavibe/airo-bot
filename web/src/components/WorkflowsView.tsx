@@ -5,6 +5,7 @@ import {
   Play,
   CheckCircle2,
   Layers,
+  ListChecks,
   AlertTriangle,
   Plus,
   Search,
@@ -595,41 +596,57 @@ export const WorkflowsView: React.FC<WorkflowsViewProps> = ({
             visible.map((p) => {
               const isSelected = !editor && selectedProcedure?.id === p.id;
               const successRate = p.run_count > 0 ? Math.round((p.success_count / p.run_count) * 100) : null;
+              // Numbered or bulleted lines in the instructions are its steps.
+              const steps = (p.body.match(/^\s*(?:\d+[.)]|[-*•])\s+\S/gm) ?? []).length;
               return (
                 <button
                   type="button"
                   key={p.id}
                   onClick={() => select(p.id)}
-                  className={`w-full text-left glass-card p-4 space-y-2.5 cursor-pointer transition-all ${
+                  aria-current={isSelected ? 'true' : undefined}
+                  className={`w-full text-left glass-card p-4 space-y-3 cursor-pointer transition-all ${
                     isSelected
                       ? 'border-white/30 bg-white/[0.08] shadow-glow-white'
                       : 'hover:border-white/15 hover:bg-white/[0.03]'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-white tracking-tight truncate">{p.title}</h3>
-                      <p className="text-[11px] text-neutral-400 mt-0.5 line-clamp-1">{p.summary}</p>
-                    </div>
-                    <span className="flex items-center gap-1 flex-shrink-0">
-                      {p.visibility && p.visibility !== 'private' && (
-                        <span className="text-neutral-500" title={VISIBILITY_LABEL[p.visibility].label}>
-                          {VISIBILITY_LABEL[p.visibility].icon}
-                        </span>
-                      )}
-                      <span className="text-[10px] font-mono text-neutral-400 bg-white/5 px-2 py-0.5 rounded-full">
-                        v{p.current_version}
-                      </span>
+                  <div className="flex items-start gap-3">
+                    <span className="w-9 h-9 rounded-xl bg-accent/15 border border-accent/30 text-accent flex items-center justify-center flex-shrink-0">
+                      <ListChecks className="w-4 h-4" />
                     </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className="text-sm font-semibold text-white tracking-tight truncate">{p.title}</h3>
+                        {p.visibility && p.visibility !== 'private' && (
+                          <span className="text-neutral-500 flex-shrink-0" title={VISIBILITY_LABEL[p.visibility].label}>
+                            {VISIBILITY_LABEL[p.visibility].icon}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-neutral-400 mt-0.5 line-clamp-2">{p.summary || 'No summary yet.'}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-neutral-400 pt-2 border-t border-white/5 font-mono">
-                    <span>
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    {steps > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-neutral-300">
+                        {steps} {steps === 1 ? 'step' : 'steps'}
+                      </span>
+                    )}
+                    <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-neutral-300 font-mono">v{p.current_version}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-neutral-300">
                       {p.run_count} {p.run_count === 1 ? 'run' : 'runs'}
                     </span>
-                    <span className={successRate === null ? 'text-neutral-500' : 'text-emerald-400'}>
-                      {successRate === null ? 'No runs yet' : `${successRate}% succeeded`}
+                    <span className="ml-auto text-neutral-500" title={new Date(p.updated_at).toLocaleString()}>
+                      {timeAgo(p.updated_at)}
                     </span>
-                    <span title={new Date(p.updated_at).toLocaleString()}>{timeAgo(p.updated_at)}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                      <div className="h-full rounded-full bg-emerald-400" style={{ width: `${successRate ?? 0}%` }} />
+                    </div>
+                    <div className={`text-[10.5px] ${successRate === null ? 'text-neutral-500' : 'text-emerald-400'}`}>
+                      {successRate === null ? 'Not run yet' : `${successRate}% of runs succeeded`}
+                    </div>
                   </div>
                 </button>
               );
