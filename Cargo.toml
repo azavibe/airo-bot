@@ -1,6 +1,6 @@
 [package]
 name = "airobot"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 description = "Open-source AI team for small businesses: AI agents that run sales, bookings, support and invoices in one chat"
 license = "AGPL-3.0-only"

@@ -7,6 +7,8 @@ app and the desktop app share one version number. A release is tagged
 
 ## Unreleased
 
+## 0.7.1 — 2026-11-23
+
 ### Added
 - **System appearance**: Settings → Appearance → Mode now has Dark, Light
   and System; System follows your computer or phone and switches live.
