@@ -84,6 +84,8 @@ interface BottomDockProps {
   officeName?: string;
   /** Opens a section of the current office (Goal, Memory, Documents). */
   onOpenOfficeSection?: (tab: EditOfficeTab) => void;
+  /** What the empty message box says (e.g. while setting up an office). */
+  placeholder?: string;
 }
 
 /** Longest single dictation; recording stops on its own after this. */
@@ -114,6 +116,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   onOpenVoiceSettings,
   officeName,
   onOpenOfficeSection,
+  placeholder = 'Message your bots…',
 }) => {
   // The menu in the message bar: approvals and the office's goal, memory
   // and documents, one tap away on every screen (phones have no sidebar).
@@ -557,7 +560,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
         >
           {!isTyping && !inputText && (
             <div className="absolute inset-x-0 bottom-0 h-8 flex items-center gap-1.5 text-neutral-400 select-none text-[13px] pl-1 group pointer-events-none">
-              <span className="truncate">Message your bots…</span>
+              <span className="truncate">{placeholder}</span>
             </div>
           )}
           <textarea
@@ -584,8 +587,8 @@ export const BottomDock: React.FC<BottomDockProps> = ({
                 void handleSubmit();
               }
             }}
-            aria-label="Message your bots"
-            placeholder={isTyping ? 'Message your bots…' : ''}
+            aria-label={placeholder.replace(/…$/, '')}
+            placeholder={isTyping ? placeholder : ''}
             className={`block w-full resize-none bg-transparent border-none outline-none text-white text-[13px] leading-5 py-1.5 placeholder-neutral-500 pl-1 pr-1 overflow-hidden ${
               isTyping || inputText ? 'opacity-100' : 'opacity-0'
             }`}

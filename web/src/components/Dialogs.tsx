@@ -25,14 +25,14 @@ const Shell: React.FC<{
   return (
     <div
       onClick={closeOnBackdrop(onClose)}
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex p-4 overflow-y-auto"
     >
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit();
         }}
-        className={`glass-panel w-full ${wide ? 'max-w-lg max-h-[90vh] overflow-y-auto' : 'max-w-sm'} p-5 space-y-4 border-white/15`}
+        className={`glass-panel m-auto w-full ${wide ? 'max-w-lg' : 'max-w-sm'} p-5 space-y-4 border-white/15`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

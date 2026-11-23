@@ -26,6 +26,19 @@ interface OnboardModalProps {
   officeName?: string;
   onClose: () => void;
   onComplete: (data: OfficeSetup) => Promise<void>;
+  /** Shown in the main area, like a chat with the Architect, instead of a
+   *  dialog; the message bar answers its questions. */
+  inline?: boolean;
+  /** Inline: what the message bar's Send does here (set while shown). */
+  sendRef?: React.MutableRefObject<((text: string) => Promise<void>) | null>;
+  /** Inline: the message bar, under the page. */
+  bottomDock?: React.ReactNode;
+}
+
+/** A line in the setup chat. */
+interface ChatLine {
+  from: 'architect' | 'you';
+  text: string;
 }
 
 /** The areas an office can handle; ids match `TEAMS` in architect.rs.
@@ -87,7 +100,17 @@ const Tick: React.FC<{ on: boolean }> = ({ on }) => (
   </span>
 );
 
-export const OnboardModal: React.FC<OnboardModalProps> = ({ isOpen, mode, officeName = '', onClose, onComplete }) => {
+export const OnboardModal: React.FC<OnboardModalProps> = ({
+  isOpen,
+  mode,
+  officeName = '',
+  onClose,
+  onComplete,
+  inline = false,
+  sendRef,
+  bottomDock,
+}) => {
+  const [chat, setChat] = useState<ChatLine[]>([]);
   const [name, setName] = useState('');
   const [businessType, setBusinessType] = useState('');
   const [teams, setTeams] = useState<string[]>([]);
@@ -110,6 +133,7 @@ export const OnboardModal: React.FC<OnboardModalProps> = ({ isOpen, mode, office
     setWebsite('');
     setFocus('');
     setError(null);
+    setChat([]);
     let cancelled = false;
     fetch('/api/connections', { headers: { Accept: 'application/json' } })
       .then((res) => (res.ok ? res.json() : null))
@@ -129,7 +153,7 @@ export const OnboardModal: React.FC<OnboardModalProps> = ({ isOpen, mode, office
     if (isSubmitting) return;
     onClose();
   };
-  useEscape(isOpen, close);
+  useEscape(isOpen && !inline, close);
 
   if (!isOpen) return null;
 
@@ -144,17 +168,16 @@ export const OnboardModal: React.FC<OnboardModalProps> = ({ isOpen, mode, office
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (over: { name?: string; businessType?: string; goals?: string } = {}) => {
     setIsSubmitting(true);
     setError(null);
     try {
       await onComplete({
-        name: name.trim(),
-        businessType: businessType.trim(),
+        name: (over.name ?? name).trim(),
+        businessType: (over.businessType ?? businessType).trim(),
         teams: TEAMS.map((t) => t.id).filter((id) => teams.includes(id)),
         connect: connect.filter((c) => available.includes(c)),
-        goals: goals.trim(),
+        goals: (over.goals ?? goals).trim(),
         website: website.trim(),
         focus,
       });
@@ -165,32 +188,51 @@ export const OnboardModal: React.FC<OnboardModalProps> = ({ isOpen, mode, office
       setIsSubmitting(false);
     }
   };
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void submit();
+  };
+
+  // The message bar answers the Architect's questions in order: the name,
+  // what the business does, then what the bots should do (which creates the
+  // office). Everything else is picked in the form below.
+  const say = (lines: ChatLine[]) => setChat((prev) => [...prev, ...lines]);
+  const send = async (raw: string) => {
+    const text = raw.trim();
+    if (!text || isSubmitting) return;
+    if (mode === 'new' && !name.trim()) {
+      const n = text.slice(0, 64);
+      setName(n);
+      say([{ from: 'you', text }, { from: 'architect', text: `Nice. What does ${n} do? For example: dental clinic, roofing, online shop.` }]);
+      return;
+    }
+    if (!businessType.trim()) {
+      setBusinessType(text.slice(0, 200));
+      say([
+        { from: 'you', text },
+        {
+          from: 'architect',
+          text: 'Got it. Pick what kind of business it is and what the office should handle below, then tell me what the bots should get done first, and I’ll set it up.',
+        },
+      ]);
+      return;
+    }
+    if (mode === 'setup' && teams.length === 0) {
+      say([{ from: 'you', text }, { from: 'architect', text: 'Pick at least one area below first, then send again.' }]);
+      setGoals(text.slice(0, 2000));
+      return;
+    }
+    const nextGoals = (goals ? `${goals}\n${text}` : text).slice(0, 2000);
+    setGoals(nextGoals);
+    say([{ from: 'you', text }, { from: 'architect', text: 'Setting it up now…' }]);
+    await submit({ goals: nextGoals });
+  };
+  if (sendRef) sendRef.current = inline ? send : null;
 
   const offeredTools = ['google', 'stripe', 'shopify', 'webhook'].filter((t) => available.includes(t));
   const needsTeams = mode === 'setup';
 
-  return (
-    <div
-      onClick={closeOnBackdrop(close)}
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto"
-    >
-      <div className="glass-panel w-full max-w-2xl p-6 space-y-5 border-white/20 my-8" role="dialog" aria-modal="true">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white tracking-tight">
-              {mode === 'new' ? 'New office' : `Set up ${officeName}`}
-            </h2>
-            <p className="text-xs text-neutral-400 mt-1">
-              {mode === 'new'
-                ? 'The Architect sets this office up. Start blank, or pick what it handles: each area gets a room with its own bot and an app.'
-                : 'The Architect adds what you pick. Each area gets a room with its own bot and an app.'}
-            </p>
-          </div>
-          <button onClick={close} aria-label="Close" className="text-neutral-400 hover:text-white p-1">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
+  const formEl = (
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1.5">
@@ -408,7 +450,7 @@ export const OnboardModal: React.FC<OnboardModalProps> = ({ isOpen, mode, office
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <button type="button" onClick={close} className="px-3.5 py-2 rounded-xl text-xs text-neutral-300 hover:text-white hover:bg-white/10">
-              Cancel
+              {inline ? 'Close' : 'Cancel'}
             </button>
             <button
               type="submit"
@@ -425,7 +467,78 @@ export const OnboardModal: React.FC<OnboardModalProps> = ({ isOpen, mode, office
             </button>
           </div>
         </form>
+  );
+  const title = mode === 'new' ? 'New office' : `Set up ${officeName}`;
+  const intro =
+    mode === 'new'
+      ? 'The Architect sets this office up. Start blank, or pick what it handles: each area gets a room with its own bot and an app.'
+      : 'The Architect adds what you pick. Each area gets a room with its own bot and an app.';
+
+  if (inline) {
+    const architectAsk =
+      mode === 'new'
+        ? 'Hi! Let’s set up your new office. What is it called? Type below, or fill in the form.'
+        : `Let’s set up ${officeName}. What does the business do? Type below, or fill in the form.`;
+    return (
+      <div className="w-full h-full flex flex-col overflow-hidden">
+        <div className="flex-shrink-0 flex items-center justify-between gap-4 px-6 py-4 border-b border-white/[0.08] bg-black/20 backdrop-blur-md">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-white tracking-tight truncate">{title}</h1>
+            <p className="text-xs text-neutral-400 mt-0.5 hidden sm:block">{intro}</p>
+          </div>
+          <button onClick={close} aria-label="Close" className="text-neutral-400 hover:text-white p-1 flex-shrink-0">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5">
+          <div className="max-w-3xl mx-auto space-y-4">
+            <ChatBubble from="architect" text={architectAsk} />
+            {chat.map((line, i) => (
+              <ChatBubble key={i} from={line.from} text={line.text} />
+            ))}
+            <div className="glass-card p-5">{formEl}</div>
+          </div>
+        </div>
+        {bottomDock && <div className="panel-footer !h-auto min-h-[66px] px-3 py-2.5 justify-center">{bottomDock}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={closeOnBackdrop(close)}
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex p-4 overflow-y-auto"
+    >
+      <div className="glass-panel m-auto w-full max-w-2xl p-6 space-y-5 border-white/20" role="dialog" aria-modal="true">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white tracking-tight">{title}</h2>
+            <p className="text-xs text-neutral-400 mt-1">{intro}</p>
+          </div>
+          <button onClick={close} aria-label="Close" className="text-neutral-400 hover:text-white p-1">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        {formEl}
       </div>
     </div>
   );
 };
+
+/** One line of the setup chat, as in the office chat. */
+const ChatBubble: React.FC<ChatLine> = ({ from, text }) =>
+  from === 'architect' ? (
+    <div className="flex items-start gap-2.5">
+      <span className="w-7 h-7 rounded-full bg-accent text-accent-fg text-[11px] font-semibold flex items-center justify-center flex-shrink-0">
+        A
+      </span>
+      <div className="min-w-0">
+        <div className="text-[12px] font-semibold text-white">Architect</div>
+        <p className="text-sm text-neutral-200 whitespace-pre-wrap">{text}</p>
+      </div>
+    </div>
+  ) : (
+    <div className="flex justify-end">
+      <p className="max-w-[80%] px-3.5 py-2 rounded-2xl bg-[rgb(var(--c-bubble-user))] text-sm text-white whitespace-pre-wrap">{text}</p>
+    </div>
+  );

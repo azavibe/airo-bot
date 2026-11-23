@@ -507,12 +507,12 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
       {/* New Record Modal */}
       {isModalOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex p-4 overflow-y-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeModal();
           }}
         >
-          <div className="glass-panel w-full max-w-md p-6 space-y-4" role="dialog" aria-modal="true">
+          <div className="glass-panel m-auto w-full max-w-md p-6 space-y-4" role="dialog" aria-modal="true">
             <h2 className="text-lg font-bold text-white">New {activeView?.title || 'Record'}</h2>
             {formError && (
               <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-300">{formError}</div>

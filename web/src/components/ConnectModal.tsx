@@ -83,10 +83,10 @@ export const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, loc
   return (
     <div
       onClick={closeOnBackdrop(onClose)}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md select-none animate-fade-in overflow-y-auto"
+      className="fixed inset-0 z-50 flex p-4 bg-black/75 backdrop-blur-md select-none animate-fade-in overflow-y-auto"
     >
       <div
-        className="glass-panel w-full max-w-2xl overflow-hidden border border-white/20 shadow-2xl relative bg-black/90 my-auto"
+        className="glass-panel m-auto w-full max-w-2xl overflow-hidden border border-white/20 shadow-2xl relative bg-black/90"
         role="dialog"
         aria-modal="true"
       >

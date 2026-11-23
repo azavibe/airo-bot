@@ -21,9 +21,9 @@ export const TeamModal: React.FC<{
   return (
     <div
       onClick={closeOnBackdrop(onClose)}
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex p-4 overflow-y-auto"
     >
-      <div className="glass-panel w-full max-w-md p-5 space-y-4 border-white/15" role="dialog" aria-modal="true" aria-label={`${officeName} team`}>
+      <div className="glass-panel m-auto w-full max-w-md p-5 space-y-4 border-white/15" role="dialog" aria-modal="true" aria-label={`${officeName} team`}>
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-[15px] font-semibold text-white">{officeName}</h2>
