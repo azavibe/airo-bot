@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
-import { AgentTaskPlan } from '../types';
+import { AgentTaskPlan, EditOfficeTab } from '../types';
 import { VoiceSettings, Recording, startRecording, transcribe, groqKey, voice, speaker, stopSpeaking, KOKORO_MODEL } from '../utils/voice';
 import type { Tab } from '../App';
 import {
@@ -14,6 +14,11 @@ import {
   Activity,
   ArrowRight,
   Square,
+  CircleDashedCheck,
+  Target,
+  Brain,
+  FileText,
+  PanelLeft,
 } from 'lucide-react';
 
 /** Who is reading a message aloud, with Stop. Only one voice plays at a time. */
@@ -75,6 +80,10 @@ interface BottomDockProps {
   voiceSettings?: VoiceSettings;
   onVoiceError?: (message: string) => void;
   onOpenVoiceSettings?: () => void;
+  /** The office this chat belongs to, named in the menu. */
+  officeName?: string;
+  /** Opens a section of the current office (Goal, Memory, Documents). */
+  onOpenOfficeSection?: (tab: EditOfficeTab) => void;
 }
 
 /** Longest single dictation; recording stops on its own after this. */
@@ -103,7 +112,28 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   voiceSettings,
   onVoiceError,
   onOpenVoiceSettings,
+  officeName,
+  onOpenOfficeSection,
 }) => {
+  // The menu in the message bar: approvals and the office's goal, memory
+  // and documents, one tap away on every screen (phones have no sidebar).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuPopRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!menuRef.current?.contains(t) && !menuPopRef.current?.contains(t)) setMenuOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [menuOpen]);
   const [isTyping, setIsTyping] = useState(false);
   const [inputText, setInputText] = useState(composerText);
   const [isSending, setIsSending] = useState(false);
@@ -419,6 +449,71 @@ export const BottomDock: React.FC<BottomDockProps> = ({
       )}
 
       <SpeakingBar />
+      {menuOpen && (
+        <div
+          role="menu"
+          ref={menuPopRef}
+          className="absolute bottom-[54px] left-1 w-60 py-1.5 rounded-2xl border border-white/15 bg-surface shadow-2xl z-50 text-[13px] animate-fade-in"
+        >
+          {officeName && <div className="px-3.5 pt-1 pb-1.5 text-[11px] text-neutral-500 truncate">{officeName}</div>}
+          {(
+            [
+              {
+                key: 'approvals',
+                label: 'Approvals',
+                icon: <CircleDashedCheck className="w-4 h-4" />,
+                meta: pendingApprovalsCount > 0 ? String(pendingApprovalsCount) : null,
+                run: () => onChangeTab('approvals'),
+              },
+              ...(onOpenOfficeSection
+                ? [
+                    { key: 'goal', label: 'Goal & milestones', icon: <Target className="w-4 h-4" />, meta: null, run: () => onOpenOfficeSection('goal') },
+                    { key: 'memory', label: 'Memory', icon: <Brain className="w-4 h-4" />, meta: null, run: () => onOpenOfficeSection('memory') },
+                    { key: 'documents', label: 'Documents', icon: <FileText className="w-4 h-4" />, meta: null, run: () => onOpenOfficeSection('documents') },
+                  ]
+                : []),
+            ] as { key: string; label: string; icon: React.ReactNode; meta: string | null; run: () => void }[]
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                item.run();
+              }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left text-neutral-300 hover:text-white hover:bg-white/[0.06]"
+            >
+              <span className="text-neutral-400">{item.icon}</span>
+              <span className="flex-1">{item.label}</span>
+              {item.meta && (
+                <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-accent-fg text-[10.5px] font-semibold flex items-center justify-center">
+                  {item.meta}
+                </span>
+              )}
+            </button>
+          ))}
+          {onToggleSidebarMobile && (
+            <>
+              <div className="md:hidden my-1 border-t border-white/10" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onToggleSidebarMobile();
+                }}
+                className="md:hidden w-full flex items-center gap-2.5 px-3.5 py-2 text-left text-neutral-300 hover:text-white hover:bg-white/[0.06]"
+              >
+                <span className="text-neutral-400">
+                  <PanelLeft className="w-4 h-4" />
+                </span>
+                <span className="flex-1">Rooms & offices</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Dynamic island dock */}
       <form
@@ -427,24 +522,30 @@ export const BottomDock: React.FC<BottomDockProps> = ({
           isMultiline ? '!rounded-[22px]' : ''
         }`}
       >
-        {/* Navigation lives in the sidebar only. On phones the sidebar is a
-            drawer, opened here; a dot says approvals are waiting. */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSidebarMobile?.();
-          }}
-          className="md:hidden relative w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
-          title={pendingApprovalsCount > 0 ? `Rooms & menu (${pendingApprovalsCount} approvals waiting)` : 'Rooms & menu'}
-          aria-label="Open rooms & menu"
-        >
-          <Menu className="w-4 h-4" />
-          {pendingApprovalsCount > 0 && (
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-accent shadow-glow-white" />
-          )}
-        </button>
-        <div className="md:hidden w-[1px] h-4 bg-white/15 mx-1.5 mb-2 flex-shrink-0" />
+        {/* Menu: approvals and the office's goal, memory and documents; on
+            phones also the rooms (the sidebar is a drawer there). */}
+        <div ref={menuRef} className="flex-shrink-0 self-end">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen((v) => !v);
+            }}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              menuOpen ? 'bg-white/15 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/10'
+            }`}
+            title={pendingApprovalsCount > 0 ? `Menu (${pendingApprovalsCount} approvals waiting)` : 'Menu'}
+            aria-label={pendingApprovalsCount > 0 ? `Menu, ${pendingApprovalsCount} approvals waiting` : 'Menu'}
+          >
+            <Menu className="w-4 h-4" />
+            {pendingApprovalsCount > 0 && (
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-accent shadow-glow-white" />
+            )}
+          </button>
+        </div>
+        <div className="w-[1px] h-4 bg-white/15 mx-1.5 mb-2 flex-shrink-0" />
 
         {/* Middle: Ask Bot input */}
         <div

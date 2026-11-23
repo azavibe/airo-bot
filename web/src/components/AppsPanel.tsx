@@ -241,7 +241,10 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
         )}
       </div>
 
-      {/* Footer, level with the dock and sidebar profile row */}
+      {/* Footer, level with the dock and sidebar profile row: the credit
+          balance. On this computer there are no credits, so no footer (it
+          only said "AI on this computer" and led nowhere useful). */}
+      {!localMode && (
       <button
         onClick={() => onNavigateTab('bots')}
         title="Open Bots for credit details"
@@ -251,12 +254,10 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
           <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
           <div>
             <div className="text-[12px] font-semibold text-white">
-              {localMode ? 'AI on this computer' : `${formatCredits(wallet?.credit_balance)} credits`}
+              {`${formatCredits(wallet?.credit_balance)} credits`}
             </div>
             <div className="text-[10px] text-neutral-400">
-              {localMode
-                ? 'Your own tools · no credits needed'
-                : wallet
+              {wallet
                 ? `${formatCredits(wallet.credits_burned_today)} of ${formatCredits(wallet.max_daily_credit_burn)} used today`
                 : 'Sign in to see your balance'}
             </div>
@@ -268,6 +269,7 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
             people on a paid plan do not see it here. Show a friendly name
             (e.g. "Pro") once the server can say whether a plan was bought. */}
       </button>
+      )}
     </div>
   );
 };

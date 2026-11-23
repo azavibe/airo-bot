@@ -168,6 +168,22 @@ export const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>(() => loadCachedTheme());
   // "System" appearance: repaint when the OS switches light/dark.
   useEffect(() => watchSystemMode(reapplyTheme), []);
+
+  // The left sidebar can shrink to a rail of icons (desktop widths).
+  const [sidebarRail, setSidebarRail] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('air.sidebarRail') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleSidebarRail = () =>
+    setSidebarRail((v) => {
+      try {
+        localStorage.setItem('air.sidebarRail', v ? '0' : '1');
+      } catch {}
+      return !v;
+    });
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(() => loadVoiceSettings());
   // The note stream outlives renders; read the latest voice settings from a ref.
   const voiceRef = React.useRef(voiceSettings);
@@ -1104,6 +1120,8 @@ export const App: React.FC = () => {
     .filter((a): a is Agent => !!a)
     .map((agent) => ({ agent, model: botModelLabel(agent, localEngine) }));
   const pendingApprovalsCount = approvals.filter((a) => a.status === 'pending').length;
+  // Full-width pages fill what the sidebar leaves.
+  const wideSpan = sidebarRail ? 'md:col-span-11' : 'md:col-span-9';
 
   const dockElement = (
     <BottomDock
@@ -1120,6 +1138,10 @@ export const App: React.FC = () => {
       onOpenVoiceSettings={() => {
         openSettings('voice');
       }}
+      officeName={isGuest ? undefined : activeOffice?.name}
+      onOpenOfficeSection={
+        isGuest || !activeOffice ? undefined : (tab) => setDialog({ kind: 'editOffice', office: activeOffice, tab })
+      }
     />
   );
 
@@ -1183,7 +1205,13 @@ export const App: React.FC = () => {
       {/* The desktop window has no system title bar; this is its own. */}
       {inDesktopApp && (
         <div className="-mx-3 md:-mx-4 mb-1">
-          <DesktopTitleBar />
+          <DesktopTitleBar
+            approvalsCount={isGuest ? 0 : pendingApprovalsCount}
+            approvalsActive={activeTab === 'approvals'}
+            onOpenApprovals={isGuest ? undefined : () => handleTabChange('approvals')}
+            sidebarCollapsed={sidebarRail}
+            onToggleSidebar={toggleSidebarRail}
+          />
         </div>
       )}
       {/* 1-Tap Mobile Push Notification Banner */}
@@ -1214,12 +1242,18 @@ export const App: React.FC = () => {
       )}
 
       {/* Main 3-Column Glass Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 h-full min-h-0 flex-1 overflow-hidden">
-        {/* Left Column: Sidebar Panel (col-span-3) */}
-        <div className="h-full min-h-0 hidden md:block md:col-span-3 overflow-hidden">
+      <div
+        className={`grid grid-cols-1 gap-3.5 h-full min-h-0 flex-1 overflow-hidden ${
+          sidebarRail ? 'md:grid-cols-[68px_repeat(11,minmax(0,1fr))]' : 'md:grid-cols-12'
+        }`}
+      >
+        {/* Left Column: Sidebar Panel (col-span-3, or a 68px rail of icons) */}
+        <div className={`h-full min-h-0 hidden md:block overflow-hidden ${sidebarRail ? 'md:col-span-1' : 'md:col-span-3'}`}>
           <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
             <Sidebar
               {...sidebarProps}
+              rail={sidebarRail}
+              onToggleRail={toggleSidebarRail}
               onSelectThread={(id) => setActiveThreadId(id)}
               onOpenOffice={openOffice}
               onNewOffice={() => openOfficeSetup({ mode: 'new' })}
@@ -1237,7 +1271,7 @@ export const App: React.FC = () => {
         {activeTab === 'chat' && (
           <>
             {/* Center Column: Chat Stream (col-span-5) */}
-            <div className="h-full min-h-0 col-span-12 md:col-span-5 overflow-hidden">
+            <div className={`h-full min-h-0 col-span-12 overflow-hidden ${sidebarRail ? 'md:col-span-6' : 'md:col-span-5'}`}>
               <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
                 <ChatStream
                   thread={activeThread}
@@ -1281,7 +1315,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* Right Column: Dash / Apps Panel (col-span-4) */}
-            <div className="h-full min-h-0 hidden md:block md:col-span-4 overflow-hidden">
+            <div className={`h-full min-h-0 hidden md:block overflow-hidden ${sidebarRail ? 'md:col-span-5' : 'md:col-span-4'}`}>
               <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
                 <AppsPanel
                   apps={apps.filter((a) => !a.archived_at)}
@@ -1306,7 +1340,7 @@ export const App: React.FC = () => {
 
         {/* Full-Width Tab Views (col-span-9 on desktop alongside sidebar) */}
         {activeTab === 'apps' && (
-          <div className="col-span-12 md:col-span-9 h-full min-h-0 overflow-hidden">
+          <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <AppsHub
                 apps={apps}
@@ -1335,7 +1369,7 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'approvals' && (
-          <div className="col-span-12 md:col-span-9 h-full min-h-0 overflow-hidden">
+          <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <ApprovalsView
                 approvals={approvals}
@@ -1348,7 +1382,7 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'bots' && (
-          <div className="col-span-12 md:col-span-9 h-full min-h-0 overflow-hidden">
+          <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <BotsView
                 agents={agents}
@@ -1372,7 +1406,7 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'contacts' && (
-          <div className="col-span-12 md:col-span-9 h-full min-h-0 overflow-hidden">
+          <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <ContactsView
                 office={activeOffice ?? offices.find((o) => o.primary) ?? null}
@@ -1383,7 +1417,7 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'workflows' && (
-          <div className="col-span-12 md:col-span-9 h-full min-h-0 overflow-hidden">
+          <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <WorkflowsView
                 procedures={procedures}
@@ -1401,7 +1435,7 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'settings' && (
-          <div className="col-span-12 md:col-span-9 h-full min-h-0 overflow-hidden">
+          <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <SettingsView
                 section={settingsSection}

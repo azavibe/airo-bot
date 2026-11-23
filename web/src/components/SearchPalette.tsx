@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import { Agent, Office, OfficeApp, Procedure, Thread } from '../types';
 import type { Tab } from '../App';
 import { botModelLabel, roomName } from '../utils/format';
+import { roomLabel } from './Sidebar';
 import { closeOnBackdrop } from '../utils/useEscape';
 
 // One search for everything in the sidebar and beyond: rooms, bots, apps,
@@ -37,7 +38,7 @@ interface Item {
   run: () => void;
 }
 
-const GROUP_ORDER = ['Rooms', 'Bots', 'Apps', 'Workflows', 'Offices', 'Go to'];
+const GROUP_ORDER = ['Chats', 'Bot settings', 'Apps', 'Workflows', 'Offices', 'Go to'];
 
 export const SearchPalette: React.FC<Props> = (props) => {
   const { open, onClose } = props;
@@ -60,16 +61,20 @@ export const SearchPalette: React.FC<Props> = (props) => {
       .forEach((t) =>
       out.push({
         key: `room-${t.id}`,
-        group: 'Rooms',
-        label: roomName(t.title),
-        detail: p.officeOf(t)?.name,
+        group: 'Chats',
+        // The name the sidebar shows (a bot's room is called after the bot);
+        // the room's own name still matches a search.
+        label: roomLabel(t, p.agents),
+        detail: [p.officeOf(t)?.name, roomLabel(t, p.agents) !== roomName(t.title) ? roomName(t.title) : null]
+          .filter(Boolean)
+          .join(' · '),
         run: () => p.onOpenRoom(t.id),
       })
     );
     p.agents.forEach((a) =>
       out.push({
         key: `bot-${a.id}`,
-        group: 'Bots',
+        group: 'Bot settings',
         label: a.name,
         detail: `${a.handle ? `@${a.handle} · ` : ''}${botModelLabel(a, p.localEngine)}`,
         run: () => p.onOpenBot(a),
@@ -108,7 +113,7 @@ export const SearchPalette: React.FC<Props> = (props) => {
     const q = query.trim().toLowerCase();
     const matched = q
       ? items.filter((i) => `${i.label} ${i.detail ?? ''}`.toLowerCase().includes(q))
-      : items.filter((i) => i.group === 'Rooms' || i.group === 'Go to');
+      : items.filter((i) => i.group === 'Chats' || i.group === 'Go to');
     // Grouped in a fixed order, a few per group, so nothing floods the list.
     return GROUP_ORDER.flatMap((g) => matched.filter((i) => i.group === g).slice(0, q ? 8 : 12));
   }, [items, query]);
