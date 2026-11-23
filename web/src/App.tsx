@@ -25,7 +25,7 @@ import { roomsOf, roomLabel } from './components/Sidebar';
 import type { OfficeSetup } from './components/OnboardModal';
 import { botModelLabel, roomName } from './utils/format';
 import { Bell, X, Check } from 'lucide-react';
-import { Theme, applyTheme, cacheTheme, loadCachedTheme, normalizeTheme, DEFAULT_THEME } from './utils/theme';
+import { Theme, applyTheme, cacheTheme, loadCachedTheme, normalizeTheme, reapplyTheme, watchSystemMode, DEFAULT_THEME } from './utils/theme';
 import { VoiceSettings, loadVoiceSettings, speak } from './utils/voice';
 import {
   Thread,
@@ -166,10 +166,13 @@ export const App: React.FC = () => {
   // User Profile
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [theme, setTheme] = useState<Theme>(() => loadCachedTheme());
+  // "System" appearance: repaint when the OS switches light/dark.
+  useEffect(() => watchSystemMode(reapplyTheme), []);
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>(() => loadVoiceSettings());
   // The note stream outlives renders; read the latest voice settings from a ref.
   const voiceRef = React.useRef(voiceSettings);
   voiceRef.current = voiceSettings;
+  const speakWhereRef = React.useRef('');
 
   // Data State
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -530,7 +533,10 @@ export const App: React.FC = () => {
         // Read a bot's reply aloud when the person asked for that.
         const v = voiceRef.current;
         if (v.speakReplies && v.tts !== 'off' && incoming.author_kind !== 'human') {
-          speak(incoming.body, v).catch(() => {});
+          // One voice at a time; the bar above the message box says who.
+          speak(incoming.body, v, { who: incoming.author_name || 'A bot', where: speakWhereRef.current }).catch((err) =>
+            showError(err instanceof Error ? err.message : 'Could not read the reply aloud.')
+          );
         }
         setNotes((prev) => {
           // Replace an optimistic local copy of our own message, skip duplicates.
@@ -1078,6 +1084,8 @@ export const App: React.FC = () => {
 
   const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0] || null;
   const activeOffice = activeThread ? officeOfThread(activeThread.id) : undefined;
+  // Where a reply read aloud comes from, for the "who is speaking" bar.
+  speakWhereRef.current = activeOffice?.name ?? '';
   const appsOfficeId = (activeOffice ?? offices.find((o) => o.primary))?.id ?? null;
   useEffect(() => {
     if (appsOfficeRef.current === appsOfficeId) return;

@@ -7,6 +7,21 @@ app and the desktop app share one version number. A release is tagged
 
 ## Unreleased
 
+### Added
+- **System appearance**: Settings → Appearance → Mode now has Dark, Light
+  and System; System follows your computer or phone and switches live.
+- While a reply is read aloud, a bar above the message box shows which bot
+  is speaking and where, with Stop. Only one voice plays at a time;
+  messages wait their turn.
+
+### Fixed
+- Dictation no longer stops at the first pause: click the mic to start and
+  click it again (or send) to stop.
+- The app no longer freezes while a local voice model loads or works:
+  Kokoro, Whisper, Moonshine and Parakeet now run in the background.
+- The voice Test button works again (it failed with "The play request was
+  interrupted by a call to pause()").
+
 ## 0.7.0 — 2026-11-22
 
 ### Added

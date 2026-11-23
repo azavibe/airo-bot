@@ -9,6 +9,10 @@ export type BackgroundStyle = 'solid' | 'glow';
 
 export interface Theme {
   mode: ThemeMode;
+  /** "System": follow the operating system's light or dark setting. The
+   *  theme's own colours are used in its own mode; in the other mode the
+   *  neutrals come from that mode's default preset, keeping the accent. */
+  followSystem: boolean;
   /** Primary buttons, active states, focus and glow. */
   accent: string;
   /** Page behind the panels. */
@@ -36,6 +40,7 @@ export interface ThemePreset {
 
 const base: Theme = {
   mode: 'dark',
+  followSystem: false,
   accent: '#ffffff',
   background: '#000000',
   backgroundStyle: 'solid',
@@ -72,12 +77,12 @@ export const PRESETS: ThemePreset[] = [
   {
     id: 'paper',
     name: 'Paper',
-    theme: { mode: 'light', accent: '#18181b', background: '#ecebe7', backgroundStyle: 'solid', surface: '#fbfaf8', border: '#18181b', text: '#18181b', userBubble: '#e4e2dc', radius: 20, blur: 0 },
+    theme: { mode: 'light', followSystem: false, accent: '#18181b', background: '#ecebe7', backgroundStyle: 'solid', surface: '#fbfaf8', border: '#18181b', text: '#18181b', userBubble: '#e4e2dc', radius: 20, blur: 0 },
   },
   {
     id: 'daylight',
     name: 'Daylight',
-    theme: { mode: 'light', accent: '#2563eb', background: '#dfe7f5', backgroundStyle: 'glow', surface: '#ffffff', border: '#1e3a8a', text: '#0f172a', userBubble: '#dbe7ff', radius: 24, blur: 20 },
+    theme: { mode: 'light', followSystem: false, accent: '#2563eb', background: '#dfe7f5', backgroundStyle: 'glow', surface: '#ffffff', border: '#1e3a8a', text: '#0f172a', userBubble: '#dbe7ff', radius: 24, blur: 20 },
   },
 ];
 
@@ -97,6 +102,7 @@ export function normalizeTheme(value: unknown): Theme {
     typeof v[key] === 'number' && Number.isFinite(v[key]) ? clamp(Math.round(v[key] as number), lo, hi) : base[key];
   return {
     mode: v.mode === 'light' ? 'light' : 'dark',
+    followSystem: v.followSystem === true,
     accent: color('accent'),
     background: color('background'),
     backgroundStyle: v.backgroundStyle === 'glow' ? 'glow' : 'solid',
@@ -174,7 +180,47 @@ export function themeVariables(theme: Theme): Record<string, string> {
   return vars;
 }
 
-export function applyTheme(theme: Theme, root: HTMLElement = document.documentElement): void {
+/** The operating system's preference, or null where it can't be read. */
+export function systemMode(): ThemeMode | null {
+  try {
+    if (typeof window === 'undefined' || !window.matchMedia) return null;
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  } catch {
+    return null;
+  }
+}
+
+/** A theme in another mode: that mode's neutrals, this theme's accent,
+ *  corners and blur. Used by the Mode switch and by "System". */
+export function inMode(theme: Theme, mode: ThemeMode): Theme {
+  if (mode === theme.mode) return theme;
+  const preset = PRESETS.find((p) => p.theme.mode === mode)!.theme;
+  return normalizeTheme({
+    ...preset,
+    followSystem: theme.followSystem,
+    accent: mode === 'light' && theme.accent === '#ffffff' ? preset.accent : theme.accent,
+    radius: theme.radius,
+    blur: theme.blur,
+  });
+}
+
+/** What is actually painted: a "System" theme follows the OS. */
+export function resolveTheme(theme: Theme, os: ThemeMode | null = systemMode()): Theme {
+  return theme.followSystem && os ? inMode(theme, os) : theme;
+}
+
+// What was last painted (a saved theme or a live preview), so an OS
+// light/dark switch repaints that, not something older.
+let lastApplied: Theme | null = null;
+
+/** Paints the last theme again, e.g. after the OS switched light/dark. */
+export function reapplyTheme(): void {
+  if (lastApplied) applyTheme(lastApplied);
+}
+
+export function applyTheme(input: Theme, root: HTMLElement = document.documentElement): void {
+  if (root === document.documentElement) lastApplied = input;
+  const theme = resolveTheme(input);
   for (const [name, value] of Object.entries(themeVariables(theme))) {
     root.style.setProperty(name, value);
   }
@@ -196,5 +242,16 @@ export function cacheTheme(theme: Theme): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(theme));
   } catch {
     // Private windows and blocked storage just skip the instant-paint cache.
+  }
+}
+
+/** Calls `onChange` whenever the OS switches between light and dark. */
+export function watchSystemMode(onChange: () => void): () => void {
+  try {
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  } catch {
+    return () => {};
   }
 }

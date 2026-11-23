@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Moon, Sun, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Check, Moon, Sun, Monitor, RotateCcw, AlertTriangle } from 'lucide-react';
 import {
   Theme,
   ThemeMode,
@@ -7,6 +7,7 @@ import {
   DEFAULT_THEME,
   applyTheme,
   cacheTheme,
+  inMode,
   normalizeTheme,
   readableOn,
   themesEqual,
@@ -108,20 +109,17 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
     setDraft((d) => normalizeTheme({ ...d, [key]: value }));
   };
 
-  const switchMode = (mode: ThemeMode) => {
-    if (mode === draft.mode) return;
-    // A mode switch swaps the neutrals for that mode and keeps the accent.
-    const preset = PRESETS.find((p) => p.theme.mode === mode)!.theme;
+  // Dark or Light: swap the neutrals for that mode, keep the accent.
+  // System: keep these colours and follow the OS's light or dark setting.
+  const switchMode = (mode: ThemeMode | 'system') => {
     setStatus(null);
-    setDraft(
-      normalizeTheme({
-        ...preset,
-        accent: mode === 'light' && draft.accent === '#ffffff' ? preset.accent : draft.accent,
-        radius: draft.radius,
-        blur: draft.blur,
-      })
-    );
+    if (mode === 'system') {
+      setDraft((d) => ({ ...d, followSystem: true }));
+      return;
+    }
+    setDraft((d) => ({ ...inMode(d, mode), followSystem: false }));
   };
+  const modeChoice: ThemeMode | 'system' = draft.followSystem ? 'system' : draft.mode;
 
   const save = async () => {
     setSaving(true);
@@ -162,13 +160,13 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
         <h3 className="text-xs font-semibold text-white">Presets</h3>
         <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
           {PRESETS.map((p) => {
-            const active = themesEqual(draft, p.theme);
+            const active = themesEqual({ ...draft, followSystem: false }, p.theme);
             return (
               <button
                 key={p.id}
                 onClick={() => {
                   setStatus(null);
-                  setDraft(p.theme);
+                  setDraft({ ...p.theme, followSystem: draft.followSystem });
                 }}
                 aria-pressed={active}
                 title={p.name}
@@ -197,17 +195,18 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
         <div className="space-y-1.5">
           <h3 className="text-xs font-semibold text-white">Mode</h3>
           <div className="flex rounded-xl bg-white/5 border border-white/10 p-0.5">
-            {(['dark', 'light'] as ThemeMode[]).map((m) => (
+            {(['dark', 'light', 'system'] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => switchMode(m)}
-                aria-pressed={draft.mode === m}
+                aria-pressed={modeChoice === m}
+                title={m === 'system' ? 'Follow your computer or phone: light by day, dark at night' : undefined}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs transition-colors ${
-                  draft.mode === m ? 'bg-white/15 text-white' : 'text-neutral-400 hover:text-white'
+                  modeChoice === m ? 'bg-white/15 text-white' : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                {m === 'dark' ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
-                {m === 'dark' ? 'Dark' : 'Light'}
+                {m === 'dark' ? <Moon className="w-3.5 h-3.5" /> : m === 'light' ? <Sun className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}
+                {m === 'dark' ? 'Dark' : m === 'light' ? 'Light' : 'System'}
               </button>
             ))}
           </div>
