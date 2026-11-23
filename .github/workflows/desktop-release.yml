@@ -3,14 +3,13 @@
 #
 # Publish a GitHub Release named v<version> (or push that tag) and this
 # builds the installers for that version and attaches them to the release.
-# You can also start it from the Actions tab ("Run workflow").
+# The version comes from the release name: v0.7.1 builds 0.7.1, stamped
+# into the app's files on the runner, so no version bump is needed first.
+# You can also start it from the Actions tab ("Run workflow"), with the
+# release to build (blank: the version in the app's files).
 #
 # A published release is built from the branch it targets (normally main),
-# not from whatever commit an old tag with the same name points at, so a tag
-# left over from an earlier attempt cannot make it build the wrong code. The
-# version in the app's files (Cargo.toml, src-tauri/Cargo.toml,
-# src-tauri/tauri.conf.json, web/package.json) must equal the release name
-# minus the "v"; the first step checks that and says what to bump.
+# not from whatever commit an old tag with the same name points at.
 #
 # Publishing on a brand new tag fires both the tag push and the release
 # event. The runs share a group, so the second waits for the first and then
@@ -26,6 +25,10 @@ name: Desktop Release
 on:
   workflow_dispatch:
     inputs:
+      release:
+        description: "Release to build, e.g. v0.7.1 (blank: the version in the app's files)"
+        required: false
+        default: ""
       app_url:
         description: "Airobot web app the desktop window opens (https)"
         required: false
@@ -76,50 +79,71 @@ jobs:
           # A published release builds what it targets (main), not an old tag.
           ref: ${{ github.event_name == 'release' && github.event.release.target_commitish || '' }}
 
-      # The installers go to the release named v<version>, taken from the
-      # app's own version files. Make sure that is the release being built.
-      - name: Check the version matches the release
+      # The release's name is the version: v0.7.1 builds 0.7.1. It is
+      # stamped into the app's files here (on the runner only), so the
+      # installers carry it and go to that release, whatever the files say.
+      - name: Set the version from the release
         shell: bash
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_RELEASE: ${{ github.event.inputs.release }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -eu
-          from_file() { sed -n "$2" "$1" | head -1; }
-          app=$(from_file src-tauri/tauri.conf.json 's/^ *"version": *"\([^"]*\)".*/\1/p')
-          tauri_crate=$(from_file src-tauri/Cargo.toml 's/^version *= *"\([^"]*\)".*/\1/p')
-          server=$(from_file Cargo.toml 's/^version *= *"\([^"]*\)".*/\1/p')
-          web=$(from_file web/package.json 's/^ *"version": *"\([^"]*\)".*/\1/p')
-          echo "tauri.conf.json=$app src-tauri/Cargo.toml=$tauri_crate Cargo.toml=$server web/package.json=$web"
-          if [ -z "$app" ] || [ "$app" != "$tauri_crate" ] || [ "$app" != "$server" ] || [ "$app" != "$web" ]; then
-            echo "::error::The version files disagree. Make them all the same version, merge that, then release."
-            exit 1
-          fi
+          files=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' src-tauri/tauri.conf.json | head -1)
           case "$GITHUB_EVENT_NAME" in
             release) want="$RELEASE_TAG" ;;
             push) want="$GITHUB_REF_NAME" ;;
-            *) want="v$app" ;;
+            *) want="${INPUT_RELEASE:-v$files}" ;;
           esac
-          if [ "$want" != "v$app" ]; then
-            echo "::error::Release $want would be built from files that say version $app. Bump the version to ${want#v} (in the four files above), merge it, then publish the release again."
+          version="${want#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::\"$want\" is not a version. Name the release like v1.2.3."
             exit 1
           fi
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]; then
-            # By hand from a side branch: never add to a release whose tag is
-            # on another commit.
+            # By hand from a side branch: never add to a release whose tag
+            # is on another commit.
             git fetch --quiet --tags origin
-            if tagged=$(git rev-parse --verify --quiet "refs/tags/v$app^{commit}"); then
+            if tagged=$(git rev-parse --verify --quiet "refs/tags/v$version^{commit}"); then
               if [ "$tagged" != "$(git rev-parse HEAD)" ]; then
-                echo "::error::Release v$app already exists on another commit ($tagged). Run this on $DEFAULT_BRANCH, or bump the version."
+                echo "::error::Release v$version already exists on another commit ($tagged). Run this on $DEFAULT_BRANCH."
                 exit 1
               fi
             fi
           fi
-          git fetch --quiet --tags origin 2>/dev/null || true
-          if tagged=$(git rev-parse --verify --quiet "refs/tags/v$app^{commit}") && [ "$tagged" != "$(git rev-parse HEAD)" ]; then
-            echo "::warning::Tag v$app points at ${tagged:0:7}, but the installers are built from $(git rev-parse --short HEAD) (what the release targets). The version is right; only the tag is older."
+          if [ "$version" != "$files" ]; then
+            echo "::notice::The app's files say $files; building $version, as the release is named."
           fi
-          echo "Building installers for v$app and attaching them to release v$app"
+          node -e '
+            const fs = require("fs");
+            const v = process.argv[1];
+            const edit = (file, re, label) => {
+              const s = fs.readFileSync(file, "utf8");
+              const t = s.replace(re, (_, a, b) => a + v + b);
+              if (t === s && !re.test(s)) throw new Error("no " + label + " version in " + file);
+              fs.writeFileSync(file, t);
+            };
+            const json = /("version"\s*:\s*")[^"]*(")/;
+            const toml = /^(version\s*=\s*")[^"]*(")/m;
+            edit("src-tauri/tauri.conf.json", json, "app");
+            edit("web/package.json", json, "web");
+            edit("src-tauri/Cargo.toml", toml, "desktop");
+            edit("Cargo.toml", toml, "server");
+            const lock = (name) => new RegExp("(name = \"" + name + "\"\\r?\\nversion = \")[^\"]*(\")");
+            edit("Cargo.lock", lock("airobot"), "server");
+            edit("src-tauri/Cargo.lock", lock("airobot-desktop"), "desktop");
+            const pl = "web/package-lock.json";
+            const j = JSON.parse(fs.readFileSync(pl, "utf8"));
+            j.version = v;
+            if (j.packages && j.packages[""]) j.packages[""].version = v;
+            fs.writeFileSync(pl, JSON.stringify(j, null, 2) + "\n");
+          ' "$version"
+          echo "Building installers for v$version and attaching them to release v$version"
+          tagged=$(git rev-parse --verify --quiet "refs/tags/v$version^{commit}" || true)
+          if [ -n "$tagged" ] && [ "$tagged" != "$(git rev-parse HEAD)" ]; then
+            echo "::warning::Tag v$version points at ${tagged:0:7}; the installers are built from $(git rev-parse --short HEAD), what the release targets."
+          fi
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
