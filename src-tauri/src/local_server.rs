@@ -224,6 +224,8 @@ pub async fn start(paths: &LocalPaths, local_ai: LocalAi) -> Result<LocalServer,
         connectors: desktop_connectors(),
         // The person's own AI tools do the searching, so the desktop allows more.
         web: airobot::web::WebLimits::from_env(true),
+        // "Check for updates" in the app's Settings and title bar.
+        update_feed: airobot::config::update_feed_from_env(),
     };
     let (note_sender, _) = tokio::sync::broadcast::channel(256);
     let state = airobot::state::AppState {

@@ -70,6 +70,24 @@ pub struct Config {
     /// Bots' web access and its daily allowance (`WEB_ACCESS`,
     /// `WEB_RUNS_PER_DAY`).
     pub web: crate::web::WebLimits,
+    /// Where "Check for updates" reads the newest release (GitHub by
+    /// default, `UPDATE_FEED_URL`); `None` turns checks off
+    /// (`UPDATE_CHECK=off`).
+    pub update_feed: Option<String>,
+}
+
+/// The update feed from the environment (see `Config::update_feed`).
+pub fn update_feed_from_env() -> Option<String> {
+    if std::env::var("UPDATE_CHECK").is_ok_and(|v| v.eq_ignore_ascii_case("off")) {
+        return None;
+    }
+    Some(
+        std::env::var("UPDATE_FEED_URL")
+            .ok()
+            .map(|u| u.trim().to_string())
+            .filter(|u| u.starts_with("https://") || u.starts_with("http://"))
+            .unwrap_or_else(|| crate::handlers::updates::DEFAULT_FEED.to_string()),
+    )
 }
 
 impl Config {
@@ -160,6 +178,7 @@ impl Config {
             ),
             connectors: crate::connectors::ConnectorApps::from_env(),
             web: crate::web::WebLimits::from_env(false),
+            update_feed: update_feed_from_env(),
         }
     }
 }

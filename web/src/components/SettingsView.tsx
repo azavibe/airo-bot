@@ -6,6 +6,68 @@ import { VoicePanel } from './VoicePanel';
 import { VoiceSettings } from '../utils/voice';
 import { ConnectionsView } from './ConnectionsView';
 import { AdminView } from './AdminView';
+import { checkForUpdates, openUpdate, useUpdates } from '../state/updates';
+import { RefreshCw, Download, CheckCircle2 } from 'lucide-react';
+
+/** The app's version and "Check for updates" (desktop app). */
+const UpdatesCard: React.FC = () => {
+  const { info, checking, error, checkedAt } = useUpdates();
+  useEffect(() => {
+    if (!info && !checking) void checkForUpdates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <section className="max-w-2xl glass-card p-4 space-y-3" aria-label="Updates">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-white">Updates</h3>
+          <p className="text-xs text-neutral-400">
+            Airobot {info?.current ?? '…'}
+            {info?.available && info.latest
+              ? ` · version ${info.latest} is out`
+              : info && !info.disabled && !error
+                ? ' · up to date'
+                : ''}
+            {checkedAt ? ` · checked ${new Date(checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {info?.available && (
+            <button
+              onClick={() => void openUpdate(info)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-400 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" /> Update to {info.latest}
+            </button>
+          )}
+          {!info?.disabled && (
+            <button
+              onClick={() => void checkForUpdates(true)}
+              disabled={checking}
+              className="manage-btn border border-white/10 disabled:opacity-50"
+            >
+              {checking ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {checking ? 'Checking…' : 'Check for updates'}
+            </button>
+          )}
+        </div>
+      </div>
+      {info?.available ? (
+        <p className="text-[11px] text-neutral-400">
+          {info.download_url
+            ? 'Downloads the installer for this computer. Open it to update; your offices and data stay as they are.'
+            : 'Opens the release page; pick the installer for this computer.'}
+        </p>
+      ) : info && !info.disabled && !error ? (
+        <p className="text-[11px] text-neutral-500 flex items-center gap-1.5">
+          <CheckCircle2 className="w-3 h-3 text-emerald-400" /> The app checks by itself at start and every 6 hours.
+        </p>
+      ) : null}
+      {info?.disabled && <p className="text-[11px] text-neutral-500">Update checks are turned off on this server.</p>}
+      {error && <p className="text-[11px] text-amber-300">{error}</p>}
+    </section>
+  );
+};
 
 export type SettingsSection = 'account' | 'appearance' | 'voice' | 'connections' | 'admin';
 
@@ -214,7 +276,12 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
       </div>
 
       <div className={`flex-1 min-h-0 ${shown === 'admin' ? '' : 'overflow-y-auto p-6'}`}>
-        {shown === 'account' && <AccountPanel userProfile={userProfile} onRefreshProfile={props.onRefreshProfile} />}
+        {shown === 'account' && (
+          <div className="space-y-5">
+            {(userProfile?.local_mode || !!(window as any).__TAURI__) && <UpdatesCard />}
+            <AccountPanel userProfile={userProfile} onRefreshProfile={props.onRefreshProfile} />
+          </div>
+        )}
         {shown === 'appearance' && (
           <div className="max-w-2xl">
             <AppearancePanel

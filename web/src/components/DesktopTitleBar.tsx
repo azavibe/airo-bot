@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Minus, Square, Copy, X, CircleDashedCheck, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Minus, Square, Copy, X, CircleDashedCheck, PanelLeftClose, PanelLeftOpen, Download } from 'lucide-react';
+import { openUpdate, useUpdates } from '../state/updates';
 
 // The desktop app's window has no system title bar (src-tauri/src/lib.rs),
 // so the app draws its own, in its own colours: a drag area (double-click
@@ -45,6 +46,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
   onToggleSidebar,
 }) => {
   const [win] = useState(currentWindow);
+  const { info: update } = useUpdates();
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -91,6 +93,16 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         )}
       </div>
       <div className="flex items-stretch">
+        {update?.available && update.latest && (
+          <button
+            type="button"
+            onClick={() => void openUpdate(update)}
+            className="my-1.5 mr-1 px-3 rounded-full flex items-center gap-1.5 bg-emerald-500 text-white text-[12px] font-semibold hover:bg-emerald-400 transition-colors"
+            title={`Airobot ${update.latest} is out (you have ${update.current}). Downloads the installer.`}
+          >
+            <Download className="w-3.5 h-3.5" /> Update to {update.latest}
+          </button>
+        )}
         {onOpenApprovals && (
           <button
             type="button"

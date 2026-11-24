@@ -6,6 +6,7 @@ pub mod device;
 pub mod offices;
 pub mod procedures;
 pub mod threads;
+pub mod updates;
 pub mod web;
 pub mod workflows;
 

@@ -457,7 +457,13 @@ async fn a_fresh_install_can_chat_and_each_bot_picks_its_ai(pool: PgPool) {
         .expect("the Architect answers");
     assert_eq!(body, "Answered on this computer.");
     let calls = seen.lock().unwrap();
-    let (system, _, engine, _) = calls.last().expect("asked");
+    // The Architect's own call: other bots' kickoff tasks may finish after
+    // it, so "the last call" isn't necessarily this one.
+    let (system, _, engine, _) = calls
+        .iter()
+        .rev()
+        .find(|(system, ..)| system.contains("You are the Architect"))
+        .expect("asked");
     assert!(system.contains("Architect"), "{system}");
     assert_eq!(engine, &None, "the Architect still uses the default");
 }
