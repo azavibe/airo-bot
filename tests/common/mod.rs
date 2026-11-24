@@ -32,6 +32,7 @@ pub fn state(pool: PgPool) -> AppState {
             web_dist: "web/dist".into(),
             connectors: Default::default(),
             web: Default::default(),
+            update_feed: None,
         }),
         mailer: Arc::new(Mailer::new(None)),
         push: Arc::new(PushSender::new(None).expect("disabled push sender")),
@@ -59,6 +60,7 @@ pub fn state_with_dev_login(pool: PgPool) -> AppState {
         web_dist: "web/dist".into(),
         connectors: Default::default(),
         web: Default::default(),
+        update_feed: None,
     });
     s
 }

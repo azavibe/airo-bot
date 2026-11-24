@@ -7,6 +7,12 @@ app and the desktop app share one version number. A release is tagged
 
 ## Unreleased
 
+### Added
+- **Check for updates** in the desktop app: it checks at start and every 6
+  hours, and when a new version is out a green "Update to x.y.z" button
+  appears in the title bar and in Settings → Account. It downloads the
+  installer for your computer.
+
 ## 0.7.1 — 2026-11-23
 
 ### Added

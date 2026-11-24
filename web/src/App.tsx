@@ -25,6 +25,7 @@ import { roomsOf, roomLabel } from './components/Sidebar';
 import type { OfficeSetup } from './components/OnboardModal';
 import { botModelLabel, roomName } from './utils/format';
 import { Bell, X, Check } from 'lucide-react';
+import { startUpdateChecks } from './state/updates';
 import { Theme, applyTheme, cacheTheme, loadCachedTheme, normalizeTheme, reapplyTheme, watchSystemMode, DEFAULT_THEME } from './utils/theme';
 import { VoiceSettings, loadVoiceSettings, speak } from './utils/voice';
 import {
@@ -170,6 +171,13 @@ export const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>(() => loadCachedTheme());
   // "System" appearance: repaint when the OS switches light/dark.
   useEffect(() => watchSystemMode(reapplyTheme), []);
+
+  // Check for updates (desktop app, signed in): at start and every 6 hours.
+  const signedIn = !!userProfile?.authenticated;
+  useEffect(() => {
+    if (!inDesktopApp || !signedIn) return;
+    return startUpdateChecks();
+  }, [inDesktopApp, signedIn]);
 
   // The left sidebar can shrink to a rail of icons (desktop widths).
   const [sidebarRail, setSidebarRail] = useState<boolean>(() => {
