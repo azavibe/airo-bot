@@ -251,7 +251,7 @@ export interface OfficeDocument {
   id: string;
   workspace_id: string;
   title: string;
-  kind: 'file' | 'text' | 'page';
+  kind: 'file' | 'text' | 'page' | 'drive';
   filename?: string | null;
   source_url?: string | null;
   chars: number;

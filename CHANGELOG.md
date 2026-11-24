@@ -17,6 +17,9 @@ app and the desktop app share one version number. A release is tagged
   and you're told once, by email and in the office chat.
 - Mark a document outdated, from a bot's answer that cites it or in
   Documents: bots stop answering from it until you mark it current.
+- Link a Google Drive folder in Documents: its Docs, Sheets, Slides, PDFs,
+  Word and text files become documents and are kept in step every day.
+  Connect Google with the new "Drive (read only)" option first.
 
 ## 0.7.1 — 2026-11-23
 

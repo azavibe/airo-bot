@@ -343,6 +343,13 @@ pub const GOOGLE_PRODUCTS: &[(&str, &str, &[&str])] = &[
         "Sheets",
         &["https://www.googleapis.com/auth/spreadsheets"],
     ),
+    // Office documents from a Drive folder (read only). Google treats this
+    // scope as restricted: an app used by the public needs Google's review.
+    (
+        "drive",
+        "Drive (read only)",
+        &["https://www.googleapis.com/auth/drive.readonly"],
+    ),
 ];
 
 const SHOPIFY_SCOPES: &str = "read_orders,read_products";
@@ -551,6 +558,200 @@ async fn send_json(
         429 => format!("{} is limiting requests. Try again soon.", provider.name()),
         code if code >= 500 => format!("{} had a problem ({code}). Try again.", provider.name()),
         code => format!("{} refused the request ({code}).", provider.name()),
+    }))
+}
+
+// ---------- Google Drive (office documents) ----------
+
+/// A file in a Drive folder.
+#[derive(Debug, Clone)]
+pub struct DriveFile {
+    pub id: String,
+    pub name: String,
+    pub mime_type: String,
+    /// Drive's modifiedTime; unchanged means the file need not be read again.
+    pub modified: String,
+    pub link: Option<String>,
+    pub size: Option<u64>,
+}
+
+/// What a Drive file reads as.
+pub enum DriveContent {
+    /// Google Docs, Sheets and Slides, exported as text.
+    Text(String),
+    /// Anything else, downloaded (PDF, Word, text, Markdown, CSV, HTML).
+    Bytes(Vec<u8>),
+}
+
+const FOLDER_MIME: &str = "application/vnd.google-apps.folder";
+
+/// The folder id in a Drive folder link (`.../folders/<id>`, `?id=<id>`)
+/// or a bare id.
+pub fn drive_folder_id(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    let id = if let Some(rest) = raw.split("/folders/").nth(1) {
+        rest.split(['/', '?', '#']).next().unwrap_or_default()
+    } else if let Some(rest) = raw.split("id=").nth(1) {
+        rest.split(['&', '#']).next().unwrap_or_default()
+    } else {
+        raw
+    };
+    let ok = (10..=200).contains(&id.len())
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    ok.then(|| id.to_string())
+}
+
+fn drive_url(apps: &ConnectorApps, segments: &[&str]) -> Result<reqwest::Url, ProviderError> {
+    let mut url = reqwest::Url::parse(&apps.url("www.googleapis.com", "/drive/v3"))
+        .map_err(|_| ProviderError::new("Bad Google address."))?;
+    url.path_segments_mut()
+        .map_err(|_| ProviderError::new("Bad Google address."))?
+        .extend(segments);
+    Ok(url)
+}
+
+/// A folder's name; an error when the id isn't a folder this account sees.
+pub async fn drive_folder_name(
+    apps: &ConnectorApps,
+    token: &str,
+    folder_id: &str,
+) -> Result<String, ProviderError> {
+    let mut url = drive_url(apps, &["files", folder_id])?;
+    url.query_pairs_mut()
+        .append_pair("fields", "id,name,mimeType")
+        .append_pair("supportsAllDrives", "true");
+    let meta = send_json(Provider::Google, client().get(url).bearer_auth(token)).await?;
+    if meta["mimeType"].as_str() != Some(FOLDER_MIME) {
+        return Err(ProviderError::bad_input(
+            "That link is not a Google Drive folder.",
+        ));
+    }
+    Ok(meta["name"]
+        .as_str()
+        .unwrap_or("Drive folder")
+        .chars()
+        .take(200)
+        .collect())
+}
+
+/// The files directly in a folder (not subfolders), at most `max`.
+pub async fn drive_list(
+    apps: &ConnectorApps,
+    token: &str,
+    folder_id: &str,
+    max: usize,
+) -> Result<Vec<DriveFile>, ProviderError> {
+    let mut files = Vec::new();
+    let mut page: Option<String> = None;
+    for _ in 0..5 {
+        let mut url = drive_url(apps, &["files"])?;
+        url.query_pairs_mut()
+            .append_pair(
+                "q",
+                &format!("'{folder_id}' in parents and trashed = false"),
+            )
+            .append_pair(
+                "fields",
+                "nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,size)",
+            )
+            .append_pair("pageSize", "100")
+            .append_pair("supportsAllDrives", "true")
+            .append_pair("includeItemsFromAllDrives", "true");
+        if let Some(p) = &page {
+            url.query_pairs_mut().append_pair("pageToken", p);
+        }
+        let list = send_json(Provider::Google, client().get(url).bearer_auth(token)).await?;
+        for f in list["files"].as_array().into_iter().flatten() {
+            let (Some(id), Some(name), Some(mime)) =
+                (f["id"].as_str(), f["name"].as_str(), f["mimeType"].as_str())
+            else {
+                continue;
+            };
+            if mime == FOLDER_MIME {
+                continue;
+            }
+            files.push(DriveFile {
+                id: id.to_string(),
+                name: name.to_string(),
+                mime_type: mime.to_string(),
+                modified: f["modifiedTime"].as_str().unwrap_or_default().to_string(),
+                link: f["webViewLink"].as_str().map(str::to_string),
+                size: f["size"].as_str().and_then(|s| s.parse().ok()),
+            });
+            if files.len() >= max {
+                return Ok(files);
+            }
+        }
+        page = list["nextPageToken"].as_str().map(str::to_string);
+        if page.is_none() {
+            break;
+        }
+    }
+    Ok(files)
+}
+
+/// A file's content: Google's own formats exported as text, others
+/// downloaded. `None` for kinds that hold no readable text (images, video,
+/// forms) and files over `max_bytes`.
+pub async fn drive_content(
+    apps: &ConnectorApps,
+    token: &str,
+    file: &DriveFile,
+    max_bytes: usize,
+) -> Result<Option<DriveContent>, ProviderError> {
+    let export = match file.mime_type.as_str() {
+        "application/vnd.google-apps.document" | "application/vnd.google-apps.presentation" => {
+            Some("text/plain")
+        }
+        "application/vnd.google-apps.spreadsheet" => Some("text/csv"),
+        m if m.starts_with("application/vnd.google-apps.") => return Ok(None),
+        _ => None,
+    };
+    if export.is_none() && file.size.is_some_and(|s| s as usize > max_bytes) {
+        return Ok(None);
+    }
+    let mut url = match export {
+        Some(_) => drive_url(apps, &["files", &file.id, "export"])?,
+        None => drive_url(apps, &["files", &file.id])?,
+    };
+    match export {
+        Some(mime) => {
+            url.query_pairs_mut().append_pair("mimeType", mime);
+        }
+        None => {
+            url.query_pairs_mut()
+                .append_pair("alt", "media")
+                .append_pair("supportsAllDrives", "true");
+        }
+    }
+    let response = client()
+        .get(url)
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|_| ProviderError::new("Could not reach Google Drive. Try again."))?;
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(ProviderError::reconnect(Provider::Google));
+    }
+    if !response.status().is_success() {
+        return Err(ProviderError::new(format!(
+            "Google Drive refused to send “{}” ({}).",
+            truncate(&file.name, 80),
+            response.status().as_u16()
+        )));
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|_| ProviderError::new("Google Drive stopped sending a file. Try again."))?;
+    if bytes.len() > max_bytes {
+        return Ok(None);
+    }
+    Ok(Some(match export {
+        Some(_) => DriveContent::Text(String::from_utf8_lossy(&bytes).into_owned()),
+        None => DriveContent::Bytes(bytes.to_vec()),
     }))
 }
 
@@ -1711,6 +1912,30 @@ mod tests {
         for ip in ["8.8.8.8", "2606:4700::1111"] {
             assert!(is_public_ip(ip.parse().expect("ip")), "{ip}");
         }
+    }
+
+    #[test]
+    fn a_drive_folder_link_gives_its_id() {
+        let id = "1AbCdEfGhIjKlMnOpQrStUvWxYz_-012";
+        assert_eq!(
+            drive_folder_id(&format!(
+                "https://drive.google.com/drive/folders/{id}?usp=sharing"
+            ))
+            .as_deref(),
+            Some(id)
+        );
+        assert_eq!(
+            drive_folder_id(&format!("https://drive.google.com/drive/u/0/folders/{id}")).as_deref(),
+            Some(id)
+        );
+        assert_eq!(
+            drive_folder_id(&format!("https://drive.google.com/open?id={id}")).as_deref(),
+            Some(id)
+        );
+        assert_eq!(drive_folder_id(id).as_deref(), Some(id));
+        assert_eq!(drive_folder_id("https://example.com/folders/x"), None);
+        assert_eq!(drive_folder_id("short"), None);
+        assert_eq!(drive_folder_id("1AbCdEfGh' or '1'='1"), None);
     }
 
     #[test]
