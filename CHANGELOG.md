@@ -12,6 +12,11 @@ app and the desktop app share one version number. A release is tagged
   hours, and when a new version is out a green "Update to x.y.z" button
   appears in the title bar and in Settings → Account. It downloads the
   installer for your computer.
+- Website pages in an office's Documents are read again every week (or now,
+  with Re-read now). If a page can't be read, your bots keep the last copy
+  and you're told once, by email and in the office chat.
+- Mark a document outdated, from a bot's answer that cites it or in
+  Documents: bots stop answering from it until you mark it current.
 
 ## 0.7.1 — 2026-11-23
 

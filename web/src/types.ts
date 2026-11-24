@@ -90,7 +90,7 @@ export interface RecordView {
  *  `forget`: forgets the memory whose id is `target` (a bot's Undo). */
 export interface NoteAction {
   label: string;
-  kind: 'send' | 'setup' | 'open' | 'forget' | 'keep_milestone' | 'start_job' | 'stop_job';
+  kind: 'send' | 'setup' | 'open' | 'forget' | 'keep_milestone' | 'start_job' | 'stop_job' | 'doc_outdated';
   message?: string;
   target?: string;
 }
@@ -257,6 +257,11 @@ export interface OfficeDocument {
   chars: number;
   created_at: string;
   updated_at: string;
+  /** Marked outdated: bots don't see or cite it. */
+  outdated_at?: string | null;
+  /** Website pages: when last read again, and why that failed. */
+  synced_at?: string | null;
+  sync_error?: string | null;
 }
 
 /** Which tab the Edit office dialog opens on. */

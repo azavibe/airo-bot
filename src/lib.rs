@@ -537,6 +537,14 @@ pub fn app(state: AppState) -> Router {
             post(office::documents::delete_document),
         )
         .route(
+            "/api/documents/{id}/sync",
+            post(office::documents::sync_document),
+        )
+        .route(
+            "/api/documents/{id}/outdated",
+            post(office::documents::mark_outdated),
+        )
+        .route(
             "/api/contacts/{id}/memory",
             post(office::contacts::add_contact_memory),
         )

@@ -126,6 +126,11 @@ pub async fn run_daily_plan_loop(state: AppState) {
             Ok(n) => tracing::info!(jobs = n, "recurring jobs started"),
             Err(error) => tracing::warn!(?error, "recurring jobs tick failed"),
         }
+        match super::documents::sync_due(&state).await {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(pages = n, "website documents read again"),
+            Err(error) => tracing::warn!(?error, "document sync tick failed"),
+        }
         match super::goals::run_due_reports(&state).await {
             Ok(0) => {}
             Ok(n) => tracing::info!(offices = n, "weekly reports posted"),
