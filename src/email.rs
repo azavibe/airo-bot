@@ -49,6 +49,42 @@ impl Mailer {
         }
     }
 
+    /// A short plain-text notice (a document that couldn't be updated).
+    /// Without SMTP it is logged instead, as in development.
+    pub async fn send_notice(
+        &self,
+        to_email: &str,
+        subject: &str,
+        text: &str,
+    ) -> Result<(), String> {
+        let Some(transport) = &self.transport else {
+            tracing::info!(
+                email = to_email,
+                subject,
+                "SMTP not configured; notice not emailed"
+            );
+            return Ok(());
+        };
+        let to: Mailbox = to_email
+            .parse()
+            .map_err(|e| format!("invalid recipient address: {e}"))?;
+        let from: Mailbox = self
+            .from
+            .parse()
+            .map_err(|e| format!("invalid SMTP_FROM address: {e}"))?;
+        let email = Message::builder()
+            .from(from)
+            .to(to)
+            .subject(subject)
+            .body(text.to_string())
+            .map_err(|e| format!("failed to build email: {e}"))?;
+        transport
+            .send(email)
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("failed to send email: {e}"))
+    }
+
     pub async fn send_magic_link(&self, to_email: &str, link: &str) -> Result<(), String> {
         let Some(transport) = &self.transport else {
             tracing::info!(email = to_email, %link, "SMTP not configured; logging magic link instead of sending");

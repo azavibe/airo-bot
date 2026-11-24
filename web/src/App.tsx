@@ -1109,6 +1109,11 @@ export const App: React.FC = () => {
       postJson(`/api/milestones/${action.target}`, { status: 'active', idempotency_key: `keep:${action.target}` }, 'PATCH')
         .then(() => showOk('Milestone kept.'))
         .catch((e) => showError(e instanceof Error ? e.message : 'That did not work.'));
+    } else if (action.kind === 'doc_outdated' && action.target) {
+      // "“Price list” is outdated" under a reply that cited it.
+      postJson(`/api/documents/${action.target}/outdated`, { outdated: true, idempotency_key: `outdated:${action.target}` })
+        .then(() => showOk('Marked outdated. Bots no longer answer from it; mark it current again in Documents.'))
+        .catch((e) => showError(e instanceof Error ? e.message : 'That did not work.'));
     } else if (action.kind === 'forget' && action.target) {
       // A bot's "Remembered: ..." Undo.
       postJson(`/api/memories/${action.target}/delete`)
@@ -1120,6 +1125,8 @@ export const App: React.FC = () => {
       const botId = action.target.startsWith('bot:') ? action.target.slice(4) : null;
       if (action.target === 'office' && office) setDialog({ kind: 'editOffice', office });
       else if (action.target === 'goal' && office) setDialog({ kind: 'editOffice', office, tab: 'goal' });
+      else if ((action.target === 'documents' || action.target === 'memory') && office)
+        setDialog({ kind: 'editOffice', office, tab: action.target });
       else if (botId) {
         const bot = agents.find((a) => a.id === botId);
         if (bot) openBot(bot);

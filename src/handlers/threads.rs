@@ -1613,8 +1613,18 @@ async fn deliver_reply(
     // What it learned about the business (`ABOUT: ...` lines) goes into
     // "About the business", which every bot reads.
     let (body, about) = crate::office::memory::apply_about(pool, thread_id, &body).await;
-    // `[doc 1a2b3c4d]` citations become "(from “Price list”)".
-    let body = crate::office::documents::cite(pool, thread_id, &body).await;
+    // `[doc 1a2b3c4d]` citations become "(from “Price list”)", with a
+    // button to mark a cited document outdated.
+    let (body, cited) = crate::office::documents::cite_sources(pool, thread_id, &body).await;
+    let actions = if cited.is_empty() {
+        actions
+    } else {
+        let mut all = actions
+            .and_then(|a| a.as_array().cloned())
+            .unwrap_or_default();
+        all.extend(crate::office::documents::outdated_buttons(&cited));
+        Some(serde_json::Value::Array(all))
+    };
     // Recurring jobs it set (`EVERY ...:` lines): proposed, or started for
     // a Trusted bot.
     let (body, schedules) =

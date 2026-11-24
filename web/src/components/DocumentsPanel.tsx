@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FileText, Globe, Loader2, Search, Trash2, Type, Pencil } from 'lucide-react';
+import { FileText, Globe, Loader2, Search, Trash2, Type, Pencil, RefreshCw, Archive, ArchiveRestore } from 'lucide-react';
 import { OfficeDocument } from '../types';
 
 // What an office's bots answer from: files (PDF, Word, text), pasted text
@@ -379,11 +379,31 @@ export const DocumentsPanel: React.FC<{ officeId: string; website?: string | nul
                     aria-expanded={open?.id === d.id}
                     className="flex-1 min-w-0 text-left"
                   >
-                    <div className="text-[13px] text-neutral-100 truncate">{d.title}</div>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`text-[13px] truncate ${d.outdated_at ? 'text-neutral-500 line-through' : 'text-neutral-100'}`}>
+                        {d.title}
+                      </span>
+                      {d.outdated_at && (
+                        <span
+                          className="flex-shrink-0 text-[10px] px-1.5 py-px rounded-full border border-amber-400/40 text-amber-300"
+                          title="Bots don't answer from it"
+                        >
+                          Outdated
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-neutral-500 truncate">
                       {d.chars.toLocaleString()} characters
                       {d.source_url ? ` · ${d.source_url}` : d.filename ? ` · ${d.filename}` : ''}
+                      {d.kind === 'page' && (d.synced_at || d.created_at)
+                        ? ` · read ${new Date(d.synced_at || d.created_at).toLocaleDateString()}, again weekly`
+                        : ''}
                     </div>
+                    {d.sync_error && (
+                      <div className="text-[11px] text-amber-300 truncate" title={d.sync_error}>
+                        Couldn’t read it again: {d.sync_error}
+                      </div>
+                    )}
                   </button>
                 )}
                 {renaming?.id !== d.id &&
@@ -410,6 +430,40 @@ export const DocumentsPanel: React.FC<{ officeId: string; website?: string | nul
                     </span>
                   ) : (
                     <span className="flex items-center gap-0.5">
+                      {d.kind === 'page' && (
+                        <button
+                          type="button"
+                          title="Read the page again now"
+                          aria-label={`Read ${d.title} again`}
+                          disabled={busy}
+                          onClick={() =>
+                            void run(async () => {
+                              const res = await call(`/api/documents/${d.id}/sync`, 'POST', { idempotency_key: `sync:${d.id}:${Date.now()}` });
+                              setNotice(res?.changed ? `“${d.title}” has new text.` : `“${d.title}” hasn’t changed.`);
+                            })
+                          }
+                          className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-white/5 disabled:opacity-40"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${busy ? 'animate-spin' : ''}`} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        title={d.outdated_at ? 'Mark current: bots answer from it again' : 'Mark outdated: bots stop answering from it'}
+                        aria-label={d.outdated_at ? `Mark ${d.title} current` : `Mark ${d.title} outdated`}
+                        disabled={busy}
+                        onClick={() =>
+                          void run(async () => {
+                            await call(`/api/documents/${d.id}/outdated`, 'POST', {
+                              outdated: !d.outdated_at,
+                              idempotency_key: `outdated:${d.id}:${Date.now()}`,
+                            });
+                          })
+                        }
+                        className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-white/5 disabled:opacity-40"
+                      >
+                        {d.outdated_at ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                      </button>
                       <button
                         type="button"
                         title="Rename"

@@ -71,10 +71,22 @@ pub struct Document {
     pub chars: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Marked outdated: bots don't see or cite it.
+    pub outdated_at: Option<DateTime<Utc>>,
+    /// Pages: when the page was last read again.
+    pub synced_at: Option<DateTime<Utc>>,
+    /// Pages: why the last re-read failed.
+    pub sync_error: Option<String>,
 }
 
-const DOCUMENT_COLUMNS: &str =
-    "id, workspace_id, title, kind, filename, source_url, chars, created_at, updated_at";
+const DOCUMENT_COLUMNS: &str = "id, workspace_id, title, kind, filename, source_url, chars, created_at, updated_at, outdated_at, synced_at, sync_error";
+
+/// Pages of the business's website are read again this often.
+const SYNC_EVERY_DAYS: i64 = 7;
+/// After a failed re-read, try again after a day (not a week).
+const SYNC_RETRY_DAYS: i64 = 1;
+/// Pages re-read per background tick.
+const SYNC_BATCH: i64 = 10;
 
 /// The short tag a bot cites a document by.
 pub fn tag(id: Uuid) -> String {
@@ -533,7 +545,6 @@ async fn store(
     key: Option<&str>,
 ) -> Result<Document, AppError> {
     let parts = chunks(&doc.body);
-    let positions: Vec<i32> = (0..parts.len() as i32).collect();
     let mut tx = pool.begin().await?;
     let saved = sqlx::query_as::<_, Document>(&format!(
         "INSERT INTO documents
@@ -552,21 +563,34 @@ async fn store(
     .bind(key)
     .fetch_one(&mut *tx)
     .await?;
+    write_chunks(&mut tx, saved.id, office, &saved.title, &parts).await?;
+    tx.commit().await?;
+    Ok(saved)
+}
+
+/// Writes a document's passages, indexed with its title weighted higher.
+async fn write_chunks(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    document: Uuid,
+    office: Uuid,
+    title: &str,
+    parts: &[String],
+) -> Result<(), sqlx::Error> {
+    let positions: Vec<i32> = (0..parts.len() as i32).collect();
     sqlx::query(
         "INSERT INTO document_chunks (document_id, workspace_id, position, body, search)
          SELECT $1, $2, c.position, c.body,
                 setweight(to_tsvector('english', $3), 'B') || to_tsvector('english', c.body)
          FROM UNNEST($4::int[], $5::text[]) AS c(position, body)",
     )
-    .bind(saved.id)
+    .bind(document)
     .bind(office)
-    .bind(&saved.title)
+    .bind(title)
     .bind(&positions)
-    .bind(&parts)
-    .execute(&mut *tx)
+    .bind(parts)
+    .execute(&mut **tx)
     .await?;
-    tx.commit().await?;
-    Ok(saved)
+    Ok(())
 }
 
 struct NewDocument {
@@ -672,7 +696,7 @@ pub async fn context_block(
         .unwrap_or(false);
     let docs: Vec<(Uuid, String, i32)> = sqlx::query_as(
         "SELECT id, title, chars FROM documents
-         WHERE workspace_id = $1 AND deleted_at IS NULL
+         WHERE workspace_id = $1 AND deleted_at IS NULL AND outdated_at IS NULL
          ORDER BY created_at ASC LIMIT $2",
     )
     .bind(workspace_id)
@@ -693,7 +717,7 @@ pub async fn context_block(
     let passages: Vec<(Uuid, String, String)> = if total <= WHOLE_LIBRARY_CHARS {
         sqlx::query_as(
             "SELECT id, title, body FROM documents
-             WHERE workspace_id = $1 AND deleted_at IS NULL
+             WHERE workspace_id = $1 AND deleted_at IS NULL AND outdated_at IS NULL
              ORDER BY created_at ASC",
         )
         .bind(workspace_id)
@@ -716,7 +740,8 @@ pub async fn context_block(
                     "SELECT c.document_id, d.title, c.body
                      FROM UNNEST($2::uuid[]) WITH ORDINALITY AS pick(id, n)
                      JOIN document_chunks c ON c.id = pick.id AND c.workspace_id = $1
-                     JOIN documents d ON d.id = c.document_id AND d.deleted_at IS NULL
+                     JOIN documents d ON d.id = c.document_id
+                       AND d.deleted_at IS NULL AND d.outdated_at IS NULL
                      ORDER BY pick.n",
                 )
                 .bind(workspace_id)
@@ -768,8 +793,17 @@ pub async fn context_block(
 /// Turns the `[doc 1a2b3c4d]` tags in a bot's reply into "(from “Title”)"
 /// notes, for the documents of the room's office; unknown tags are dropped.
 pub async fn cite(pool: &PgPool, thread_id: Uuid, text: &str) -> String {
+    cite_sources(pool, thread_id, text).await.0
+}
+
+/// [`cite`], and the documents the reply cited (id and title), in order.
+pub async fn cite_sources(
+    pool: &PgPool,
+    thread_id: Uuid,
+    text: &str,
+) -> (String, Vec<(Uuid, String)>) {
     if !text.contains("[doc ") {
-        return text.to_string();
+        return (text.to_string(), Vec::new());
     }
     let mut prefixes: Vec<String> = Vec::new();
     let mut rest = text;
@@ -787,12 +821,13 @@ pub async fn cite(pool: &PgPool, thread_id: Uuid, text: &str) -> String {
         rest = after;
     }
     if prefixes.is_empty() {
-        return text.to_string();
+        return (text.to_string(), Vec::new());
     }
-    let titles: Vec<(String, String)> = sqlx::query_as(
-        "SELECT left(d.id::text, 8), d.title
+    let titles: Vec<(String, String, Uuid)> = sqlx::query_as(
+        "SELECT left(d.id::text, 8), d.title, d.id
          FROM documents d JOIN threads t ON t.workspace_id = d.workspace_id
-         WHERE t.id = $1 AND d.deleted_at IS NULL AND left(d.id::text, 8) = ANY($2)",
+         WHERE t.id = $1 AND d.deleted_at IS NULL AND d.outdated_at IS NULL
+           AND left(d.id::text, 8) = ANY($2)",
     )
     .bind(thread_id)
     .bind(&prefixes)
@@ -800,6 +835,7 @@ pub async fn cite(pool: &PgPool, thread_id: Uuid, text: &str) -> String {
     .await
     .unwrap_or_default();
     let mut out = String::with_capacity(text.len());
+    let mut sources: Vec<(Uuid, String)> = Vec::new();
     let mut rest = text;
     while let Some(at) = rest.find("[doc ") {
         out.push_str(&rest[..at]);
@@ -810,8 +846,13 @@ pub async fn cite(pool: &PgPool, thread_id: Uuid, text: &str) -> String {
             .map(|h| h[..8].to_ascii_lowercase());
         match prefix {
             Some(p) => {
-                match titles.iter().find(|(id, _)| *id == p) {
-                    Some((_, title)) => out.push_str(&format!("(from “{title}”)")),
+                match titles.iter().find(|(prefix, ..)| *prefix == p) {
+                    Some((_, title, id)) => {
+                        out.push_str(&format!("(from “{title}”)"));
+                        if !sources.iter().any(|(s, _)| s == id) {
+                            sources.push((*id, title.clone()));
+                        }
+                    }
                     // An unknown tag is dropped with the space before it.
                     None => {
                         if out.ends_with(' ') {
@@ -828,14 +869,31 @@ pub async fn cite(pool: &PgPool, thread_id: Uuid, text: &str) -> String {
         }
     }
     out.push_str(rest);
-    out
+    (out, sources)
+}
+
+/// Buttons under a reply that cited documents: "Mark “Title” outdated"
+/// (note action `doc_outdated`), for at most two of them.
+pub fn outdated_buttons(sources: &[(Uuid, String)]) -> Vec<Value> {
+    sources
+        .iter()
+        .take(2)
+        .map(|(id, title)| {
+            let short: String = title.chars().take(40).collect();
+            json!({
+                "label": format!("“{short}” is outdated"),
+                "kind": "doc_outdated",
+                "target": id.to_string(),
+            })
+        })
+        .collect()
 }
 
 /// What a bot's settings show under "What this bot knows".
 pub async fn knows(pool: &PgPool, office: Uuid, agent_id: Uuid) -> Value {
     let documents: Vec<(Uuid, String)> = sqlx::query_as(
         "SELECT id, title FROM documents
-         WHERE workspace_id = $1 AND deleted_at IS NULL
+         WHERE workspace_id = $1 AND deleted_at IS NULL AND outdated_at IS NULL
          ORDER BY created_at ASC LIMIT $2",
     )
     .bind(office)
@@ -1154,6 +1212,246 @@ pub async fn search_documents(
         }
     }
     Ok(Json(json!({ "results": results })))
+}
+
+// ---------------------------------------------------------------- keeping current
+
+/// The outcome of reading a page again.
+#[derive(Debug, PartialEq)]
+pub enum Refreshed {
+    /// The page's text changed; the document now has the new text.
+    Changed,
+    /// Same text as before.
+    Unchanged,
+}
+
+/// Reads a page document's address again and, when its text changed,
+/// replaces the document's text and passages (title kept). Clears
+/// "outdated", since the text is fresh. On failure the document keeps its
+/// last text and records why; it is tried again after a day.
+pub async fn refresh_page(state: &AppState, id: Uuid) -> Result<Refreshed, String> {
+    let row: Option<(Uuid, String, Option<String>, String)> = sqlx::query_as(
+        "SELECT workspace_id, title, source_url, body FROM documents
+         WHERE id = $1 AND kind = 'page' AND deleted_at IS NULL",
+    )
+    .bind(id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|_| "Could not read the document.".to_string())?;
+    let Some((office, title, Some(url), old_body)) = row else {
+        return Err("Only website pages can be read again.".to_string());
+    };
+    let fetched = fetch_page(&url, state.config.production).await;
+    let outcome = match fetched {
+        Ok((_, html)) => {
+            let (_, raw) = html_to_text(&html);
+            let (text, _) = tidy(&raw);
+            if text.trim().is_empty() {
+                Err("The page had no text this time.".to_string())
+            } else if text == old_body {
+                Ok((Refreshed::Unchanged, text))
+            } else {
+                Ok((Refreshed::Changed, text))
+            }
+        }
+        Err(AppError::BadRequest(msg)) => Err(msg),
+        Err(_) => Err("That page could not be reached.".to_string()),
+    };
+    match outcome {
+        Ok((Refreshed::Unchanged, _)) => {
+            sqlx::query(
+                "UPDATE documents SET synced_at = now(), sync_error = NULL, sync_failures = 0
+                 WHERE id = $1",
+            )
+            .bind(id)
+            .execute(&state.pool)
+            .await
+            .map_err(|_| "Could not save the document.".to_string())?;
+            Ok(Refreshed::Unchanged)
+        }
+        Ok((_, text)) => {
+            let parts = chunks(&text);
+            let save = async {
+                let mut tx = state.pool.begin().await?;
+                sqlx::query(
+                    "UPDATE documents
+                     SET body = $2, chars = $3, synced_at = now(), sync_error = NULL,
+                         sync_failures = 0, outdated_at = NULL, updated_at = now()
+                     WHERE id = $1",
+                )
+                .bind(id)
+                .bind(&text)
+                .bind(text.chars().count() as i32)
+                .execute(&mut *tx)
+                .await?;
+                // Passages are derived from the text, so they are rebuilt
+                // rather than kept: the document itself is never deleted.
+                sqlx::query("DELETE FROM document_chunks WHERE document_id = $1")
+                    .bind(id)
+                    .execute(&mut *tx)
+                    .await?;
+                write_chunks(&mut tx, id, office, &title, &parts).await?;
+                tx.commit().await
+            };
+            save.await.map_err(|error: sqlx::Error| {
+                tracing::warn!(?error, "could not save a re-read page");
+                "Could not save the new text.".to_string()
+            })?;
+            Ok(Refreshed::Changed)
+        }
+        Err(message) => {
+            let failures: Option<i32> = sqlx::query_scalar(
+                "UPDATE documents
+                 SET synced_at = now() - make_interval(days => $3::int), sync_error = left($2, 500),
+                     sync_failures = sync_failures + 1
+                 WHERE id = $1
+                 RETURNING sync_failures",
+            )
+            .bind(id)
+            .bind(&message)
+            .bind((SYNC_EVERY_DAYS - SYNC_RETRY_DAYS) as i32)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+            // Told once per run of failures, not every day.
+            if failures == Some(1) {
+                notify_sync_failed(state, office, &title, &url, &message).await;
+            }
+            Err(message)
+        }
+    }
+}
+
+/// Tells the owner a page couldn't be read again: an email (when the server
+/// can send mail) and a card in the office's group chat.
+async fn notify_sync_failed(state: &AppState, office: Uuid, title: &str, url: &str, why: &str) {
+    let owner: Option<(Uuid, Option<String>)> = sqlx::query_as(
+        "SELECT w.owner_user_id, u.email FROM workspaces w
+         LEFT JOIN users u ON u.id = w.owner_user_id
+         WHERE w.id = $1 AND w.deleted_at IS NULL",
+    )
+    .bind(office)
+    .fetch_optional(&state.pool)
+    .await
+    .ok()
+    .flatten();
+    let Some((owner, email)) = owner else { return };
+    let text = format!(
+        "Airobot couldn't read “{title}” again from {url}: {why} Your bots keep answering from the last copy. It will try again tomorrow; you can also read it again, or mark it outdated, in Edit office → Documents."
+    );
+    if let Some(email) = email.filter(|e| e.contains('@') && !e.ends_with(".local")) {
+        if let Err(error) = state
+            .mailer
+            .send_notice(&email, &format!("“{title}” couldn't be updated"), &text)
+            .await
+        {
+            tracing::warn!(%error, "could not email a sync failure");
+        }
+    }
+    let chat = crate::office::group::ensure_office_chat(&state.pool, owner, office).await;
+    let architect = crate::office::group::architect_bot(&state.pool, owner).await;
+    if let (Ok(chat), Ok(architect)) = (chat, architect) {
+        let body = format!(
+            "**“{title}” couldn't be read again** from {url}: {why} Your bots keep answering from the last copy, and I'll try again tomorrow."
+        );
+        let actions = json!([{ "label": "Open Documents", "kind": "open", "target": "documents" }]);
+        crate::handlers::threads::insert_bot_note(
+            &state.pool,
+            &state.note_sender,
+            chat,
+            architect,
+            &body,
+            Some(actions),
+        )
+        .await;
+    }
+}
+
+/// Reads again the website pages that are due (weekly; a day after a
+/// failure), a few per tick. Returns how many were read.
+pub async fn sync_due(state: &AppState) -> Result<usize, sqlx::Error> {
+    let due: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT d.id FROM documents d
+         JOIN workspaces w ON w.id = d.workspace_id AND w.deleted_at IS NULL
+         WHERE d.kind = 'page' AND d.deleted_at IS NULL AND d.source_url IS NOT NULL
+           AND COALESCE(d.synced_at, d.created_at) < now() - make_interval(days => $1::int)
+         ORDER BY COALESCE(d.synced_at, d.created_at) ASC
+         LIMIT $2",
+    )
+    .bind(SYNC_EVERY_DAYS as i32)
+    .bind(SYNC_BATCH)
+    .fetch_all(&state.pool)
+    .await?;
+    for id in &due {
+        if let Err(error) = refresh_page(state, *id).await {
+            tracing::info!(%id, %error, "page re-read failed");
+        }
+    }
+    Ok(due.len())
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct SyncDocumentRequest {
+    pub idempotency_key: Option<String>,
+}
+
+/// POST /api/documents/:id/sync -- read a page document again now.
+pub async fn sync_document(
+    State(state): State<AppState>,
+    caller: Caller,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    body: Option<Json<SyncDocumentRequest>>,
+) -> Result<Json<Value>, AppError> {
+    let body = body.map(|Json(b)| b).unwrap_or_default();
+    crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    let doc = owned_document(&state.pool, &caller, id).await?;
+    if doc.kind != "page" {
+        return Err(AppError::BadRequest(
+            "Only website pages can be read again.".into(),
+        ));
+    }
+    let outcome = refresh_page(&state, id).await;
+    let doc = owned_document(&state.pool, &caller, id).await?;
+    match outcome {
+        Ok(r) => Ok(Json(
+            json!({ "document": doc, "changed": r == Refreshed::Changed }),
+        )),
+        Err(message) => Err(AppError::BadRequest(message)),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OutdatedRequest {
+    /// true marks it outdated; false marks it current again.
+    pub outdated: bool,
+    pub idempotency_key: Option<String>,
+}
+
+/// POST /api/documents/:id/outdated -- bots stop (or start again) answering
+/// from it. Marking twice keeps the first time.
+pub async fn mark_outdated(
+    State(state): State<AppState>,
+    caller: Caller,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(body): Json<OutdatedRequest>,
+) -> Result<Json<Document>, AppError> {
+    crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    owned_document(&state.pool, &caller, id).await?;
+    let saved = sqlx::query_as::<_, Document>(&format!(
+        "UPDATE documents
+         SET outdated_at = CASE WHEN $2 THEN COALESCE(outdated_at, now()) ELSE NULL END,
+             updated_at = now()
+         WHERE id = $1 AND deleted_at IS NULL
+         RETURNING {DOCUMENT_COLUMNS}"
+    ))
+    .bind(id)
+    .bind(body.outdated)
+    .fetch_one(&state.pool)
+    .await?;
+    Ok(Json(saved))
 }
 
 #[cfg(test)]
