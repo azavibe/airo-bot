@@ -52,6 +52,10 @@ pub struct OfficeItem {
     /// The cap refused a call this month and hasn't been changed since:
     /// its autonomous work waits.
     pub cap_reached: bool,
+    /// The person's role here: owner, member or viewer (issue #29).
+    pub role: String,
+    /// Whose office it is, for one shared with this person.
+    pub owner_handle: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -96,9 +100,15 @@ pub async fn list_for(pool: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<OfficeIt
                   AND w.cap_notice_month IS NOT DISTINCT FROM date_trunc('month', now())::date
                 ) AS cap_reached,
                 (SELECT COUNT(*) FROM threads t
-                  WHERE t.user_id = $1 AND t.deleted_at IS NULL AND t.kind = 'room'
+                  WHERE t.user_id = w.owner_user_id AND t.deleted_at IS NULL AND t.kind = 'room'
                     AND (t.workspace_id = w.id OR (t.workspace_id IS NULL AND w.id = $2))
                 ) AS room_count,
+                CASE WHEN w.owner_user_id = $1 THEN 'owner' ELSE COALESCE((
+                    SELECT m.role FROM workspace_members m
+                    WHERE m.workspace_id = w.id AND m.user_id = $1 AND m.deleted_at IS NULL
+                    LIMIT 1), 'member') END AS role,
+                CASE WHEN w.owner_user_id = $1 THEN NULL ELSE (
+                    SELECT u.handle FROM users u WHERE u.id = w.owner_user_id) END AS owner_handle,
                 w.created_at
          FROM workspaces w
          WHERE w.deleted_at IS NULL

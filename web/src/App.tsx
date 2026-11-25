@@ -516,6 +516,53 @@ export const App: React.FC = () => {
     fetchInitialData();
   }, [fetchInitialData]);
 
+  // An invite link (/?invite=…, issue #29): kept on this device until the
+  // person is signed in (the sign-in email may open a new tab), then
+  // accepted, and the office opens.
+  const INVITE_KEY = 'airobot.invite';
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('invite');
+    if (fromUrl) {
+      try {
+        localStorage.setItem(INVITE_KEY, fromUrl);
+      } catch {}
+      const url = new URL(window.location.href);
+      url.searchParams.delete('invite');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+  }, []);
+  useEffect(() => {
+    if (!userProfile) return;
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem(INVITE_KEY);
+    } catch {}
+    if (!token) return;
+    if (!userProfile.authenticated) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    try {
+      localStorage.removeItem(INVITE_KEY);
+    } catch {}
+    (async () => {
+      try {
+        const res = await fetch('/api/invites/accept', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ token, idempotency_key: newKey() }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || tr('That did not work. Please try again.'));
+        showOk(tr('You joined {office}.', { office: data?.office?.name ?? '' }));
+        await fetchInitialData();
+      } catch (e) {
+        showError(e instanceof Error ? e.message : tr('That did not work. Please try again.'));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.authenticated]);
+
   // Ctrl/Cmd+K opens search from anywhere.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -667,6 +714,10 @@ export const App: React.FC = () => {
       setIsAuthModalOpen(true);
       throw new Error('sign-in required');
     }
+    if (activeOfficeRole() === 'viewer') {
+      showError(tr('You can view this office. Ask its owner to make you a member to write here.'));
+      throw new Error('view only');
+    }
     if (!activeThreadId) {
       showError('Set up your office first; it creates the rooms your bots listen in.');
       setIsOnboardOpen(true);
@@ -808,6 +859,8 @@ export const App: React.FC = () => {
     const t = threads.find((x) => x.id === id);
     return t ? offices.find((o) => roomsOf(o, [t], offices).length > 0) : undefined;
   };
+  /** The person's role in the office of the open chat. */
+  const activeOfficeRole = () => officeOfThread(activeThreadId)?.role ?? 'owner';
 
   /** A new office (optionally set up for a business), or setting one up. */
   const handleOfficeSetup = async (data: OfficeSetup) => {
@@ -1209,7 +1262,13 @@ export const App: React.FC = () => {
             }
           : handleSendMessage
       }
-      placeholder={isOnboardOpen ? tr('Answer the Architect…') : undefined}
+      placeholder={
+        isOnboardOpen
+          ? tr('Answer the Architect…')
+          : activeTab === 'chat' && activeOffice?.role === 'viewer'
+          ? tr('You can view this office')
+          : undefined
+      }
       composerText={composerText}
       onComposerChange={(text) => setComposerText(text)}
       activeAgentPlan={activeAgentPlan}
@@ -1749,6 +1808,13 @@ export const App: React.FC = () => {
               ? null
               : { spent: dialog.office.month_spent_credits ?? 0, reached: !!dialog.office.cap_reached }
           }
+          role={dialog.office.role}
+          hideTeam={!!userProfile?.local_mode}
+          onLeft={() => {
+            showOk(tr('You left {office}.', { office: dialog.office.name }));
+            setDialog(null);
+            void fetchInitialData();
+          }}
           onSubmit={(values) => editOffice(dialog.office, values)}
           onClose={() => setDialog(null)}
         />

@@ -28,6 +28,17 @@ app and the desktop app share one version number. A release is tagged
   browser or computer; a choice is kept on your account for every device.
   The sidebar, message bar, chat, Apps panel, search, approvals and
   settings are translated so far; other screens follow.
+- **Invite your team to an office**: Edit office → Team. Invite someone by
+  email as a member (works with the bots and approves their work) or a
+  viewer (sees the chats, apps and approvals). They open the link, sign in
+  with that email and the office appears in their sidebar. Change roles,
+  remove people or revoke an invite there; teammates can leave. Bots answer
+  on the owner's account whoever writes to them, and the owner's own
+  Assistant stays private.
+
+### Fixed
+- Approvals from every office now show in Approvals, not only the first
+  office's, and approval cards show what the bot asks to do again.
 
 ## 0.7.1 — 2026-11-23
 

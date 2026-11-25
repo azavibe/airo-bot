@@ -63,6 +63,44 @@ fn can_view(caller: Option<&Caller>, thread: &Thread) -> bool {
     caller.is_some_and(|c| owns_thread(c, thread))
 }
 
+/// The caller's role in the office `thread` belongs to: owner for the
+/// owning human (and their bots); member or viewer for someone the owner
+/// invited, in that office's group chat and rooms. None otherwise.
+async fn thread_role(
+    pool: &PgPool,
+    caller: Option<&Caller>,
+    thread: &Thread,
+) -> Result<Option<crate::office::team::Role>, AppError> {
+    let Some(caller) = caller else {
+        return Ok(None);
+    };
+    if owns_thread(caller, thread) {
+        return Ok(Some(crate::office::team::Role::Owner));
+    }
+    // The owner's personal Assistant room is theirs alone.
+    if thread.title == crate::office::ASSISTANT_ROOM {
+        return Ok(None);
+    }
+    match (caller, thread.workspace_id, thread.kind.as_str()) {
+        (Caller::User(user), Some(office), "office" | "room") => {
+            crate::office::team::role_in(pool, user.id, office).await
+        }
+        _ => Ok(None),
+    }
+}
+
+/// `can_view`, plus the people the office's owner invited.
+async fn may_view(
+    pool: &PgPool,
+    caller: Option<&Caller>,
+    thread: &Thread,
+) -> Result<bool, AppError> {
+    if can_view(caller, thread) {
+        return Ok(true);
+    }
+    Ok(thread_role(pool, caller, thread).await?.is_some())
+}
+
 async fn ensure_agent_joined(
     pool: &PgPool,
     thread_id: Uuid,
@@ -339,12 +377,21 @@ pub async fn list_threads(
     Query(query): Query<ListThreadsQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let threads = match &caller {
+        // Their own rooms, and the chats and rooms of offices they were
+        // invited to.
         Caller::User(user) => {
             sqlx::query_as::<_, Thread>(
-                "SELECT * FROM threads
-                 WHERE user_id = $1 AND deleted_at IS NULL
-                   AND ($2::thread_status IS NULL OR status = $2)
-                 ORDER BY COALESCE(last_note_at, created_at) DESC
+                "SELECT * FROM threads t
+                 WHERE t.deleted_at IS NULL
+                   AND ($2::thread_status IS NULL OR t.status = $2)
+                   AND (t.user_id = $1 OR (
+                        t.kind IN ('office', 'room') AND t.title <> '#assistant'
+                        AND t.workspace_id IN (
+                            SELECT m.workspace_id FROM workspace_members m
+                            JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
+                            WHERE m.user_id = $1 AND m.deleted_at IS NULL
+                              AND w.owner_user_id <> $1)))
+                 ORDER BY COALESCE(t.last_note_at, t.created_at) DESC
                  LIMIT 100",
             )
             .bind(user.id)
@@ -622,7 +669,7 @@ pub async fn get_thread(
         .await?
         .ok_or(AppError::NotFound)?;
 
-    if !can_view(caller.as_ref(), &thread) {
+    if !may_view(&state.pool, caller.as_ref(), &thread).await? {
         return Err(if caller.is_none() {
             AppError::Unauthorized
         } else {
@@ -885,7 +932,29 @@ pub async fn create_note(
     let thread = find_thread(&state.pool, thread_id)
         .await?
         .ok_or(AppError::NotFound)?;
-    authorize_note(&caller, &thread, body.kind)?;
+    // The owner (and their bots) by the thread's own rules; an invited
+    // member writes in the office's chats like the owner does; a viewer
+    // only reads.
+    let invited = if owns_thread(&caller, &thread) {
+        false
+    } else {
+        match thread_role(&state.pool, Some(&caller), &thread).await? {
+            Some(role)
+                if role.can_act()
+                    && matches!(
+                        body.kind,
+                        NoteKind::Command | NoteKind::Comment | NoteKind::Status
+                    ) =>
+            {
+                true
+            }
+            Some(_) => return Err(AppError::Forbidden),
+            None => false,
+        }
+    };
+    if !invited {
+        authorize_note(&caller, &thread, body.kind)?;
+    }
 
     let (note, created) = insert_note(
         &state,
@@ -916,16 +985,19 @@ pub async fn create_note(
 
         // Free chat: any human message reaches the thread's agent, which
         // answers in its own character. Commands travel the same path.
-        if let Caller::User(u) = &caller {
+        // Bots answer on the owner's account (their AI, keys and credits),
+        // whoever in the office wrote.
+        if let Caller::User(_) = &caller {
+            let owner = thread.user_id;
             match (thread.kind.as_str(), thread.workspace_id) {
                 // The office group chat: the Architect (or an @mentioned
                 // bot) answers, and hands work to the right bot.
-                ("office", Some(workspace_id)) if is_owning_human(&caller, &thread) => {
+                ("office", Some(workspace_id)) if is_owning_human(&caller, &thread) || invited => {
                     crate::office::group::on_person_message(
                         &state,
                         thread.id,
                         workspace_id,
-                        u.id,
+                        owner,
                         text,
                     )
                     .await;
@@ -947,7 +1019,7 @@ pub async fn create_note(
                             state.clone(),
                             thread.id,
                             aid,
-                            u.id,
+                            owner,
                             ReplyMode::default(),
                         );
                     }
@@ -992,7 +1064,7 @@ pub async fn thread_live_events(
         .await?
         .ok_or(AppError::NotFound)?;
 
-    if !can_view(caller.as_ref(), &thread) {
+    if !may_view(&state.pool, caller.as_ref(), &thread).await? {
         return Err(if caller.is_none() {
             AppError::Unauthorized
         } else {
@@ -1096,7 +1168,13 @@ async fn callers_thread_ids(pool: &PgPool, caller: &Caller) -> Result<Vec<Uuid>,
     let ids = match caller {
         Caller::User(user) => {
             sqlx::query_scalar::<_, Uuid>(
-                "SELECT id FROM threads WHERE user_id = $1 AND deleted_at IS NULL",
+                "SELECT t.id FROM threads t
+                 WHERE t.deleted_at IS NULL
+                   AND (t.user_id = $1 OR (
+                        t.kind IN ('office', 'room') AND t.title <> '#assistant'
+                        AND t.workspace_id IN (
+                            SELECT m.workspace_id FROM workspace_members m
+                            WHERE m.user_id = $1 AND m.deleted_at IS NULL)))",
             )
             .bind(user.id)
             .fetch_all(pool)

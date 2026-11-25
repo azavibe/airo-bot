@@ -76,7 +76,8 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
                       <span className="truncate">{t('{bot} asks', { bot: item.agent_name || t('A bot') })}</span>
                     </span>
                     <span className="text-[11px] text-neutral-500 flex-shrink-0">
-                      {t('{n} credits', { n: item.estimated_credits })} · {timeAgo(item.created_at)}
+                      {item.estimated_credits != null ? `${t('{n} credits', { n: item.estimated_credits })} · ` : ''}
+                      {timeAgo(item.created_at)}
                     </span>
                   </div>
 
@@ -91,7 +92,11 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
                   </div>
 
 
-                  {isRejecting ? (
+                  {item.can_decide === false ? (
+                    <p className="pt-1 text-[12px] text-neutral-500">
+                      {t('View only: a member or the owner of this office decides.')}
+                    </p>
+                  ) : isRejecting ? (
                     <div className="space-y-2 pt-2 border-t border-white/10 animate-fade-in">
                       <label
                         htmlFor={`reject-${item.id}`}

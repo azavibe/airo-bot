@@ -49,9 +49,11 @@ const ApprovalCard: React.FC<{
           <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
           <span className="text-[13px] font-medium text-amber-300">{t('Approval needed')}</span>
         </div>
-        <span className="text-[11px] text-neutral-400 font-mono">
-          {t('{n} credits', { n: approval.estimated_credits })}
-        </span>
+        {approval.estimated_credits != null && (
+          <span className="text-[11px] text-neutral-400 font-mono">
+            {t('{n} credits', { n: approval.estimated_credits })}
+          </span>
+        )}
       </div>
 
       <div className="text-xs text-neutral-300 leading-relaxed font-medium">{approval.action_summary}</div>
@@ -60,6 +62,9 @@ const ApprovalCard: React.FC<{
         <div className="text-[11px] text-neutral-400 italic bg-white/[0.02] p-2 rounded-lg">"{approval.reason}"</div>
       )}
 
+      {approval.can_decide === false ? (
+        <p className="pt-1 text-[11px] text-neutral-500">{t('View only: a member or the owner of this office decides.')}</p>
+      ) : (
       <div className="flex items-center gap-2 pt-1">
         <button
           onClick={() => decide('rejected')}
@@ -76,6 +81,7 @@ const ApprovalCard: React.FC<{
           {t('Approve')}
         </button>
       </div>
+      )}
     </div>
   );
 };

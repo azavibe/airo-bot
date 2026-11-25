@@ -5,6 +5,7 @@ pub mod connections;
 pub mod device;
 pub mod offices;
 pub mod procedures;
+pub mod team;
 pub mod threads;
 pub mod updates;
 pub mod web;

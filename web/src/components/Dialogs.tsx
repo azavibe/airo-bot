@@ -5,6 +5,7 @@ import { DocumentsPanel } from './DocumentsPanel';
 import { GoalPanel } from './GoalPanel';
 import { useEscape, closeOnBackdrop } from '../utils/useEscape';
 import { translate, useT } from '../i18n';
+import { TeamPanel } from './TeamPanel';
 
 // Small dialogs for naming, renaming and deleting offices and rooms. Each
 // one reports a failure inline and stays open, so nothing fails silently.
@@ -394,11 +395,18 @@ export const EditOfficeDialog: React.FC<{
   /** This month's spend, for the cap field; null hides the cap (desktop
    *  app: no credits). */
   spend?: { spent: number; reached: boolean } | null;
+  /** The person's role: an office shared with them shows only its team. */
+  role?: 'owner' | 'member' | 'viewer';
+  /** Hides the Team tab (the desktop app has one person). */
+  hideTeam?: boolean;
+  /** They left the office (shared offices only). */
+  onLeft?: () => void;
   onSubmit: (values: OfficeEdit) => Promise<void>;
   onClose: () => void;
-}> = ({ officeId, agents, initial, startTab = 'profile', spend = null, onSubmit, onClose }) => {
+}> = ({ officeId, agents, initial, startTab = 'profile', spend = null, role = 'owner', hideTeam = false, onLeft, onSubmit, onClose }) => {
   const [values, setValues] = useState<OfficeEdit>(initial);
-  const [tab, setTab] = useState<EditOfficeTab>(startTab);
+  const shared = role !== 'owner';
+  const [tab, setTab] = useState<EditOfficeTab>(shared ? 'team' : startTab);
   const t = useT();
   const set = (patch: Partial<OfficeEdit>) => setValues((v) => ({ ...v, ...patch }));
   const [languages, setLanguages] = useState<Language[]>([]);
@@ -429,7 +437,7 @@ export const EditOfficeDialog: React.FC<{
     }`;
   return (
     <Shell
-      title={t('Edit office')}
+      title={shared ? initial.name : t('Edit office')}
       onClose={onClose}
       onSubmit={tab === 'profile' ? go : onClose}
       busy={busy}
@@ -439,6 +447,8 @@ export const EditOfficeDialog: React.FC<{
       wide
     >
       <div role="tablist" className="flex gap-1 -mt-1">
+        {!shared && (
+        <>
         <button type="button" role="tab" aria-selected={tab === 'profile'} onClick={() => setTab('profile')} className={tabClass(tab === 'profile')}>
           {t('Profile')}
         </button>
@@ -451,8 +461,17 @@ export const EditOfficeDialog: React.FC<{
         <button type="button" role="tab" aria-selected={tab === 'documents'} onClick={() => setTab('documents')} className={tabClass(tab === 'documents')}>
           {t('Documents')}
         </button>
+        </>
+        )}
+        {(!hideTeam || shared) && (
+          <button type="button" role="tab" aria-selected={tab === 'team'} onClick={() => setTab('team')} className={tabClass(tab === 'team')}>
+            {t('Team')}
+          </button>
+        )}
       </div>
-      {tab === 'goal' ? (
+      {tab === 'team' ? (
+        <TeamPanel officeId={officeId} onLeft={onLeft} />
+      ) : tab === 'goal' ? (
         <GoalPanel officeId={officeId} onGoalSaved={(goal) => set({ goal })} />
       ) : tab === 'memory' ? (
         <MemoryPanel officeId={officeId} agents={agents} />

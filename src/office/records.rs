@@ -166,10 +166,17 @@ pub async fn get_records(
     caller: Caller,
     Query(q): Query<RecordsQuery>,
 ) -> Result<Json<Value>, AppError> {
-    let Caller::User(user) = &caller else {
+    let Caller::User(_) = &caller else {
         return Err(AppError::Forbidden);
     };
-    crate::handlers::offices::owned_office(&state.pool, user.id, q.office).await?;
+    // Everyone in the office sees the cards in its chats (issue #29).
+    crate::office::team::require(
+        &state.pool,
+        &caller,
+        q.office,
+        crate::office::team::Role::Viewer,
+    )
+    .await?;
     let ids: Vec<Uuid> = q
         .ids
         .split(',')

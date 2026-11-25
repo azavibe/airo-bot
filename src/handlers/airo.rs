@@ -171,11 +171,12 @@ pub async fn get_or_create_default_workspace(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<Workspace, AppError> {
+    // A person's own first office: never one they were invited to, so an
+    // invited teammate gets an office of their own as well.
     let existing = sqlx::query_as::<_, Workspace>(
         "SELECT w.* FROM workspaces w
-         LEFT JOIN workspace_members m ON m.workspace_id = w.id
-         WHERE (w.owner_user_id = $1 OR m.user_id = $1) AND w.deleted_at IS NULL
-         ORDER BY (w.owner_user_id = $1) DESC, w.created_at ASC
+         WHERE w.owner_user_id = $1 AND w.deleted_at IS NULL
+         ORDER BY w.created_at ASC
          LIMIT 1",
     )
     .bind(user_id)
@@ -224,28 +225,28 @@ pub async fn get_or_create_default_workspace(
     Ok(ws)
 }
 
+/// The caller owns this office (or is one of the owner's bots). Setting an
+/// office up (bots, tasks, connections, apps, devices) is the owner's;
+/// invited members and viewers get only what `office::team` grants them.
 pub async fn ensure_workspace_access(
     pool: &PgPool,
     caller: &Caller,
     workspace_id: Uuid,
 ) -> Result<(), AppError> {
-    let user_id = caller.user_id();
-    let has_access = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(
-            SELECT 1 FROM workspaces w
-            LEFT JOIN workspace_members m ON m.workspace_id = w.id
-            WHERE w.id = $1 AND (w.owner_user_id = $2 OR m.user_id = $2) AND w.deleted_at IS NULL
-        )",
-    )
-    .bind(workspace_id)
-    .bind(user_id)
-    .fetch_one(pool)
-    .await?;
+    ensure_workspace_role(pool, caller, workspace_id, crate::office::team::Role::Owner).await
+}
 
-    if !has_access {
-        return Err(AppError::Forbidden);
+/// The caller has at least `needed` in this office; otherwise forbidden.
+pub async fn ensure_workspace_role(
+    pool: &PgPool,
+    caller: &Caller,
+    workspace_id: Uuid,
+    needed: crate::office::team::Role,
+) -> Result<(), AppError> {
+    match crate::office::team::role_in(pool, caller.user_id(), workspace_id).await? {
+        Some(role) if role >= needed => Ok(()),
+        _ => Err(AppError::Forbidden),
     }
-    Ok(())
 }
 
 // ---------- View Models ----------
@@ -268,6 +269,10 @@ pub struct BotJob {
 
 pub struct ApprovalView {
     pub id: Uuid,
+    /// The office it belongs to.
+    pub workspace_id: Uuid,
+    /// The caller may approve or reject it (not a viewer).
+    pub can_decide: bool,
     pub task_id: Uuid,
     pub thread_id: Option<Uuid>,
     pub task_title: String,
@@ -279,6 +284,8 @@ pub struct ApprovalView {
     pub bot_label: String,
     pub message_body: String,
     pub created_ago: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub reason: Option<String>,
 }
 
 pub struct AgentChoice {
@@ -361,7 +368,7 @@ pub async fn yours(
 
     let workspaces = sqlx::query_as::<_, Workspace>(
         "SELECT w.* FROM workspaces w
-         LEFT JOIN workspace_members m ON m.workspace_id = w.id
+         LEFT JOIN workspace_members m ON m.workspace_id = w.id AND m.deleted_at IS NULL
          WHERE (w.owner_user_id = $1 OR m.user_id = $1) AND w.deleted_at IS NULL
          ORDER BY w.name ASC",
     )
@@ -1402,12 +1409,32 @@ pub async fn list_approvals(
 ) -> Result<Response, AppError> {
     let ws = get_or_create_default_workspace(&state.pool, caller.user_id()).await?;
 
+    // Every office the caller can see: their own and the ones shared with
+    // them. Viewers see approvals but can't decide them.
     let raw_approvals = sqlx::query_as::<_, Approval>(
-        "SELECT * FROM approvals WHERE workspace_id = $1 AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC",
+        "SELECT a.* FROM approvals a
+         JOIN workspaces w ON w.id = a.workspace_id AND w.deleted_at IS NULL
+         WHERE a.status = 'pending' AND a.deleted_at IS NULL
+           AND (w.owner_user_id = $1 OR EXISTS (
+                SELECT 1 FROM workspace_members m
+                WHERE m.workspace_id = w.id AND m.user_id = $1 AND m.deleted_at IS NULL))
+         ORDER BY a.created_at DESC
+         LIMIT 200",
     )
-    .bind(ws.id)
+    .bind(caller.user_id())
     .fetch_all(&state.pool)
     .await?;
+    let mut roles: std::collections::HashMap<Uuid, crate::office::team::Role> =
+        std::collections::HashMap::new();
+    for a in &raw_approvals {
+        if let std::collections::hash_map::Entry::Vacant(slot) = roles.entry(a.workspace_id) {
+            if let Some(role) =
+                crate::office::team::role_in(&state.pool, caller.user_id(), a.workspace_id).await?
+            {
+                slot.insert(role);
+            }
+        }
+    }
 
     let mut approval_views = Vec::new();
     for a in raw_approvals {
@@ -1455,6 +1482,8 @@ pub async fn list_approvals(
 
         approval_views.push(ApprovalView {
             id: a.id,
+            workspace_id: a.workspace_id,
+            can_decide: roles.get(&a.workspace_id).is_some_and(|r| r.can_act()),
             task_id: a.task_id,
             thread_id,
             task_title,
@@ -1466,6 +1495,8 @@ pub async fn list_approvals(
             bot_label,
             message_body,
             created_ago: time_ago(a.created_at),
+            created_at: a.created_at,
+            reason: a.reason,
         });
     }
 
@@ -1520,13 +1551,20 @@ pub async fn list_approvals(
             "workspace": ws,
             "approvals": approval_views.iter().map(|av| json!({
                 "id": av.id,
+                "workspace_id": av.workspace_id,
+                "can_decide": av.can_decide,
                 "task_id": av.task_id,
                 "task_title": av.task_title,
                 "requested_action": av.requested_action,
                 "risk_level": av.risk_level,
                 "status": av.status,
                 "requested_by": av.requested_by,
-                "created_ago": av.created_ago
+                "created_ago": av.created_ago,
+                // The names the app's approval cards read.
+                "action_summary": av.requested_action,
+                "agent_name": av.bot_label,
+                "reason": av.reason,
+                "created_at": av.created_at,
             })).collect::<Vec<_>>()
         }))
         .into_response())
@@ -1560,7 +1598,14 @@ pub async fn decide_approval(
     .await?
     .ok_or(AppError::NotFound)?;
 
-    ensure_workspace_access(&state.pool, &caller, approval.workspace_id).await?;
+    // Members decide approvals too; viewers only see them.
+    ensure_workspace_role(
+        &state.pool,
+        &caller,
+        approval.workspace_id,
+        crate::office::team::Role::Member,
+    )
+    .await?;
 
     // Idempotency: if already decided, return current state without re-deciding or duplicating audit
     if approval.status != "pending" {

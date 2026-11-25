@@ -599,6 +599,21 @@ pub fn app(state: AppState) -> Router {
         .route("/api/me", get(handlers::auth::current_user))
         .route("/api/me/theme", put(handlers::auth::save_theme))
         .route("/api/me/language", put(handlers::auth::save_language))
+        .route("/api/offices/{id}/team", get(handlers::team::team))
+        .route("/api/offices/{id}/invites", post(handlers::team::invite))
+        .route("/api/invites/accept", post(handlers::team::accept_invite))
+        .route(
+            "/api/invites/{id}/revoke",
+            post(handlers::team::revoke_invite),
+        )
+        .route(
+            "/api/offices/{id}/members/{user_id}",
+            patch(handlers::team::change_role),
+        )
+        .route(
+            "/api/offices/{id}/members/{user_id}/remove",
+            post(handlers::team::remove_member),
+        )
         .route("/api/app/update", get(handlers::updates::check_update))
         .route(
             "/api/languages",

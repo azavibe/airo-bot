@@ -76,6 +76,24 @@ async fn app_workspace(
     }
 }
 
+/// `app_workspace` for what invited people may do too: viewers read apps
+/// and records, members also add and change records. Setting apps up stays
+/// the owner's (`app_workspace`).
+async fn app_workspace_as(
+    state: &AppState,
+    caller: &Caller,
+    office: Option<Uuid>,
+    needed: crate::office::team::Role,
+) -> Result<Uuid, AppError> {
+    match office {
+        Some(id) => {
+            crate::handlers::airo::ensure_workspace_role(&state.pool, caller, id, needed).await?;
+            Ok(id)
+        }
+        None => primary_workspace_id(state, caller).await,
+    }
+}
+
 async fn primary_workspace_id(state: &AppState, caller: &Caller) -> Result<Uuid, AppError> {
     Ok(
         get_or_create_default_workspace(&state.pool, caller.user_id())
@@ -875,7 +893,13 @@ pub async fn list_office_apps(
     caller: Caller,
     Query(office): Query<OfficeQuery>,
 ) -> Result<Json<Vec<OfficeApp>>, AppError> {
-    let workspace_id = app_workspace(&state, &caller, office.office).await?;
+    let workspace_id = app_workspace_as(
+        &state,
+        &caller,
+        office.office,
+        crate::office::team::Role::Viewer,
+    )
+    .await?;
     let apps = sqlx::query_as::<_, OfficeApp>(&format!(
         "SELECT {APP_COLUMNS} FROM office_apps
          WHERE workspace_id = $1 AND deleted_at IS NULL
@@ -965,7 +989,13 @@ pub async fn get_app_records(
     Query(office): Query<OfficeQuery>,
     Path(slug): Path<String>,
 ) -> Result<Json<Vec<OfficeRecord>>, AppError> {
-    let workspace_id = app_workspace(&state, &caller, office.office).await?;
+    let workspace_id = app_workspace_as(
+        &state,
+        &caller,
+        office.office,
+        crate::office::team::Role::Viewer,
+    )
+    .await?;
     let app = find_app(&state, workspace_id, &slug).await?;
     let records = sqlx::query_as::<_, OfficeRecord>(&format!(
         "SELECT {RECORD_COLUMNS} FROM office_records
@@ -1014,7 +1044,13 @@ pub async fn create_app_record(
         return Err(AppError::BadRequest("data must be a JSON object".into()));
     }
 
-    let workspace_id = app_workspace(&state, &caller, office.office).await?;
+    let workspace_id = app_workspace_as(
+        &state,
+        &caller,
+        office.office,
+        crate::office::team::Role::Member,
+    )
+    .await?;
     let app = find_app(&state, workspace_id, &slug).await?;
     let created_by_agent = match &caller {
         Caller::Agent(a) => Some(a.id),
@@ -1117,7 +1153,13 @@ pub async fn patch_app_record(
     if payload.data.as_ref().is_some_and(|d| !d.is_object()) {
         return Err(AppError::BadRequest("data must be a JSON object".into()));
     }
-    let workspace_id = app_workspace(&state, &caller, office.office).await?;
+    let workspace_id = app_workspace_as(
+        &state,
+        &caller,
+        office.office,
+        crate::office::team::Role::Member,
+    )
+    .await?;
     let new_hash = payload.data.as_ref().map(calculate_content_hash);
 
     let updated = sqlx::query_as::<_, OfficeRecord>(&format!(
@@ -1251,7 +1293,13 @@ pub async fn delete_app_record(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let body = body.map(|Json(b)| b).unwrap_or_default();
     crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
-    let workspace_id = app_workspace(&state, &caller, office.office).await?;
+    let workspace_id = app_workspace_as(
+        &state,
+        &caller,
+        office.office,
+        crate::office::team::Role::Member,
+    )
+    .await?;
     let deleted: Option<Uuid> = sqlx::query_scalar(
         "UPDATE office_records SET deleted_at = now(), updated_at = now()
          WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL

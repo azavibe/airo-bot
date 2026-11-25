@@ -197,6 +197,10 @@ export interface Approval {
   status: 'pending' | 'approved' | 'rejected';
   agent_name?: string;
   created_at: string;
+  /** The office it belongs to. */
+  workspace_id?: string;
+  /** False for a viewer of that office: they see it but can't decide. */
+  can_decide?: boolean;
 }
 
 export interface Agent {
@@ -246,6 +250,11 @@ export interface Office {
   month_spent_credits?: number;
   /** The cap stopped paid work this month (until raised or the 1st). */
   cap_reached?: boolean;
+  /** The person's role here (issue #29): their own office, or one they
+   *  were invited to as a member (chats, approves) or viewer (reads). */
+  role?: 'owner' | 'member' | 'viewer';
+  /** Whose office it is, when it's shared with this person. */
+  owner_handle?: string | null;
 }
 
 /** Something an office's bots answer from: a file, pasted text or a
@@ -268,7 +277,7 @@ export interface OfficeDocument {
 }
 
 /** Which tab the Edit office dialog opens on. */
-export type EditOfficeTab = 'profile' | 'goal' | 'memory' | 'documents';
+export type EditOfficeTab = 'profile' | 'goal' | 'memory' | 'documents' | 'team';
 
 /** A fact an office remembers: the whole office's, or one bot's. */
 export interface Memory {

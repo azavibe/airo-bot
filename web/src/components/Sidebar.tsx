@@ -168,11 +168,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // `tr`, not `t`: rooms are `t` throughout this file.
   const tr = useT();
   const [showArchived, setShowArchived] = useState<string[]>([]);
-  const officeItems = (office: Office): RowMenuItem[] => [
+  // An office someone else owns and shared with this person: they see its
+  // team (and can leave); setting it up stays the owner's.
+  const isShared = (office: Office) => !!office.role && office.role !== 'owner';
+  const localMode = !!userProfile?.local_mode;
+  const officeItems = (office: Office): RowMenuItem[] =>
+    isShared(office)
+      ? [{ label: tr('Team…'), onSelect: () => onEditOffice(office, 'team') }]
+      : [
     { label: tr('Edit office…'), onSelect: () => onEditOffice(office) },
     { label: tr('Goal & milestones…'), onSelect: () => onEditOffice(office, 'goal') },
     { label: tr('Memory…'), onSelect: () => onEditOffice(office, 'memory') },
     { label: tr('Documents…'), onSelect: () => onEditOffice(office, 'documents') },
+    ...(localMode ? [] : [{ label: tr('Team…'), onSelect: () => onEditOffice(office, 'team') }]),
     { label: tr('New bot'), onSelect: () => onNewBot(office) },
     { label: tr('New room'), onSelect: () => onNewRoom(office) },
     { label: tr('Set up for a business'), onSelect: () => onSetUpOffice(office) },
@@ -185,6 +193,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
   // A bot's room offers the bot's choices; a shared room, the room's.
   const roomItems = (t: Thread): RowMenuItem[] => {
+    // Rooms of a shared office are the owner's to change.
+    if (offices.some((o) => isShared(o) && o.id === t.workspace_id)) return [];
     const bot = botOfRoom(t, agents);
     if (t.archived_at) {
       return [
@@ -454,13 +464,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onOpenOffice(office);
                         onCloseMobile?.();
                       }}
-                      title={tr('{office}: group chat with all its bots', { office: office.name })}
+                      title={
+                        isShared(office) && office.owner_handle
+                          ? tr('{office}, shared by @{owner}', { office: office.name, owner: office.owner_handle })
+                          : tr('{office}: group chat with all its bots', { office: office.name })
+                      }
                       aria-current={chatActive ? 'page' : undefined}
                       className={`flex-1 min-w-0 h-7 px-1.5 -ml-1.5 rounded-lg text-left text-[12.5px] font-medium truncate transition-colors ${
                         chatActive ? 'bg-white/10 text-white' : 'text-neutral-300 hover:text-white hover:bg-white/[0.06]'
                       }`}
                     >
                       {office.name}
+                      {isShared(office) && office.owner_handle && (
+                        <span className="ml-1.5 font-normal text-neutral-500">@{office.owner_handle}</span>
+                      )}
                     </button>
                     <button
                       onClick={() => toggleOffice(office.id)}
@@ -471,6 +488,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                     </button>
                     <RowMenu label={tr('{name} options', { name: office.name })} className={hoverReveal} items={officeItems(office)} />
+                    {!isShared(office) && (
                     <button
                       onClick={() => onNewBot(office)}
                       title={tr('New bot in {office}', { office: office.name })}
@@ -479,11 +497,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
+                    )}
                   </div>
 
                   {!isCollapsed && (
                     <div className="space-y-0.5">
-                      {rooms.length === 0 ? (
+                      {rooms.length === 0 && isShared(office) ? null : rooms.length === 0 ? (
                         <button
                           onClick={() => onNewBot(office)}
                           className="w-full text-left px-3 py-1.5 text-[12px] text-neutral-500 hover:text-white transition-colors"
@@ -510,7 +529,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 <RoomIcon thread={t} agents={agents} />
                                 <span className="truncate">{label}</span>
                               </button>
-                              <RowMenu label={tr('{name} options', { name: label })} className={`mr-1.5 ${hoverReveal}`} items={roomItems(t)} />
+                              {roomItems(t).length > 0 && (
+                                <RowMenu label={tr('{name} options', { name: label })} className={`mr-1.5 ${hoverReveal}`} items={roomItems(t)} />
+                              )}
                             </div>
                           );
                         })
@@ -550,7 +571,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     <RoomIcon thread={t} agents={agents} />
                                     <span className="truncate">{label}</span>
                                   </button>
-                                  <RowMenu label={tr('{name} options', { name: label })} className={`mr-1.5 ${hoverReveal}`} items={roomItems(t)} />
+                                  {roomItems(t).length > 0 && (
+                                <RowMenu label={tr('{name} options', { name: label })} className={`mr-1.5 ${hoverReveal}`} items={roomItems(t)} />
+                              )}
                                 </div>
                               );
                             })}
