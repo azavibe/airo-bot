@@ -1270,33 +1270,12 @@ pub async fn refresh_page(state: &AppState, id: Uuid) -> Result<Refreshed, Strin
             Ok(Refreshed::Unchanged)
         }
         Ok((_, text)) => {
-            let parts = chunks(&text);
-            let save = async {
-                let mut tx = state.pool.begin().await?;
-                sqlx::query(
-                    "UPDATE documents
-                     SET body = $2, chars = $3, synced_at = now(), sync_error = NULL,
-                         sync_failures = 0, outdated_at = NULL, updated_at = now()
-                     WHERE id = $1",
-                )
-                .bind(id)
-                .bind(&text)
-                .bind(text.chars().count() as i32)
-                .execute(&mut *tx)
-                .await?;
-                // Passages are derived from the text, so they are rebuilt
-                // rather than kept: the document itself is never deleted.
-                sqlx::query("DELETE FROM document_chunks WHERE document_id = $1")
-                    .bind(id)
-                    .execute(&mut *tx)
-                    .await?;
-                write_chunks(&mut tx, id, office, &title, &parts).await?;
-                tx.commit().await
-            };
-            save.await.map_err(|error: sqlx::Error| {
-                tracing::warn!(?error, "could not save a re-read page");
-                "Could not save the new text.".to_string()
-            })?;
+            replace_text(&state.pool, id, office, &title, &text)
+                .await
+                .map_err(|error| {
+                    tracing::warn!(?error, "could not save a re-read page");
+                    "Could not save the new text.".to_string()
+                })?;
             Ok(Refreshed::Changed)
         }
         Err(message) => {
@@ -1321,6 +1300,39 @@ pub async fn refresh_page(state: &AppState, id: Uuid) -> Result<Refreshed, Strin
             Err(message)
         }
     }
+}
+
+/// Gives a document new text (title kept): its passages are rebuilt, it is
+/// current again, and its sync error is cleared.
+async fn replace_text(
+    pool: &PgPool,
+    id: Uuid,
+    office: Uuid,
+    title: &str,
+    text: &str,
+) -> Result<(), sqlx::Error> {
+    let parts = chunks(text);
+    let mut tx = pool.begin().await?;
+    sqlx::query(
+        "UPDATE documents
+         SET title = $4, body = $2, chars = $3, synced_at = now(), sync_error = NULL,
+             sync_failures = 0, outdated_at = NULL, updated_at = now()
+         WHERE id = $1",
+    )
+    .bind(id)
+    .bind(text)
+    .bind(text.chars().count() as i32)
+    .bind(title)
+    .execute(&mut *tx)
+    .await?;
+    // Passages are derived from the text, so they are rebuilt rather than
+    // kept: the document itself is never deleted.
+    sqlx::query("DELETE FROM document_chunks WHERE document_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    write_chunks(&mut tx, id, office, title, &parts).await?;
+    tx.commit().await
 }
 
 /// Tells the owner a page couldn't be read again: an email (when the server
@@ -1388,7 +1400,24 @@ pub async fn sync_due(state: &AppState) -> Result<usize, sqlx::Error> {
             tracing::info!(%id, %error, "page re-read failed");
         }
     }
-    Ok(due.len())
+    let folders: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT f.id FROM document_folders f
+         JOIN workspaces w ON w.id = f.workspace_id AND w.deleted_at IS NULL
+         WHERE f.deleted_at IS NULL
+           AND COALESCE(f.synced_at, f.created_at) < now() - make_interval(hours => $1::int)
+         ORDER BY COALESCE(f.synced_at, f.created_at) ASC
+         LIMIT $2",
+    )
+    .bind(FOLDER_SYNC_HOURS as i32)
+    .bind(FOLDER_BATCH)
+    .fetch_all(&state.pool)
+    .await?;
+    for id in &folders {
+        if let Err(error) = sync_folder(state, *id).await {
+            tracing::info!(%id, %error, "Drive folder sync failed");
+        }
+    }
+    Ok(due.len() + folders.len())
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -1452,6 +1481,431 @@ pub async fn mark_outdated(
     .fetch_one(&state.pool)
     .await?;
     Ok(Json(saved))
+}
+
+// ---------------------------------------------------------------- Drive folders
+
+/// Files read from one folder at most.
+const MAX_FOLDER_FILES: usize = 50;
+/// A linked folder is read again this often.
+const FOLDER_SYNC_HOURS: i64 = 24;
+/// Folders read per background tick.
+const FOLDER_BATCH: i64 = 5;
+/// Folders one office links at most.
+const MAX_FOLDERS: i64 = 10;
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct DocumentFolder {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub connection_id: Uuid,
+    pub drive_folder_id: String,
+    pub name: String,
+    pub synced_at: Option<DateTime<Utc>>,
+    pub sync_error: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+const FOLDER_COLUMNS: &str = "id, workspace_id, connection_id, drive_folder_id, name, synced_at, sync_error, created_at, updated_at";
+
+/// What one read of a folder did.
+#[derive(Debug, Default, Serialize, PartialEq)]
+pub struct FolderReport {
+    pub added: usize,
+    pub updated: usize,
+    pub unchanged: usize,
+    pub removed: usize,
+    /// Files left out, each with why ("photo.png: no text").
+    pub skipped: Vec<String>,
+}
+
+/// A file name the text readers recognise: Drive names often have no
+/// extension, so one is added from the file's type.
+fn drive_filename(name: &str, mime: &str) -> String {
+    let ext = match mime {
+        "application/pdf" => ".pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => ".docx",
+        "text/html" => ".html",
+        "text/csv" => ".csv",
+        "text/markdown" => ".md",
+        m if m.starts_with("text/") => ".txt",
+        _ => "",
+    };
+    if ext.is_empty() || name.to_ascii_lowercase().ends_with(ext) {
+        name.to_string()
+    } else {
+        format!("{name}{ext}")
+    }
+}
+
+/// Reads a linked folder: new files become documents, changed files get
+/// their new text, files that left the folder are removed (soft), and
+/// files with no readable text are skipped. On failure the documents stay
+/// as they were and the owner is told once.
+pub async fn sync_folder(state: &AppState, folder_id: Uuid) -> Result<FolderReport, String> {
+    let folder: Option<(Uuid, Uuid, String, String, Uuid)> = sqlx::query_as(
+        "SELECT f.workspace_id, f.connection_id, f.drive_folder_id, f.name, w.owner_user_id
+         FROM document_folders f JOIN workspaces w ON w.id = f.workspace_id
+         WHERE f.id = $1 AND f.deleted_at IS NULL AND w.deleted_at IS NULL",
+    )
+    .bind(folder_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|_| "Could not read the folder.".to_string())?;
+    let Some((office, connection, drive_id, name, owner)) = folder else {
+        return Err("That folder was removed.".to_string());
+    };
+    match read_folder(state, folder_id, office, connection, &drive_id, owner).await {
+        Ok(report) => {
+            let _ = sqlx::query(
+                "UPDATE document_folders
+                 SET synced_at = now(), sync_error = NULL, sync_failures = 0, updated_at = now()
+                 WHERE id = $1",
+            )
+            .bind(folder_id)
+            .execute(&state.pool)
+            .await;
+            Ok(report)
+        }
+        Err(message) => {
+            let failures: Option<i32> = sqlx::query_scalar(
+                "UPDATE document_folders
+                 SET synced_at = now(), sync_error = left($2, 500),
+                     sync_failures = sync_failures + 1, updated_at = now()
+                 WHERE id = $1
+                 RETURNING sync_failures",
+            )
+            .bind(folder_id)
+            .bind(&message)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
+            if failures == Some(1) {
+                notify_sync_failed(state, office, &name, "Google Drive", &message).await;
+            }
+            Err(message)
+        }
+    }
+}
+
+async fn read_folder(
+    state: &AppState,
+    folder_id: Uuid,
+    office: Uuid,
+    connection: Uuid,
+    drive_id: &str,
+    owner: Uuid,
+) -> Result<FolderReport, String> {
+    let (apps, token) =
+        crate::handlers::connections::drive_access(state, office, connection).await?;
+    let files = crate::connectors::drive_list(&apps, &token, drive_id, MAX_FOLDER_FILES)
+        .await
+        .map_err(|e| e.public)?;
+    let existing: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
+        "SELECT id, external_id, external_modified FROM documents
+         WHERE folder_id = $1 AND deleted_at IS NULL AND external_id IS NOT NULL",
+    )
+    .bind(folder_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|_| "Could not read the folder's documents.".to_string())?;
+    let mut report = FolderReport::default();
+    for file in &files {
+        let known = existing.iter().find(|(_, ext, _)| *ext == file.id);
+        if let Some((_, _, modified)) = known {
+            if modified.as_deref() == Some(file.modified.as_str()) {
+                report.unchanged += 1;
+                continue;
+            }
+        }
+        let content = crate::connectors::drive_content(&apps, &token, file, MAX_FILE_BYTES)
+            .await
+            .map_err(|e| e.public)?;
+        let raw = match content {
+            None => {
+                report
+                    .skipped
+                    .push(format!("{}: no text to read", file.name));
+                continue;
+            }
+            Some(crate::connectors::DriveContent::Text(t)) => t,
+            Some(crate::connectors::DriveContent::Bytes(b)) => {
+                match file_text(&drive_filename(&file.name, &file.mime_type), &b) {
+                    Ok(t) => t,
+                    Err(why) => {
+                        report.skipped.push(format!("{}: {why}", file.name));
+                        continue;
+                    }
+                }
+            }
+        };
+        let (text, _) = tidy(&raw);
+        if text.trim().is_empty() {
+            report
+                .skipped
+                .push(format!("{}: no text to read", file.name));
+            continue;
+        }
+        let title: String = file.name.chars().take(200).collect();
+        if let Some((id, _, _)) = known {
+            replace_text(&state.pool, *id, office, &title, &text)
+                .await
+                .map_err(|_| "Could not save a file's new text.".to_string())?;
+            let _ = sqlx::query("UPDATE documents SET external_modified = $2 WHERE id = $1")
+                .bind(id)
+                .bind(&file.modified)
+                .execute(&state.pool)
+                .await;
+            report.updated += 1;
+            continue;
+        }
+        let (count, total): (i64, i64) = sqlx::query_as(
+            "SELECT COUNT(*), COALESCE(SUM(chars), 0)::bigint FROM documents
+             WHERE workspace_id = $1 AND deleted_at IS NULL",
+        )
+        .bind(office)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|_| "Could not read the office's documents.".to_string())?;
+        if count >= MAX_DOCUMENTS || total + text.chars().count() as i64 > MAX_OFFICE_CHARS {
+            report
+                .skipped
+                .push(format!("{}: the office's documents are full", file.name));
+            continue;
+        }
+        let saved = store(
+            &state.pool,
+            office,
+            owner,
+            NewDocument {
+                title,
+                kind: "drive",
+                filename: Some(file.name.chars().take(255).collect()),
+                source_url: file.link.clone().filter(|l| l.starts_with("https://")),
+                body: text,
+            },
+            None,
+        )
+        .await
+        .map_err(|_| "Could not save a file from the folder.".to_string())?;
+        let _ = sqlx::query(
+            "UPDATE documents SET folder_id = $2, external_id = $3, external_modified = $4, synced_at = now()
+             WHERE id = $1",
+        )
+        .bind(saved.id)
+        .bind(folder_id)
+        .bind(&file.id)
+        .bind(&file.modified)
+        .execute(&state.pool)
+        .await;
+        report.added += 1;
+    }
+    // Files no longer in the folder.
+    let present: Vec<String> = files.iter().map(|f| f.id.clone()).collect();
+    let removed = sqlx::query(
+        "UPDATE documents SET deleted_at = now(), updated_at = now()
+         WHERE folder_id = $1 AND deleted_at IS NULL AND NOT (external_id = ANY($2))",
+    )
+    .bind(folder_id)
+    .bind(&present)
+    .execute(&state.pool)
+    .await
+    .map_err(|_| "Could not update the folder's documents.".to_string())?;
+    report.removed = removed.rows_affected() as usize;
+    Ok(report)
+}
+
+/// A folder the caller owns (through its office).
+async fn owned_folder(
+    pool: &PgPool,
+    caller: &Caller,
+    id: Uuid,
+) -> Result<DocumentFolder, AppError> {
+    let Caller::User(user) = caller else {
+        return Err(AppError::Forbidden);
+    };
+    sqlx::query_as::<_, DocumentFolder>(&format!(
+        "SELECT {} FROM document_folders f
+         JOIN workspaces w ON w.id = f.workspace_id
+         WHERE f.id = $1 AND f.deleted_at IS NULL
+           AND w.owner_user_id = $2 AND w.deleted_at IS NULL",
+        FOLDER_COLUMNS
+            .split(", ")
+            .map(|c| format!("f.{c}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
+    .bind(id)
+    .bind(user.id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or(AppError::NotFound)
+}
+
+async fn folder_by_id(pool: &PgPool, id: Uuid) -> Result<DocumentFolder, AppError> {
+    sqlx::query_as::<_, DocumentFolder>(&format!(
+        "SELECT {FOLDER_COLUMNS} FROM document_folders WHERE id = $1"
+    ))
+    .bind(id)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::from)
+}
+
+/// GET /api/offices/:id/document-folders
+pub async fn list_folders(
+    State(state): State<AppState>,
+    caller: Caller,
+    Path(office): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    // (owned_office checks ownership and returns the caller's user id.)
+    owned_office(&state.pool, &caller, office).await?;
+    let folders = sqlx::query_as::<_, DocumentFolder>(&format!(
+        "SELECT {FOLDER_COLUMNS} FROM document_folders
+         WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC"
+    ))
+    .bind(office)
+    .fetch_all(&state.pool)
+    .await?;
+    Ok(Json(json!({ "folders": folders })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LinkFolderRequest {
+    /// A Drive folder link (or its id).
+    pub folder: String,
+    /// The office's Google connection with Drive (read only).
+    pub connection_id: Uuid,
+    pub idempotency_key: Option<String>,
+}
+
+/// POST /api/offices/:id/document-folders -- link a Drive folder and read it.
+pub async fn link_folder(
+    State(state): State<AppState>,
+    caller: Caller,
+    headers: HeaderMap,
+    Path(office): Path<Uuid>,
+    Json(body): Json<LinkFolderRequest>,
+) -> Result<Json<Value>, AppError> {
+    let key = crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    // (owned_office checks ownership and returns the caller's user id.)
+    owned_office(&state.pool, &caller, office).await?;
+    let Caller::User(user) = &caller else {
+        return Err(AppError::Forbidden);
+    };
+    if let Some(key) = key {
+        let existing: Option<DocumentFolder> = sqlx::query_as(&format!(
+            "SELECT {FOLDER_COLUMNS} FROM document_folders
+             WHERE workspace_id = $1 AND idempotency_key = $2 AND deleted_at IS NULL"
+        ))
+        .bind(office)
+        .bind(key)
+        .fetch_optional(&state.pool)
+        .await?;
+        if let Some(folder) = existing {
+            return Ok(Json(json!({ "folder": folder, "report": Value::Null })));
+        }
+    }
+    let drive_id = crate::connectors::drive_folder_id(&body.folder)
+        .ok_or_else(|| AppError::BadRequest("Paste the link of a Google Drive folder.".into()))?;
+    let linked: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM document_folders WHERE workspace_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(office)
+    .fetch_one(&state.pool)
+    .await?;
+    if linked >= MAX_FOLDERS {
+        return Err(AppError::BadRequest(format!(
+            "An office links at most {MAX_FOLDERS} folders."
+        )));
+    }
+    let (apps, token) =
+        crate::handlers::connections::drive_access(&state, office, body.connection_id)
+            .await
+            .map_err(AppError::BadRequest)?;
+    let name = crate::connectors::drive_folder_name(&apps, &token, &drive_id)
+        .await
+        .map_err(|e| AppError::BadRequest(e.public))?;
+    let id: Option<Uuid> = sqlx::query_scalar(
+        "INSERT INTO document_folders
+            (workspace_id, connection_id, drive_folder_id, name, created_by_user_id, idempotency_key)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT DO NOTHING
+         RETURNING id",
+    )
+    .bind(office)
+    .bind(body.connection_id)
+    .bind(&drive_id)
+    .bind(&name)
+    .bind(user.id)
+    .bind(key)
+    .fetch_optional(&state.pool)
+    .await?;
+    let Some(id) = id else {
+        return Err(AppError::Conflict("That folder is already linked.".into()));
+    };
+    let outcome = sync_folder(&state, id).await;
+    let folder = folder_by_id(&state.pool, id).await?;
+    Ok(Json(match outcome {
+        Ok(report) => json!({ "folder": folder, "report": report }),
+        Err(error) => json!({ "folder": folder, "report": Value::Null, "error": error }),
+    }))
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct FolderActionRequest {
+    pub idempotency_key: Option<String>,
+}
+
+/// POST /api/document-folders/:id/sync -- read the folder again now.
+pub async fn sync_folder_now(
+    State(state): State<AppState>,
+    caller: Caller,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    body: Option<Json<FolderActionRequest>>,
+) -> Result<Json<Value>, AppError> {
+    let body = body.map(|Json(b)| b).unwrap_or_default();
+    crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    owned_folder(&state.pool, &caller, id).await?;
+    let outcome = sync_folder(&state, id).await;
+    let folder = folder_by_id(&state.pool, id).await?;
+    match outcome {
+        Ok(report) => Ok(Json(json!({ "folder": folder, "report": report }))),
+        Err(message) => Err(AppError::BadRequest(message)),
+    }
+}
+
+/// POST /api/document-folders/:id/delete -- unlink the folder; its
+/// documents go too (soft). Nothing changes in Drive.
+pub async fn delete_folder(
+    State(state): State<AppState>,
+    caller: Caller,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    body: Option<Json<FolderActionRequest>>,
+) -> Result<Json<Value>, AppError> {
+    let body = body.map(|Json(b)| b).unwrap_or_default();
+    crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    owned_folder(&state.pool, &caller, id).await?;
+    let mut tx = state.pool.begin().await?;
+    let docs = sqlx::query(
+        "UPDATE documents SET deleted_at = now(), updated_at = now()
+         WHERE folder_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("UPDATE document_folders SET deleted_at = now(), updated_at = now() WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(Json(
+        json!({ "deleted": true, "documents_removed": docs.rows_affected() }),
+    ))
 }
 
 #[cfg(test)]

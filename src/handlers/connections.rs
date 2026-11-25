@@ -1167,6 +1167,46 @@ async fn read_action(
 
 /// The OAuth apps this server can use: the environment's first, then the
 /// ones an admin (or the desktop app's owner) saved in Settings.
+/// The apps and a fresh access token for an office's Google connection with
+/// Drive (read only), for syncing a Drive folder into the office's
+/// documents. Errors are short sentences for the owner.
+pub async fn drive_access(
+    state: &AppState,
+    office: Uuid,
+    connection_id: Uuid,
+) -> Result<(ConnectorApps, String), String> {
+    let row = sqlx::query_as::<_, ConnectionRow>(&format!(
+        "SELECT {ROW_COLUMNS} FROM connections
+         WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL"
+    ))
+    .bind(connection_id)
+    .bind(office)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|_| "Could not read the Google connection.".to_string())?
+    .ok_or_else(|| "That Google connection was removed. Connect Google again.".to_string())?;
+    if row.provider().ok() != Some(Provider::Google) {
+        return Err("That connection isn't Google.".to_string());
+    }
+    if !connectors::google_products(&row.scopes).contains(&"drive") {
+        return Err(
+            "This Google connection has no Drive permission. Connect Google again and include Drive."
+                .to_string(),
+        );
+    }
+    if row.status == "needs_reconnect" {
+        return Err("Google needs to be connected again.".to_string());
+    }
+    let apps = connector_apps(state)
+        .await
+        .map_err(|_| "Connections are not set up.".to_string())?;
+    let token = access_token(state, &apps, &row, Provider::Google)
+        .await
+        .map_err(|_| "Google needs to be connected again.".to_string())?
+        .ok_or_else(|| "Google needs to be connected again.".to_string())?;
+    Ok((apps, token))
+}
+
 pub async fn connector_apps(state: &AppState) -> Result<ConnectorApps, AppError> {
     let mut apps = state.config.connectors.clone();
     if apps.google.is_some() && apps.stripe.is_some() && apps.shopify.is_some() {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FileText, Globe, Loader2, Search, Trash2, Type, Pencil, RefreshCw, Archive, ArchiveRestore } from 'lucide-react';
+import { FileText, Globe, Loader2, Search, Trash2, Type, Pencil, RefreshCw, Archive, ArchiveRestore, HardDrive, FolderOpen } from 'lucide-react';
 import { OfficeDocument } from '../types';
 
 // What an office's bots answer from: files (PDF, Word, text), pasted text
@@ -69,6 +69,7 @@ const KindIcon: React.FC<{ kind: OfficeDocument['kind'] }> = ({ kind }) => {
   const cls = 'w-4 h-4 text-neutral-400 shrink-0';
   if (kind === 'page') return <Globe className={cls} aria-label="Web page" />;
   if (kind === 'text') return <Type className={cls} aria-label="Text" />;
+  if (kind === 'drive') return <HardDrive className={cls} aria-label="From Google Drive" />;
   return <FileText className={cls} aria-label="File" />;
 };
 
@@ -79,7 +80,15 @@ export const DocumentsPanel: React.FC<{ officeId: string; website?: string | nul
   const [docs, setDocs] = useState<OfficeDocument[] | null>(null);
   const [total, setTotal] = useState(0);
   const [limits, setLimits] = useState({ documents: 100, office_chars: 2_000_000 });
-  const [mode, setMode] = useState<'file' | 'text' | 'page'>('file');
+  const [mode, setMode] = useState<'file' | 'text' | 'page' | 'drive'>('file');
+  // Google Drive folders kept in step, and the Google connections that can.
+  const [folders, setFolders] = useState<
+    { id: string; name: string; synced_at: string | null; sync_error: string | null }[]
+  >([]);
+  const [driveConns, setDriveConns] = useState<{ id: string; label: string }[] | null>(null);
+  const [driveConn, setDriveConn] = useState('');
+  const [folderLink, setFolderLink] = useState('');
+  const [confirmUnlink, setConfirmUnlink] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
   const [url, setUrl] = useState(website ?? '');
@@ -100,14 +109,39 @@ export const DocumentsPanel: React.FC<{ officeId: string; website?: string | nul
       setDocs(data.documents ?? []);
       setTotal(data.total_chars ?? 0);
       if (data.limits) setLimits(data.limits);
+      const linked = await call(`/api/offices/${officeId}/document-folders`).catch(() => null);
+      setFolders(linked?.folders ?? []);
+      const conns = await call(`/api/connections?workspace_id=${officeId}`).catch(() => null);
+      const usable = (conns?.connections ?? []).filter(
+        (c: any) => c.provider === 'google' && (c.products ?? []).includes('drive')
+      );
+      setDriveConns(usable.map((c: any) => ({ id: c.id, label: c.label })));
+      setDriveConn((cur) => cur || usable[0]?.id || '');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the documents.');
       setDocs([]);
     }
-  }, [base]);
+  }, [base, officeId]);
   useEffect(() => {
     void load();
   }, [load]);
+
+  const linkFolder = () =>
+    run(async () => {
+      const res = await call(`/api/offices/${officeId}/document-folders`, 'POST', {
+        folder: folderLink.trim(),
+        connection_id: driveConn,
+        idempotency_key: `folder:${folderLink.trim()}:${Date.now()}`,
+      });
+      setFolderLink('');
+      if (res?.error) throw new Error(`Linked “${res.folder?.name}”, but it couldn’t be read yet: ${res.error}`);
+      const r = res?.report;
+      setNotice(
+        `Linked “${res?.folder?.name}”: ${r?.added ?? 0} ${r?.added === 1 ? 'file' : 'files'} added` +
+          (r?.skipped?.length ? `, ${r.skipped.length} skipped (no text)` : '') +
+          '. It is read again every day.'
+      );
+    });
 
   // Search as the owner types, a moment after they stop.
   useEffect(() => {
@@ -235,7 +269,62 @@ export const DocumentsPanel: React.FC<{ officeId: string; website?: string | nul
           <button type="button" role="tab" aria-selected={mode === 'page'} onClick={() => setMode('page')} className={tabClass(mode === 'page')}>
             Website page
           </button>
+          <button type="button" role="tab" aria-selected={mode === 'drive'} onClick={() => setMode('drive')} className={tabClass(mode === 'drive')}>
+            Google Drive folder
+          </button>
         </div>
+        {mode === 'drive' &&
+          (driveConns && driveConns.length === 0 ? (
+            <p className="text-[12px] text-neutral-400">
+              Connect Google with <b className="text-neutral-200">Drive (read only)</b> for this office in Settings → Connections
+              first. Then link a folder here: its files become documents, kept in step every day.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  value={folderLink}
+                  onChange={(e) => setFolderLink(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && folderLink.trim() && driveConn && !busy) {
+                      e.preventDefault();
+                      void linkFolder();
+                    }
+                  }}
+                  maxLength={500}
+                  placeholder="drive.google.com/drive/folders/…"
+                  aria-label="Google Drive folder link"
+                  className={`${inputClass} flex-1 min-w-0`}
+                />
+                <button
+                  type="button"
+                  disabled={busy || !folderLink.trim() || !driveConn}
+                  onClick={() => void linkFolder()}
+                  className={button}
+                >
+                  {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Link folder
+                </button>
+              </div>
+              {driveConns && driveConns.length > 1 && (
+                <select
+                  value={driveConn}
+                  onChange={(e) => setDriveConn(e.target.value)}
+                  aria-label="Google account"
+                  className={inputClass}
+                >
+                  {driveConns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <p className="text-[11px] text-neutral-500">
+                Docs, Sheets, Slides, PDFs, Word and text files (up to 50 per folder). Nothing in Drive is changed.
+              </p>
+            </div>
+          ))}
         {mode === 'file' && (
           <div className="flex items-center gap-2">
             <input
@@ -303,6 +392,80 @@ export const DocumentsPanel: React.FC<{ officeId: string; website?: string | nul
         {notice && <p className="text-[11px] text-emerald-300">{notice}</p>}
         {error && <p className="text-[11px] text-red-300">{error}</p>}
       </div>
+
+      {folders.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[11px] text-neutral-500">Google Drive folders, read again every day</div>
+          {folders.map((f) => (
+            <div key={f.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white/[0.03]">
+              <FolderOpen className="w-4 h-4 text-neutral-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] text-neutral-100 truncate">{f.name}</div>
+                <div className={`text-[11px] truncate ${f.sync_error ? 'text-amber-300' : 'text-neutral-500'}`}>
+                  {f.sync_error
+                    ? `Couldn’t read it: ${f.sync_error}`
+                    : f.synced_at
+                      ? `Read ${new Date(f.synced_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
+                      : 'Not read yet'}
+                </div>
+              </div>
+              {confirmUnlink === f.id ? (
+                <span className="flex items-center gap-1.5 text-[12px]">
+                  <span className="text-neutral-300">Unlink? Its documents go too.</span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        await call(`/api/document-folders/${f.id}/delete`, 'POST', { idempotency_key: `unlink:${f.id}` });
+                        setConfirmUnlink(null);
+                      })
+                    }
+                    className="text-red-300 font-medium"
+                  >
+                    Unlink
+                  </button>
+                  <button type="button" onClick={() => setConfirmUnlink(null)} className="text-neutral-400">
+                    Keep
+                  </button>
+                </span>
+              ) : (
+                <span className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    title="Read the folder again now"
+                    aria-label={`Sync ${f.name} now`}
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        const res = await call(`/api/document-folders/${f.id}/sync`, 'POST', {
+                          idempotency_key: `fsync:${f.id}:${Date.now()}`,
+                        });
+                        const r = res?.report ?? {};
+                        setNotice(
+                          `“${f.name}”: ${r.added ?? 0} added, ${r.updated ?? 0} updated, ${r.removed ?? 0} removed, ${r.unchanged ?? 0} unchanged.`
+                        );
+                      })
+                    }
+                    className="p-1.5 rounded-md text-neutral-500 hover:text-white hover:bg-white/5 disabled:opacity-40"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${busy ? 'animate-spin' : ''}`} />
+                  </button>
+                  <button
+                    type="button"
+                    title="Unlink the folder"
+                    aria-label={`Unlink ${f.name}`}
+                    onClick={() => setConfirmUnlink(f.id)}
+                    className="p-1.5 rounded-md text-neutral-500 hover:text-red-300 hover:bg-white/5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {docs && docs.length > 0 && (
         <label className="relative block">

@@ -537,6 +537,18 @@ pub fn app(state: AppState) -> Router {
             post(office::documents::delete_document),
         )
         .route(
+            "/api/offices/{id}/document-folders",
+            get(office::documents::list_folders).post(office::documents::link_folder),
+        )
+        .route(
+            "/api/document-folders/{id}/sync",
+            post(office::documents::sync_folder_now),
+        )
+        .route(
+            "/api/document-folders/{id}/delete",
+            post(office::documents::delete_folder),
+        )
+        .route(
             "/api/documents/{id}/sync",
             post(office::documents::sync_document),
         )
