@@ -8,6 +8,7 @@ import { translate, useT } from '../i18n';
 import { TeamPanel } from './TeamPanel';
 import { TelegramPanel } from './TelegramPanel';
 import { SlackPanel } from './SlackPanel';
+import { PhonePanel } from './PhonePanel';
 
 // Small dialogs for naming, renaming and deleting offices and rooms. Each
 // one reports a failure inline and stays open, so nothing fails silently.
@@ -464,7 +465,7 @@ export const EditOfficeDialog: React.FC<{
           {t('Documents')}
         </button>
         <button type="button" role="tab" aria-selected={tab === 'chat_apps'} onClick={() => setTab('chat_apps')} className={tabClass(tab === 'chat_apps')}>
-          {t('Chat apps')}
+          {t('Channels')}
         </button>
         </>
         )}
@@ -477,7 +478,7 @@ export const EditOfficeDialog: React.FC<{
       {tab === 'team' ? (
         <TeamPanel officeId={officeId} onLeft={onLeft} />
       ) : tab === 'chat_apps' ? (
-        // Telegram and Slack: talk to the office from a chat app.
+        // Telegram, Slack and the phone: reaching the office from outside.
         <div className="space-y-5">
           <section className="space-y-2" aria-label="Telegram">
             <h3 className="text-[13px] font-semibold text-white">Telegram</h3>
@@ -486,6 +487,10 @@ export const EditOfficeDialog: React.FC<{
           <section className="space-y-2 pt-4 border-t border-white/10" aria-label="Slack">
             <h3 className="text-[13px] font-semibold text-white">Slack</h3>
             <SlackPanel officeId={officeId} />
+          </section>
+          <section className="space-y-2 pt-4 border-t border-white/10" aria-label={t('Phone')}>
+            <h3 className="text-[13px] font-semibold text-white">{t('Phone')}</h3>
+            <PhonePanel officeId={officeId} />
           </section>
         </div>
       ) : tab === 'goal' ? (

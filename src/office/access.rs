@@ -67,6 +67,9 @@ pub fn role_defaults(
             &[("google", "calendar")],
         ),
         "Scheduler" => (&["appointments"], &[("google", "calendar")]),
+        // The phone receptionist (issue #32): bookings, new leads and
+        // messages; no connected tools (a caller never sees the inbox).
+        "Receptionist" => (&["appointments", "leads-pipeline", "support-inbox"], &[]),
         "Store Manager" => (&[], &[("shopify", "shopify")]),
         _ => (&[], &[]),
     }

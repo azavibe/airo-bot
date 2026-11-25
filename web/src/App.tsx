@@ -1195,7 +1195,14 @@ export const App: React.FC = () => {
       const botId = action.target.startsWith('bot:') ? action.target.slice(4) : null;
       if (action.target === 'office' && office) setDialog({ kind: 'editOffice', office });
       else if (action.target === 'goal' && office) setDialog({ kind: 'editOffice', office, tab: 'goal' });
-      else if ((action.target === 'documents' || action.target === 'memory') && office)
+      else if (action.target.startsWith('room:')) {
+        // A room, e.g. "Open Phone calls" under a call's summary.
+        const id = action.target.slice(5);
+        if (threads.some((t) => t.id === id)) {
+          setActiveThreadId(id);
+          handleTabChange('chat');
+        }
+      } else if ((action.target === 'documents' || action.target === 'memory') && office)
         setDialog({ kind: 'editOffice', office, tab: action.target });
       else if (botId) {
         const bot = agents.find((a) => a.id === botId);

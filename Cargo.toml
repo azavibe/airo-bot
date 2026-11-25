@@ -70,6 +70,7 @@ tower-http = { version = "0.6", features = ["fs"] }
 aes-gcm = "0.10"
 # Derives per-task webhook tokens so no raw webhook secret is ever stored.
 hmac = "0.12"
+sha1 = "0.10"
 # Text out of uploaded office documents (PDF and Word files); reading only.
 pdf-extract = "0.12"
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
