@@ -237,6 +237,9 @@ export interface Office {
   goal?: string | null;
   /** What it is like: hours, prices, tone, policies. */
   about?: string | null;
+  /** The language its bots write to customers in (a code from
+   *  /api/languages); none when null. */
+  language?: string | null;
   /** Hard monthly spending cap in credits; none when null. */
   monthly_cap_credits?: number | null;
   /** Credits its paid AI calls cost this month. */
