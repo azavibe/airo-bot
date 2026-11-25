@@ -14,9 +14,8 @@
 //!   PATCH /api/offices/:id/members/:user_id          owner
 //!   POST /api/offices/:id/members/:user_id/remove    owner, or the person
 //!
-//! TODO(air): a bot that uses one person's data (their Gmail, their
-//! notes) in a shared chat should answer that person privately or ask
-//! first; until then the office's connections stay the owner's.
+//! A bot in a shared office asks before it uses the owner's own inbox or
+//! calendar in a chat the team reads (`office::access::PRIVATE_PRODUCTS`).
 
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};

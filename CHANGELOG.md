@@ -35,6 +35,9 @@ app and the desktop app share one version number. A release is tagged
   remove people or revoke an invite there; teammates can leave. Bots answer
   on the owner's account whoever writes to them, and the owner's own
   Assistant stays private.
+- In an office with a team, bots don't show the owner's own Gmail or
+  Calendar in chats the team can read. When a question needs them, the bot
+  asks, and only the owner can allow it for that answer.
 
 ### Fixed
 - Approvals from every office now show in Approvals, not only the first
