@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Minus, Square, Copy, X, CircleDashedCheck, PanelLeftClose, PanelLeftOpen, Download } from 'lucide-react';
 import { openUpdate, useUpdates } from '../state/updates';
+import { useT } from '../i18n';
 
 // The desktop app's window has no system title bar (src-tauri/src/lib.rs),
 // so the app draws its own, in its own colours: a drag area (double-click
@@ -48,6 +49,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
   const [win] = useState(currentWindow);
   const { info: update } = useUpdates();
   const [maximized, setMaximized] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     if (!win) return;
@@ -85,8 +87,8 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
             type="button"
             onClick={onToggleSidebar}
             className="ml-1 w-7 h-7 rounded-lg flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
-            title={sidebarCollapsed ? 'Show the sidebar' : 'Shrink the sidebar to icons'}
-            aria-label={sidebarCollapsed ? 'Show the sidebar' : 'Shrink the sidebar to icons'}
+            title={sidebarCollapsed ? t('Show the sidebar') : t('Shrink the sidebar to icons')}
+            aria-label={sidebarCollapsed ? t('Show the sidebar') : t('Shrink the sidebar to icons')}
           >
             {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </button>
@@ -98,9 +100,12 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
             type="button"
             onClick={() => void openUpdate(update)}
             className="my-1.5 mr-1 px-3 rounded-full flex items-center gap-1.5 bg-emerald-500 text-white text-[12px] font-semibold hover:bg-emerald-400 transition-colors"
-            title={`Airobot ${update.latest} is out (you have ${update.current}). Downloads the installer.`}
+            title={t('Airobot {latest} is out (you have {current}). Downloads the installer.', {
+              latest: update.latest,
+              current: update.current,
+            })}
           >
-            <Download className="w-3.5 h-3.5" /> Update to {update.latest}
+            <Download className="w-3.5 h-3.5" /> {t('Update to {version}', { version: update.latest })}
           </button>
         )}
         {onOpenApprovals && (
@@ -111,8 +116,8 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
             className={`relative h-full px-3 flex items-center gap-1.5 text-[12px] transition-colors ${
               approvalsActive ? 'text-white bg-white/10' : 'text-neutral-400 hover:text-white hover:bg-white/10'
             }`}
-            title={approvalsCount > 0 ? `Approvals: ${approvalsCount} waiting for your OK` : 'Approvals'}
-            aria-label={approvalsCount > 0 ? `Approvals, ${approvalsCount} waiting` : 'Approvals'}
+            title={approvalsCount > 0 ? t('Approvals: {n} waiting for your OK', { n: approvalsCount }) : t('Approvals')}
+            aria-label={approvalsCount > 0 ? t('Approvals, {n} waiting', { n: approvalsCount }) : t('Approvals')}
           >
             <CircleDashedCheck className="w-4 h-4" />
             {approvalsCount > 0 && (
@@ -124,15 +129,15 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         )}
       {!mac && (
         <div className="flex items-stretch">
-          <button type="button" className={button} onClick={() => win.minimize()} title="Minimize" aria-label="Minimize">
+          <button type="button" className={button} onClick={() => win.minimize()} title={t('Minimize')} aria-label={t('Minimize')}>
             <Minus className="w-4 h-4" />
           </button>
           <button
             type="button"
             className={button}
             onClick={() => win.toggleMaximize()}
-            title={maximized ? 'Restore' : 'Maximize'}
-            aria-label={maximized ? 'Restore' : 'Maximize'}
+            title={maximized ? t('Restore') : t('Maximize')}
+            aria-label={maximized ? t('Restore') : t('Maximize')}
           >
             {maximized ? <Copy className="w-3.5 h-3.5 -scale-x-100" /> : <Square className="w-3.5 h-3.5" />}
           </button>
@@ -140,8 +145,8 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
             type="button"
             className={`${button} hover:!bg-red-600 hover:!text-white`}
             onClick={() => win.close()}
-            title="Close (Airobot keeps running in the tray)"
-            aria-label="Close"
+            title={t('Close (Airobot keeps running in the tray)')}
+            aria-label={t('Close')}
           >
             <X className="w-4 h-4" />
           </button>

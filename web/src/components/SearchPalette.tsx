@@ -5,6 +5,7 @@ import type { Tab } from '../App';
 import { botModelLabel, roomName } from '../utils/format';
 import { roomLabel } from './Sidebar';
 import { closeOnBackdrop } from '../utils/useEscape';
+import { msg, useLanguage, useT } from '../i18n';
 
 // One search for everything in the sidebar and beyond: rooms, bots, apps,
 // workflows, offices and pages. Ctrl/Cmd+K opens it from anywhere.
@@ -38,13 +39,15 @@ interface Item {
   run: () => void;
 }
 
-const GROUP_ORDER = ['Chats', 'Bot settings', 'Apps', 'Workflows', 'Offices', 'Go to'];
+const GROUP_ORDER = [msg('Chats'), msg('Bot settings'), msg('Apps'), msg('Workflows'), msg('Offices'), msg('Go to')];
 
 export const SearchPalette: React.FC<Props> = (props) => {
   const { open, onClose } = props;
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const tr = useT();
+  const { lang } = useLanguage();
 
   useEffect(() => {
     if (open) {
@@ -91,23 +94,24 @@ export const SearchPalette: React.FC<Props> = (props) => {
         key: `office-${o.id}`,
         group: 'Offices',
         label: o.name,
-        detail: `Group chat · ${o.room_count} ${o.room_count === 1 ? 'room' : 'rooms'}`,
+        detail: o.room_count === 1 ? tr('Group chat · 1 room') : tr('Group chat · {n} rooms', { n: o.room_count }),
         run: () => p.onOpenOffice(o),
       })
     );
     const pages: [string, () => void][] = [
-      ['Approvals', () => p.onOpenTab('approvals')],
-      ['Apps', () => p.onOpenTab('apps')],
-      ['Bots', () => p.onOpenTab('bots')],
-      ['Workflows', () => p.onOpenTab('workflows')],
-      ['Connections', () => p.onOpenSettings('connections')],
-      ['Devices', p.onOpenDevices],
-      ['Settings', () => p.onOpenSettings()],
+      [msg('Approvals'), () => p.onOpenTab('approvals')],
+      [msg('Apps'), () => p.onOpenTab('apps')],
+      [msg('Bots'), () => p.onOpenTab('bots')],
+      [msg('Workflows'), () => p.onOpenTab('workflows')],
+      [msg('Connections'), () => p.onOpenSettings('connections')],
+      [msg('Devices'), p.onOpenDevices],
+      [msg('Settings'), () => p.onOpenSettings()],
     ];
-    pages.forEach(([label, run]) => out.push({ key: `page-${label}`, group: 'Go to', label, run }));
+    // Page names in the app's language, so they match what people type.
+    pages.forEach(([label, run]) => out.push({ key: `page-${label}`, group: 'Go to', label: tr(label), run }));
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.threads, props.agents, props.apps, props.procedures, props.offices, props.localEngine]);
+  }, [props.threads, props.agents, props.apps, props.procedures, props.offices, props.localEngine, lang]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -159,20 +163,22 @@ export const SearchPalette: React.FC<Props> = (props) => {
                 pick(results[cursor]);
               }
             }}
-            placeholder="Search rooms, bots, apps and workflows"
-            aria-label="Search"
+            placeholder={tr('Search rooms, bots, apps and workflows')}
+            aria-label={tr('Search')}
             className="flex-1 bg-transparent outline-none text-sm text-white placeholder-neutral-500"
           />
           <kbd className="text-[10px] font-mono text-neutral-500">Esc</kbd>
         </div>
         <div ref={listRef} className="max-h-[55vh] overflow-y-auto py-1.5">
           {results.length === 0 ? (
-            <p className="px-4 py-6 text-center text-xs text-neutral-500">Nothing matches “{query.trim()}”.</p>
+            <p className="px-4 py-6 text-center text-xs text-neutral-500">
+              {tr('Nothing matches “{query}”.', { query: query.trim() })}
+            </p>
           ) : (
             results.map((item, i) => (
               <React.Fragment key={item.key}>
                 {(i === 0 || results[i - 1].group !== item.group) && (
-                  <div className="px-4 pt-2 pb-1 text-[11px] font-medium text-neutral-500">{item.group}</div>
+                  <div className="px-4 pt-2 pb-1 text-[11px] font-medium text-neutral-500">{tr(item.group)}</div>
                 )}
                 <button
                   data-index={i}

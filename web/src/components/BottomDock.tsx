@@ -20,10 +20,12 @@ import {
   FileText,
   PanelLeft,
 } from 'lucide-react';
+import { useT } from '../i18n';
 
 /** Who is reading a message aloud, with Stop. Only one voice plays at a time. */
 const SpeakingBar: React.FC = () => {
   const [, tick] = useState(0);
+  const t = useT();
   useEffect(() => voice.subscribe(() => tick((n) => n + 1)), []);
   const state = speaker.state;
   if (!state) return null;
@@ -51,18 +53,20 @@ const SpeakingBar: React.FC = () => {
       <span className="truncate text-neutral-300">
         <span className="text-white font-medium">{state.who}</span>
         {preparing
-          ? ` · getting the voice ready${progress ? ` ${Math.round(progress.fraction * 100)}%` : '…'}`
-          : ' is speaking'}
+          ? ` · ${t('getting the voice ready')}${progress ? ` ${Math.round(progress.fraction * 100)}%` : '…'}`
+          : ` ${t('is speaking')}`}
         {state.where ? <span className="text-neutral-500"> · {state.where}</span> : null}
-        {state.waiting > 0 ? <span className="text-neutral-500"> · {state.waiting} more waiting</span> : null}
+        {state.waiting > 0 ? (
+          <span className="text-neutral-500"> · {t('{n} more waiting', { n: state.waiting })}</span>
+        ) : null}
       </span>
       <button
         type="button"
         onClick={stopSpeaking}
         className="flex items-center gap-1 px-2 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white flex-shrink-0"
-        title="Stop reading aloud"
+        title={t('Stop reading aloud')}
       >
-        <Square className="w-2.5 h-2.5 fill-current" /> Stop
+        <Square className="w-2.5 h-2.5 fill-current" /> {t('Stop')}
       </button>
     </div>
   );
@@ -116,8 +120,10 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   onOpenVoiceSettings,
   officeName,
   onOpenOfficeSection,
-  placeholder = 'Message your bots…',
+  placeholder: placeholderProp,
 }) => {
+  const t = useT();
+  const placeholder = placeholderProp ?? t('Message your bots…');
   // The menu in the message bar: approvals and the office's goal, memory
   // and documents, one tap away on every screen (phones have no sidebar).
   const [menuOpen, setMenuOpen] = useState(false);
@@ -196,9 +202,9 @@ export const BottomDock: React.FC<BottomDockProps> = ({
       const blob = await rec.stop();
       const result = await transcribe(blob, voiceSettings, seconds);
       if (result.text) appendDictation(result.text);
-      else onVoiceError?.('Nothing was heard. Try again a little closer to the mic.');
+      else onVoiceError?.(t('Nothing was heard. Try again a little closer to the mic.'));
     } catch (e) {
-      onVoiceError?.(e instanceof Error ? e.message : 'Could not transcribe that.');
+      onVoiceError?.(e instanceof Error ? e.message : t('Could not transcribe that.'));
     } finally {
       setRecState('idle');
       setRecElapsed(0);
@@ -310,7 +316,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
         return;
       }
       if (engine === 'groq' && !groqKey.get()) {
-        onVoiceError?.('Add your Groq API key in Settings → Voice first.');
+        onVoiceError?.(t('Add your Groq API key in Settings → Voice first.'));
         onOpenVoiceSettings?.();
         return;
       }
@@ -322,7 +328,9 @@ export const BottomDock: React.FC<BottomDockProps> = ({
         })
         .catch((err) => {
           const denied = err?.name === 'NotAllowedError' || err?.name === 'SecurityError';
-          onVoiceError?.(denied ? 'Microphone access was blocked. Allow it for this app and try again.' : 'No microphone is available.');
+          onVoiceError?.(
+            denied ? t('Microphone access was blocked. Allow it for this app and try again.') : t('No microphone is available.')
+          );
         });
       return;
     }
@@ -369,7 +377,9 @@ export const BottomDock: React.FC<BottomDockProps> = ({
           keepListeningRef.current = false;
           setIsListening(false);
           onVoiceError?.(
-            event.error === 'audio-capture' ? 'No microphone is available.' : 'Microphone access was blocked. Allow it for this app and try again.'
+            event.error === 'audio-capture'
+              ? t('No microphone is available.')
+              : t('Microphone access was blocked. Allow it for this app and try again.')
           );
         }
         // "no-speech" and network blips: onend restarts it.
@@ -445,7 +455,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
             }}
             className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white transition-colors"
           >
-            {activeAgentPlan.status === 'waiting_approval' ? 'Review approval' : 'Open Bots'}
+            {activeAgentPlan.status === 'waiting_approval' ? t('Review approval') : t('Open Bots')}
             <ArrowRight className="w-3 h-3" />
           </button>
         </div>
@@ -463,16 +473,16 @@ export const BottomDock: React.FC<BottomDockProps> = ({
             [
               {
                 key: 'approvals',
-                label: 'Approvals',
+                label: t('Approvals'),
                 icon: <CircleDashedCheck className="w-4 h-4" />,
                 meta: pendingApprovalsCount > 0 ? String(pendingApprovalsCount) : null,
                 run: () => onChangeTab('approvals'),
               },
               ...(onOpenOfficeSection
                 ? [
-                    { key: 'goal', label: 'Goal & milestones', icon: <Target className="w-4 h-4" />, meta: null, run: () => onOpenOfficeSection('goal') },
-                    { key: 'memory', label: 'Memory', icon: <Brain className="w-4 h-4" />, meta: null, run: () => onOpenOfficeSection('memory') },
-                    { key: 'documents', label: 'Documents', icon: <FileText className="w-4 h-4" />, meta: null, run: () => onOpenOfficeSection('documents') },
+                    { key: 'goal', label: t('Goal & milestones'), icon: <Target className="w-4 h-4" />, meta: null, run: () => onOpenOfficeSection('goal') },
+                    { key: 'memory', label: t('Memory'), icon: <Brain className="w-4 h-4" />, meta: null, run: () => onOpenOfficeSection('memory') },
+                    { key: 'documents', label: t('Documents'), icon: <FileText className="w-4 h-4" />, meta: null, run: () => onOpenOfficeSection('documents') },
                   ]
                 : []),
             ] as { key: string; label: string; icon: React.ReactNode; meta: string | null; run: () => void }[]
@@ -511,7 +521,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
                 <span className="text-neutral-400">
                   <PanelLeft className="w-4 h-4" />
                 </span>
-                <span className="flex-1">Rooms & offices</span>
+                <span className="flex-1">{t('Rooms & offices')}</span>
               </button>
             </>
           )}
@@ -539,8 +549,8 @@ export const BottomDock: React.FC<BottomDockProps> = ({
             className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
               menuOpen ? 'bg-white/15 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/10'
             }`}
-            title={pendingApprovalsCount > 0 ? `Menu (${pendingApprovalsCount} approvals waiting)` : 'Menu'}
-            aria-label={pendingApprovalsCount > 0 ? `Menu, ${pendingApprovalsCount} approvals waiting` : 'Menu'}
+            title={pendingApprovalsCount > 0 ? t('Menu ({n} approvals waiting)', { n: pendingApprovalsCount }) : t('Menu')}
+            aria-label={pendingApprovalsCount > 0 ? t('Menu, {n} approvals waiting', { n: pendingApprovalsCount }) : t('Menu')}
           >
             <Menu className="w-4 h-4" />
             {pendingApprovalsCount > 0 && (
@@ -602,7 +612,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
               type="button"
               onClick={() => setShowPlanPopover(!showPlanPopover)}
               className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/15 text-white text-[11px] font-mono border border-white/15 transition-all"
-              title="Current agent task"
+              title={t('Current agent task')}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>{activeAgentPlan.status.replace(/_/g, ' ').toUpperCase()}</span>
@@ -627,20 +637,20 @@ export const BottomDock: React.FC<BottomDockProps> = ({
               }`}
               title={
                 recState === 'recording'
-                  ? 'Recording… click to transcribe'
+                  ? t('Recording… click to transcribe')
                   : recState === 'transcribing'
-                  ? 'Transcribing…'
+                  ? t('Transcribing…')
                   : isListening
-                  ? 'Listening… click to stop'
+                  ? t('Listening… click to stop')
                   : voiceSettings?.stt === 'local'
-                  ? 'Dictate (on this device)'
+                  ? t('Dictate (on this device)')
                   : voiceSettings?.stt === 'groq'
-                  ? 'Dictate (Groq)'
+                  ? t('Dictate (Groq)')
                   : SpeechRecognition
-                  ? 'Voice input'
-                  : 'Set up voice input'
+                  ? t('Voice input')
+                  : t('Set up voice input')
               }
-              aria-label={recState === 'recording' || isListening ? 'Stop and transcribe' : 'Voice input'}
+              aria-label={recState === 'recording' || isListening ? t('Stop and transcribe') : t('Voice input')}
             >
               {recState === 'transcribing' ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -657,8 +667,8 @@ export const BottomDock: React.FC<BottomDockProps> = ({
               type="submit"
               disabled={isSending}
               className="w-7 h-7 rounded-full bg-accent text-accent-fg flex items-center justify-center hover:bg-accent/90 active:scale-95 transition-all shadow-glow-white disabled:opacity-50 flex-shrink-0"
-              title="Send (Enter) · new line (Shift+Enter)"
-              aria-label="Send"
+              title={t('Send (Enter) · new line (Shift+Enter)')}
+              aria-label={t('Send')}
             >
               {isSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 stroke-[2.5]" />}
             </button>

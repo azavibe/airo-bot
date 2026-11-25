@@ -1,4 +1,5 @@
 import { Agent } from '../types';
+import { currentLanguage, translate } from '../i18n';
 
 // Shared wording for things several screens show, so they never disagree.
 
@@ -25,11 +26,11 @@ export const engineName = (id: string): string => ENGINE_NAMES[id] ?? id;
 export const botModelLabel = (agent: Agent, localEngine?: string | null): string => {
   if (agent.ai_source === 'this_computer' || agent.ai_engine) {
     const engine = agent.ai_engine || localEngine;
-    if (!engine) return 'No AI chosen';
+    if (!engine) return translate('No AI chosen');
     return agent.ai_model ? `${engineName(engine)} · ${agent.ai_model}` : engineName(engine);
   }
-  if (agent.ai_source === 'none') return 'No AI connected';
-  return agent.effective_model || agent.provider_model || 'Default model';
+  if (agent.ai_source === 'none') return translate('No AI connected');
+  return agent.effective_model || agent.provider_model || translate('Default model');
 };
 
 // The server answers for every bot in a room, so a bot is ready unless no
@@ -37,13 +38,13 @@ export const botModelLabel = (agent: Agent, localEngine?: string | null): string
 // TODO(air): 10 minutes is a guess; poll intervals may justify a different window.
 export const agentStatus = (agent: Agent, localEngine?: string | null): AgentStatus => {
   if (agent.last_seen_at && Date.now() - new Date(agent.last_seen_at).getTime() < 10 * 60 * 1000) {
-    return { label: 'Online', tone: 'emerald' };
+    return { label: translate('Online'), tone: 'emerald' };
   }
-  if (agent.ai_source === 'none') return { label: 'Needs AI', tone: 'amber' };
+  if (agent.ai_source === 'none') return { label: translate('Needs AI'), tone: 'amber' };
   if (agent.ai_source === 'this_computer' && !agent.ai_engine && localEngine === null) {
-    return { label: 'Needs AI', tone: 'amber' };
+    return { label: translate('Needs AI'), tone: 'amber' };
   }
-  return { label: 'Ready', tone: 'emerald' };
+  return { label: translate('Ready'), tone: 'emerald' };
 };
 
 export const statusToneClass = (tone: AgentStatus['tone']) =>
@@ -56,13 +57,14 @@ export const statusToneClass = (tone: AgentStatus['tone']) =>
 /** "#leads-crm" -> "leads-crm" */
 export const roomName = (title: string) => title.replace(/^#/, '');
 
-/** "just now", "5 minutes ago", "2 days ago", "1 year ago". */
+/** "just now", "5 minutes ago", "2 days ago", "1 year ago", in the app's
+ *  language (the browser's own words for times, Intl.RelativeTimeFormat). */
 export const timeAgo = (when: string | number | Date): string => {
   const t = new Date(when).getTime();
   if (Number.isNaN(t)) return '';
   const s = Math.round((Date.now() - t) / 1000);
-  if (s < 45) return 'just now';
-  const units: [number, string][] = [
+  if (s < 45) return translate('just now');
+  const units: [number, Intl.RelativeTimeFormatUnit][] = [
     [60, 'minute'],
     [3600, 'hour'],
     [86400, 'day'],
@@ -73,7 +75,11 @@ export const timeAgo = (when: string | number | Date): string => {
   let unit = units[0];
   for (const u of units) if (s >= u[0]) unit = u;
   const n = Math.max(1, Math.floor(s / unit[0]));
-  return `${n} ${unit[1]}${n === 1 ? '' : 's'} ago`;
+  try {
+    return new Intl.RelativeTimeFormat(currentLanguage(), { numeric: 'always' }).format(-n, unit[1]);
+  } catch {
+    return `${n} ${unit[1]}${n === 1 ? '' : 's'} ago`;
+  }
 };
 
 /** What a record is called, whichever app it belongs to (leads have a

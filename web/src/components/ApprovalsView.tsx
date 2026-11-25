@@ -3,6 +3,7 @@ import { Approval } from '../types';
 import { timeAgo } from '../utils/format';
 import { BotAvatar } from './BotAvatar';
 import { ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react';
+import { useT } from '../i18n';
 
 interface ApprovalsViewProps {
   approvals: Approval[];
@@ -16,6 +17,7 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  const t = useT();
 
   const decide = async (id: string, decision: 'approved' | 'rejected') => {
     setBusyId(id);
@@ -32,14 +34,14 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
       {/* Header */}
       <div className="flex-shrink-0 flex items-center justify-between gap-4 px-6 py-4 border-b border-white/[0.08] bg-black/20 backdrop-blur-md">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold text-white tracking-tight">Approvals</h1>
+          <h1 className="text-xl font-bold text-white tracking-tight">{t('Approvals')}</h1>
           <p className="text-xs text-neutral-400 mt-0.5">
-            Agents ask here before costly actions, public posts, or messages to clients.
+            {t('Agents ask here before costly actions, public posts, or messages to clients.')}
           </p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-neutral-300 flex-shrink-0">
           <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-          <span>{pending.length} waiting</span>
+          <span>{t('{n} waiting', { n: pending.length })}</span>
         </div>
       </div>
 
@@ -50,15 +52,15 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
             <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-3 text-emerald-400">
               <CheckCircle2 className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-semibold text-white">All clear</h3>
+            <h3 className="text-sm font-semibold text-white">{t('All clear')}</h3>
             <p className="text-xs text-neutral-400 max-w-sm mt-1">
-              Tasks within your safety and credit limits run without interrupting you.
+              {t('Tasks within your safety and credit limits run without interrupting you.')}
             </p>
             <button
               onClick={onOpenBots}
               className="mt-4 flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 text-white text-xs font-medium border border-white/10 transition-colors"
             >
-              See what bots are doing <ArrowRight className="w-3.5 h-3.5" />
+              {t('See what bots are doing')} <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         ) : (
@@ -70,11 +72,11 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
                 <div key={item.id} className="glass-panel p-5 space-y-4 border-white/15">
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-[12px] text-neutral-300 min-w-0">
-                      <BotAvatar name={item.agent_name || 'Bot'} size={22} />
-                      <span className="truncate">{item.agent_name || 'A bot'} asks</span>
+                      <BotAvatar name={item.agent_name || t('Bot')} size={22} />
+                      <span className="truncate">{t('{bot} asks', { bot: item.agent_name || t('A bot') })}</span>
                     </span>
                     <span className="text-[11px] text-neutral-500 flex-shrink-0">
-                      {item.estimated_credits} credits · {timeAgo(item.created_at)}
+                      {t('{n} credits', { n: item.estimated_credits })} · {timeAgo(item.created_at)}
                     </span>
                   </div>
 
@@ -82,7 +84,7 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
                     <h3 className="text-[15px] font-semibold text-white leading-snug">{item.action_summary}</h3>
                     {item.reason && (
                       <p className="text-xs text-neutral-300 mt-2 leading-relaxed bg-white/[0.03] p-3 rounded-xl border border-white/5">
-                        <strong className="text-white">Why: </strong>
+                        <strong className="text-white">{t('Why:')} </strong>
                         {item.reason}
                       </p>
                     )}
@@ -95,15 +97,15 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
                         htmlFor={`reject-${item.id}`}
                         className="text-[11px] font-medium text-neutral-300 flex items-center justify-between gap-2"
                       >
-                        <span>Why? (optional)</span>
-                        <span className="text-[10px] text-neutral-500">Saved as an office lesson</span>
+                        <span>{t('Why? (optional)')}</span>
+                        <span className="text-[10px] text-neutral-500">{t('Saved as an office lesson')}</span>
                       </label>
                       <input
                         id={`reject-${item.id}`}
                         type="text"
                         value={reasons[item.id] || ''}
                         onChange={(e) => setReasons({ ...reasons, [item.id]: e.target.value })}
-                        placeholder="e.g. Never contact leads before 9am"
+                        placeholder={t('e.g. Never contact leads before 9am')}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30"
                         autoFocus
                         onKeyDown={(e) => {
@@ -117,14 +119,14 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
                           disabled={isBusy}
                           className="flex-1 py-2 px-4 rounded-xl text-xs font-medium text-neutral-400 hover:text-white transition-colors"
                         >
-                          Cancel
+                          {t('Cancel')}
                         </button>
                         <button
                           onClick={() => decide(item.id, 'rejected')}
                           disabled={isBusy}
                           className="flex-1 py-2 px-4 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 text-xs font-semibold transition-all disabled:opacity-50"
                         >
-                          {isBusy ? 'Rejecting…' : 'Reject'}
+                          {isBusy ? t('Rejecting…') : t('Reject')}
                         </button>
                       </div>
                     </div>
@@ -135,14 +137,14 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
                         disabled={isBusy}
                         className="flex-1 py-2.5 px-4 rounded-xl text-xs font-medium bg-white/[0.08] hover:bg-white/[0.14] text-neutral-200 border border-white/10 transition-all active:scale-95 disabled:opacity-50"
                       >
-                        Reject…
+                        {t('Reject…')}
                       </button>
                       <button
                         onClick={() => decide(item.id, 'approved')}
                         disabled={isBusy}
                         className="flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold bg-accent text-accent-fg hover:bg-accent/90 shadow-glow-white transition-all active:scale-95 disabled:opacity-50"
                       >
-                        {isBusy ? 'Approving…' : 'Approve'}
+                        {isBusy ? t('Approving…') : t('Approve')}
                       </button>
                     </div>
                   )}

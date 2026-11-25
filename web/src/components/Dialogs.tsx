@@ -4,6 +4,7 @@ import { Agent, EditOfficeTab, Lesson, Memory } from '../types';
 import { DocumentsPanel } from './DocumentsPanel';
 import { GoalPanel } from './GoalPanel';
 import { useEscape, closeOnBackdrop } from '../utils/useEscape';
+import { translate, useT } from '../i18n';
 
 // Small dialogs for naming, renaming and deleting offices and rooms. Each
 // one reports a failure inline and stays open, so nothing fails silently.
@@ -22,6 +23,7 @@ const Shell: React.FC<{
   children?: React.ReactNode;
 }> = ({ title, onClose, onSubmit, busy, error, submitLabel, danger, disabled, wide, children }) => {
   useEscape(true, onClose);
+  const t = useT();
   return (
     <div
       onClick={closeOnBackdrop(onClose)}
@@ -39,7 +41,7 @@ const Shell: React.FC<{
       >
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-semibold text-white">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-neutral-400 hover:text-white p-1">
+          <button type="button" onClick={onClose} aria-label={t('Close')} className="text-neutral-400 hover:text-white p-1">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -51,7 +53,7 @@ const Shell: React.FC<{
             onClick={onClose}
             className="px-3.5 py-1.5 rounded-xl text-xs text-neutral-300 hover:text-white hover:bg-white/10 transition-colors"
           >
-            Cancel
+            {t('Cancel')}
           </button>
           <button
             type="submit"
@@ -60,7 +62,7 @@ const Shell: React.FC<{
               danger ? 'bg-red-500/80 text-white hover:bg-red-500' : 'bg-accent text-accent-fg hover:bg-accent/90'
             }`}
           >
-            {busy ? 'Working…' : submitLabel}
+            {busy ? t('Working…') : submitLabel}
           </button>
         </div>
       </form>
@@ -81,7 +83,7 @@ const useAction = (run: () => Promise<void>, onDone: () => void) => {
       await run();
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'That did not work. Please try again.');
+      setError(e instanceof Error ? e.message : translate('That did not work. Please try again.'));
     } finally {
       setBusy(false);
     }
@@ -397,6 +399,7 @@ export const EditOfficeDialog: React.FC<{
 }> = ({ officeId, agents, initial, startTab = 'profile', spend = null, onSubmit, onClose }) => {
   const [values, setValues] = useState<OfficeEdit>(initial);
   const [tab, setTab] = useState<EditOfficeTab>(startTab);
+  const t = useT();
   const set = (patch: Partial<OfficeEdit>) => setValues((v) => ({ ...v, ...patch }));
   const [languages, setLanguages] = useState<Language[]>([]);
   useEffect(() => {
@@ -426,27 +429,27 @@ export const EditOfficeDialog: React.FC<{
     }`;
   return (
     <Shell
-      title="Edit office"
+      title={t('Edit office')}
       onClose={onClose}
       onSubmit={tab === 'profile' ? go : onClose}
       busy={busy}
       error={tab === 'profile' ? error : null}
-      submitLabel={tab === 'profile' ? 'Save' : 'Done'}
+      submitLabel={tab === 'profile' ? t('Save') : t('Done')}
       disabled={tab === 'profile' && !values.name.trim()}
       wide
     >
       <div role="tablist" className="flex gap-1 -mt-1">
         <button type="button" role="tab" aria-selected={tab === 'profile'} onClick={() => setTab('profile')} className={tabClass(tab === 'profile')}>
-          Profile
+          {t('Profile')}
         </button>
         <button type="button" role="tab" aria-selected={tab === 'goal'} onClick={() => setTab('goal')} className={tabClass(tab === 'goal')}>
-          Goal
+          {t('Goal')}
         </button>
         <button type="button" role="tab" aria-selected={tab === 'memory'} onClick={() => setTab('memory')} className={tabClass(tab === 'memory')}>
-          Memory
+          {t('Memory')}
         </button>
         <button type="button" role="tab" aria-selected={tab === 'documents'} onClick={() => setTab('documents')} className={tabClass(tab === 'documents')}>
-          Documents
+          {t('Documents')}
         </button>
       </div>
       {tab === 'goal' ? (
@@ -458,7 +461,7 @@ export const EditOfficeDialog: React.FC<{
       ) : (
       <>
       <label className="block space-y-1.5">
-        <span className="text-[11px] text-neutral-400">Office name</span>
+        <span className="text-[11px] text-neutral-400">{t('Office name')}</span>
         <input
           autoFocus
           value={values.name}
@@ -468,17 +471,17 @@ export const EditOfficeDialog: React.FC<{
         />
       </label>
       <label className="block space-y-1.5">
-        <span className="text-[11px] text-neutral-400">What the business is</span>
+        <span className="text-[11px] text-neutral-400">{t('What the business is')}</span>
         <input
           value={values.business_type}
           onChange={(e) => set({ business_type: e.target.value })}
           maxLength={100}
-          placeholder="Dental clinic, bakery, online store…"
+          placeholder={t('Dental clinic, bakery, online store…')}
           className={inputClass}
         />
       </label>
       <label className="block space-y-1.5">
-        <span className="text-[11px] text-neutral-400">Website</span>
+        <span className="text-[11px] text-neutral-400">{t('Website')}</span>
         <input
           value={values.website}
           onChange={(e) => set({ website: e.target.value })}
@@ -489,7 +492,7 @@ export const EditOfficeDialog: React.FC<{
         />
       </label>
       <label className="block space-y-1.5">
-        <span className="text-[11px] text-neutral-400">What matters most this month</span>
+        <span className="text-[11px] text-neutral-400">{t('What matters most this month')}</span>
         <input
           value={values.focus}
           onChange={(e) => set({ focus: e.target.value })}
@@ -505,13 +508,13 @@ export const EditOfficeDialog: React.FC<{
         </datalist>
       </label>
       <label className="block space-y-1.5">
-        <span className="text-[11px] text-neutral-400">Language the bots write to customers in</span>
+        <span className="text-[11px] text-neutral-400">{t('Language the bots write to customers in')}</span>
         <select
           value={values.language}
           onChange={(e) => set({ language: e.target.value })}
           className={inputClass}
         >
-          <option value="">Not set: the language each person writes in</option>
+          <option value="">{t('Not set: the language each person writes in')}</option>
           {values.language && !languages.some((l) => l.code === values.language) && (
             <option value={values.language}>{values.language}</option>
           )}
@@ -522,12 +525,11 @@ export const EditOfficeDialog: React.FC<{
           ))}
         </select>
         <span className="block text-[11px] text-neutral-500 leading-relaxed">
-          Posts, emails, quotes and replies to customers are written in it. Bots still answer you in the language you
-          write in.
+          {t('Posts, emails, quotes and replies to customers are written in it. Bots still answer you in the language you write in.')}
         </span>
       </label>
       <label className="block space-y-1.5">
-        <span className="text-[11px] text-neutral-400">About the business: hours, prices, tone, policies</span>
+        <span className="text-[11px] text-neutral-400">{t('About the business: hours, prices, tone, policies')}</span>
         <textarea
           value={values.about}
           onChange={(e) => set({ about: e.target.value })}
@@ -544,32 +546,31 @@ export const EditOfficeDialog: React.FC<{
           onChange={(e) => set({ daily_plan: e.target.checked })}
           className="w-4 h-4 accent-accent"
         />
-        Daily plan: the Architect hands out the day's tasks each morning
+        {t("Daily plan: the Architect hands out the day's tasks each morning")}
       </label>
       {spend && (
         <label className="block space-y-1.5">
-          <span className="text-[11px] text-neutral-400">Monthly spending cap (included AI credits)</span>
+          <span className="text-[11px] text-neutral-400">{t('Monthly spending cap (included AI credits)')}</span>
           <div className="flex items-center gap-2">
             <input
               value={values.monthly_cap}
               onChange={(e) => set({ monthly_cap: e.target.value.replace(/[^0-9]/g, '') })}
               inputMode="numeric"
-              placeholder="No cap"
+              placeholder={t('No cap')}
               className={`${inputClass} w-36`}
             />
             <span className="text-[12px] text-neutral-400">
-              credits · {spend.spent.toLocaleString()} spent this month
-              {spend.reached ? ' · cap reached' : ''}
+              {t('credits · {n} spent this month', { n: spend.spent.toLocaleString() })}
+              {spend.reached ? ` · ${t('cap reached')}` : ''}
             </span>
           </div>
           <span className="block text-[11px] text-neutral-500 leading-relaxed">
-            When the office reaches it, its bots make no paid AI calls and the morning plan and queued tasks wait until
-            the 1st or until you raise it. Your own OpenRouter key and AI tools aren't capped.
+            {t("When the office reaches it, its bots make no paid AI calls and the morning plan and queued tasks wait until the 1st or until you raise it. Your own OpenRouter key and AI tools aren't capped.")}
           </span>
         </label>
       )}
       <p className="text-[11px] text-neutral-500 leading-relaxed">
-        Every bot in this office reads these. Leave a field empty to clear it.
+        {t('Every bot in this office reads these. Leave a field empty to clear it.')}
       </p>
       </>
       )}

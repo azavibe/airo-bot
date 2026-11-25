@@ -5,6 +5,7 @@ import { OfficeApp, OfficeRecord, Approval, WorkspaceWallet } from '../types';
 import type { Tab } from '../App';
 import { formatCredits } from '../utils/format';
 import { KanbanBoard } from './KanbanBoard';
+import { msg, useT } from '../i18n';
 
 interface AppsPanelProps {
   /** On this computer: the person's own AI, no credits. */
@@ -32,6 +33,7 @@ const ApprovalCard: React.FC<{
   onDecide: (id: string, decision: 'approved' | 'rejected') => Promise<boolean>;
 }> = ({ approval, onDecide }) => {
   const [busy, setBusy] = useState(false);
+  const t = useT();
   const decide = async (decision: 'approved' | 'rejected') => {
     setBusy(true);
     try {
@@ -45,9 +47,11 @@ const ApprovalCard: React.FC<{
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-          <span className="text-[13px] font-medium text-amber-300">Approval needed</span>
+          <span className="text-[13px] font-medium text-amber-300">{t('Approval needed')}</span>
         </div>
-        <span className="text-[11px] text-neutral-400 font-mono">{approval.estimated_credits} credits</span>
+        <span className="text-[11px] text-neutral-400 font-mono">
+          {t('{n} credits', { n: approval.estimated_credits })}
+        </span>
       </div>
 
       <div className="text-xs text-neutral-300 leading-relaxed font-medium">{approval.action_summary}</div>
@@ -62,14 +66,14 @@ const ApprovalCard: React.FC<{
           disabled={busy}
           className="flex-1 py-1.5 text-xs rounded-xl bg-white/10 hover:bg-white/15 text-neutral-300 transition-colors disabled:opacity-50"
         >
-          Reject
+          {t('Reject')}
         </button>
         <button
           onClick={() => decide('approved')}
           disabled={busy}
           className="flex-1 py-1.5 text-xs rounded-xl bg-accent text-accent-fg font-semibold hover:bg-accent/90 transition-colors shadow-glow-white disabled:opacity-50"
         >
-          Approve
+          {t('Approve')}
         </button>
       </div>
     </div>
@@ -93,6 +97,7 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
   onNavigateTab,
 }) => {
   const [subTab, setSubTab] = useState<'Apps' | 'Approvals'>('Apps');
+  const t = useT();
   // The app open here; tapping its header again folds it.
   const [folded, setFolded] = useState(false);
   const pendingApprovals = approvals.filter((a) => a.status === 'pending');
@@ -115,7 +120,7 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
       );
     }
     if (rows.length === 0) {
-      return <p className="text-[12px] text-neutral-500 px-1 py-3">Nothing here yet. Bots add records as they work.</p>;
+      return <p className="text-[12px] text-neutral-500 px-1 py-3">{t('Nothing here yet. Bots add records as they work.')}</p>;
     }
     return (
       <ul className="max-h-[340px] overflow-y-auto no-scrollbar divide-y divide-white/[0.05]">
@@ -136,7 +141,7 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
       {/* Tabs, level with the other panels' headers */}
       <div className="px-4 flex-shrink-0 border-b border-white/[0.08]">
         <div className="panel-header gap-5 text-[14px]" role="tablist">
-          {(['Apps', 'Approvals'] as const).map((tab) => (
+          {([msg('Apps'), msg('Approvals')] as ('Apps' | 'Approvals')[]).map((tab) => (
             <button
               key={tab}
               role="tab"
@@ -146,7 +151,7 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
                 subTab === tab ? 'text-white' : 'text-neutral-500 hover:text-neutral-200'
               }`}
             >
-              {tab}
+              {t(tab)}
               {tab === 'Approvals' && pendingApprovals.length > 0 && (
                 <span className="ml-1.5 px-1.5 bg-white/20 rounded-full text-[10px] text-white font-mono">
                   {pendingApprovals.length}
@@ -163,9 +168,9 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
           (pendingApprovals.length === 0 ? (
             <div className="glass-card p-6 flex flex-col items-center justify-center text-center space-y-2">
               <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-              <div className="text-xs font-semibold text-white">All clear</div>
+              <div className="text-xs font-semibold text-white">{t('All clear')}</div>
               <p className="text-[11px] text-neutral-400 max-w-xs">
-                Nothing is waiting for you. Bots ask here before risky or costly actions.
+                {t('Nothing is waiting for you. Bots ask here before risky or costly actions.')}
               </p>
             </div>
           ) : (
@@ -180,7 +185,9 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
                 className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] text-[12.5px] text-amber-200 hover:bg-amber-500/10 transition-colors"
               >
                 <span>
-                  {pendingApprovals.length} {pendingApprovals.length === 1 ? 'approval is' : 'approvals are'} waiting for you
+                  {pendingApprovals.length === 1
+                    ? t('1 approval is waiting for you')
+                    : t('{n} approvals are waiting for you', { n: pendingApprovals.length })}
                 </span>
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -189,14 +196,14 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
             {apps.length === 0 ? (
               <div className="glass-card p-5 text-center space-y-3">
                 <p className="text-[12.5px] text-neutral-400">
-                  {officeName ? `${officeName} has no apps yet.` : 'No apps yet.'} Apps hold your leads, invoices and
-                  bookings, and bots work in them.
+                  {officeName ? t('{office} has no apps yet.', { office: officeName }) : t('No apps yet.')}{' '}
+                  {t('Apps hold your leads, invoices and bookings, and bots work in them.')}
                 </p>
                 <button
                   onClick={onAddApp}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-accent text-accent-fg text-xs font-semibold hover:bg-accent/90"
                 >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> Add an app
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> {t('Add an app')}
                 </button>
               </div>
             ) : (
@@ -225,8 +232,8 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
                       </button>
                       <button
                         onClick={() => onOpenApp(app.slug)}
-                        title="Open full size"
-                        aria-label={`Open ${app.title} full size`}
+                        title={t('Open full size')}
+                        aria-label={t('Open {app} full size', { app: app.title })}
                         className="w-7 h-7 rounded-lg flex items-center justify-center text-neutral-500 hover:text-white hover:bg-white/10 transition-colors"
                       >
                         <Maximize2 className="w-3.5 h-3.5" />
@@ -247,19 +254,22 @@ export const AppsPanel: React.FC<AppsPanelProps> = ({
       {!localMode && (
       <button
         onClick={() => onNavigateTab('bots')}
-        title="Open Bots for credit details"
+        title={t('Open Bots for credit details')}
         className="panel-footer w-full text-left px-5 justify-between hover:bg-white/[0.03] transition-colors"
       >
         <div className="flex items-center gap-2">
           <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
           <div>
             <div className="text-[12px] font-semibold text-white">
-              {`${formatCredits(wallet?.credit_balance)} credits`}
+              {t('{n} credits', { n: formatCredits(wallet?.credit_balance) })}
             </div>
             <div className="text-[10px] text-neutral-400">
               {wallet
-                ? `${formatCredits(wallet.credits_burned_today)} of ${formatCredits(wallet.max_daily_credit_burn)} used today`
-                : 'Sign in to see your balance'}
+                ? t('{used} of {max} used today', {
+                    used: formatCredits(wallet.credits_burned_today),
+                    max: formatCredits(wallet.max_daily_credit_burn),
+                  })
+                : t('Sign in to see your balance')}
             </div>
           </div>
         </div>

@@ -349,8 +349,8 @@ pub async fn current_user(
             // Effective, not stored: the bootstrap admin (earliest account
             // while nobody is admin) must see the Admin screen in the app.
             let is_admin = super::admin::is_effective_admin(&state.pool, &user).await?;
-            let ui_theme: Option<serde_json::Value> =
-                sqlx::query_scalar("SELECT ui_theme FROM users WHERE id = $1")
+            let (ui_theme, ui_language): (Option<serde_json::Value>, Option<String>) =
+                sqlx::query_as("SELECT ui_theme, ui_language FROM users WHERE id = $1")
                     .bind(user.id)
                     .fetch_one(&state.pool)
                     .await?;
@@ -364,6 +364,7 @@ pub async fn current_user(
             "is_admin": is_admin,
             "is_agent": false,
             "ui_theme": ui_theme,
+            "ui_language": ui_language,
             "local_mode": state.config.local.is_some(),
             }))
             .into_response())
@@ -470,6 +471,49 @@ pub async fn save_theme(
         .execute(&state.pool)
         .await?;
     Ok(Json(json!({ "ui_theme": theme })).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct SaveLanguageRequest {
+    /// A code from `office::language::UI_LANGUAGES`, or `null` (or empty)
+    /// for automatic: the browser's or computer's language.
+    pub language: Option<String>,
+    pub idempotency_key: Option<String>,
+}
+
+/// PUT /api/me/language -- the language a person reads the app in, kept on
+/// the account so it follows them. Saving the same value twice is harmless.
+pub async fn save_language(
+    State(state): State<AppState>,
+    caller: Caller,
+    headers: HeaderMap,
+    Json(body): Json<SaveLanguageRequest>,
+) -> Result<Response, AppError> {
+    let Caller::User(user) = caller else {
+        return Err(AppError::Forbidden);
+    };
+    crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    let language = match body.language.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(code) => Some(
+            crate::office::language::UI_LANGUAGES
+                .iter()
+                .find(|c| **c == code)
+                .copied()
+                .ok_or_else(|| {
+                    AppError::BadRequest(format!(
+                        "language must be one of {}",
+                        crate::office::language::UI_LANGUAGES.join(", ")
+                    ))
+                })?,
+        ),
+    };
+    sqlx::query("UPDATE users SET ui_language = $1, updated_at = now() WHERE id = $2")
+        .bind(language)
+        .bind(user.id)
+        .execute(&state.pool)
+        .await?;
+    Ok(Json(json!({ "ui_language": language })).into_response())
 }
 
 #[derive(Deserialize, Default)]

@@ -12,6 +12,7 @@ import {
   readableOn,
   themesEqual,
 } from '../utils/theme';
+import { msg, useT } from '../i18n';
 
 interface AppearancePanelProps {
   /** The theme currently saved for this person. */
@@ -24,12 +25,12 @@ interface AppearancePanelProps {
 }
 
 const COLOR_FIELDS: { key: keyof Theme; label: string; hint: string }[] = [
-  { key: 'accent', label: 'Accent', hint: 'Buttons, active states, glow' },
-  { key: 'background', label: 'Background', hint: 'Behind the panels' },
-  { key: 'surface', label: 'Panels', hint: 'Glass panels and cards' },
-  { key: 'border', label: 'Borders', hint: 'Lines around panels and inputs' },
-  { key: 'text', label: 'Text', hint: 'Greys are mixed from this' },
-  { key: 'userBubble', label: 'Your messages', hint: 'Your chat bubbles' },
+  { key: 'accent', label: msg('Accent'), hint: msg('Buttons, active states, glow') },
+  { key: 'background', label: msg('Background'), hint: msg('Behind the panels') },
+  { key: 'surface', label: msg('Panels'), hint: msg('Glass panels and cards') },
+  { key: 'border', label: msg('Borders'), hint: msg('Lines around panels and inputs') },
+  { key: 'text', label: msg('Text'), hint: msg('Greys are mixed from this') },
+  { key: 'userBubble', label: msg('Your messages'), hint: msg('Your chat bubbles') },
 ];
 
 // WCAG contrast, to warn before someone picks unreadable text.
@@ -55,6 +56,7 @@ const ColorField: React.FC<{
 }> = ({ label, hint, value, onChange }) => {
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
+  const t = useT();
   return (
     <label className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 cursor-pointer">
       <span className="relative w-8 h-8 rounded-lg border border-white/20 overflow-hidden flex-shrink-0" style={{ background: value }}>
@@ -62,7 +64,7 @@ const ColorField: React.FC<{
           type="color"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          aria-label={`${label} colour`}
+          aria-label={t('{name} colour', { name: label })}
           className="absolute inset-0 opacity-0 cursor-pointer"
         />
       </span>
@@ -79,7 +81,7 @@ const ColorField: React.FC<{
           if (HEX.test(hex)) onChange(hex.toLowerCase());
         }}
         onBlur={() => setText(value)}
-        aria-label={`${label} hex value`}
+        aria-label={t('{name} hex value', { name: label })}
         spellCheck={false}
         className="w-[78px] bg-black/20 border border-white/10 rounded-lg px-2 py-1 text-[11px] font-mono text-neutral-200 outline-none focus:border-white/30"
       />
@@ -91,6 +93,7 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
   const [draft, setDraft] = useState<Theme>(saved);
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const t = useT();
   const savedRef = useRef(saved);
   savedRef.current = saved;
 
@@ -134,17 +137,17 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
         });
         if (!res.ok) {
           const err = await res.json().catch(() => null);
-          throw new Error(err?.error || 'Not saved. Please try again.');
+          throw new Error(err?.error || t('Not saved. Please try again.'));
         }
       }
       cacheTheme(draft);
       onSaved(draft);
       setStatus({
         kind: 'ok',
-        text: canSaveToAccount ? 'Saved to your account.' : 'Saved on this device. Sign in to keep it everywhere.',
+        text: canSaveToAccount ? t('Saved to your account.') : t('Saved on this device. Sign in to keep it everywhere.'),
       });
     } catch (err) {
-      setStatus({ kind: 'error', text: err instanceof Error ? err.message : 'Not saved.' });
+      setStatus({ kind: 'error', text: err instanceof Error ? err.message : t('Not saved.') });
     } finally {
       setSaving(false);
     }
@@ -157,7 +160,7 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
     <div className="space-y-5">
       {/* Presets */}
       <section className="space-y-2">
-        <h3 className="text-xs font-semibold text-white">Presets</h3>
+        <h3 className="text-xs font-semibold text-white">{t('Presets')}</h3>
         <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
           {PRESETS.map((p) => {
             const active = themesEqual({ ...draft, followSystem: false }, p.theme);
@@ -193,26 +196,26 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
       {/* Mode + background style */}
       <section className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <h3 className="text-xs font-semibold text-white">Mode</h3>
+          <h3 className="text-xs font-semibold text-white">{t('Mode')}</h3>
           <div className="flex rounded-xl bg-white/5 border border-white/10 p-0.5">
             {(['dark', 'light', 'system'] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => switchMode(m)}
                 aria-pressed={modeChoice === m}
-                title={m === 'system' ? 'Follow your computer or phone: light by day, dark at night' : undefined}
+                title={m === 'system' ? t('Follow your computer or phone: light by day, dark at night') : undefined}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs transition-colors ${
                   modeChoice === m ? 'bg-white/15 text-white' : 'text-neutral-400 hover:text-white'
                 }`}
               >
                 {m === 'dark' ? <Moon className="w-3.5 h-3.5" /> : m === 'light' ? <Sun className="w-3.5 h-3.5" /> : <Monitor className="w-3.5 h-3.5" />}
-                {m === 'dark' ? 'Dark' : m === 'light' ? 'Light' : 'System'}
+                {m === 'dark' ? t('Dark') : m === 'light' ? t('Light') : t('System')}
               </button>
             ))}
           </div>
         </div>
         <div className="space-y-1.5">
-          <h3 className="text-xs font-semibold text-white">Background</h3>
+          <h3 className="text-xs font-semibold text-white">{t('Background')}</h3>
           <div className="flex rounded-xl bg-white/5 border border-white/10 p-0.5">
             {(['solid', 'glow'] as const).map((s) => (
               <button
@@ -223,7 +226,7 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
                   draft.backgroundStyle === s ? 'bg-white/15 text-white' : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                {s === 'solid' ? 'Solid' : 'Accent glow'}
+                {s === 'solid' ? t('Solid') : t('Accent glow')}
               </button>
             ))}
           </div>
@@ -232,13 +235,13 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
 
       {/* Colours */}
       <section className="space-y-2">
-        <h3 className="text-xs font-semibold text-white">Colours</h3>
+        <h3 className="text-xs font-semibold text-white">{t('Colours')}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {COLOR_FIELDS.map((f) => (
             <ColorField
               key={f.key}
-              label={f.label}
-              hint={f.hint}
+              label={t(f.label)}
+              hint={t(f.hint)}
               value={draft[f.key] as string}
               onChange={(hex) => set(f.key, hex as never)}
             />
@@ -247,7 +250,7 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
         {textContrast < 4.5 && (
           <p className="flex items-center gap-1.5 text-[11px] text-amber-300">
             <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-            Text on panels is hard to read (contrast {textContrast.toFixed(1)}:1, aim for 4.5:1).
+            {t('Text on panels is hard to read (contrast {ratio}:1, aim for 4.5:1).', { ratio: textContrast.toFixed(1) })}
           </p>
         )}
       </section>
@@ -256,7 +259,7 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
       <section className="grid grid-cols-2 gap-4">
         <label className="space-y-1.5 block">
           <span className="flex justify-between text-xs">
-            <span className="font-semibold text-white">Corners</span>
+            <span className="font-semibold text-white">{t('Corners')}</span>
             <span className="font-mono text-neutral-500">{draft.radius}px</span>
           </span>
           <input
@@ -270,8 +273,8 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
         </label>
         <label className="space-y-1.5 block">
           <span className="flex justify-between text-xs">
-            <span className="font-semibold text-white">Glass blur</span>
-            <span className="font-mono text-neutral-500">{draft.blur === 0 ? 'Flat' : `${draft.blur}px`}</span>
+            <span className="font-semibold text-white">{t('Glass blur')}</span>
+            <span className="font-mono text-neutral-500">{draft.blur === 0 ? t('Flat') : `${draft.blur}px`}</span>
           </span>
           <input
             type="range"
@@ -287,10 +290,10 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
       {/* Live sample */}
       <section className="glass-card p-3 flex items-center gap-3">
         <span className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: draft.accent, color: accentFg }}>
-          Primary
+          {t('Primary')}
         </span>
-        <span className="px-3 py-1.5 rounded-full text-xs bg-white/10 text-white">Secondary</span>
-        <span className="text-xs text-neutral-400 flex-1 truncate">Muted text reads like this.</span>
+        <span className="px-3 py-1.5 rounded-full text-xs bg-white/10 text-white">{t('Secondary')}</span>
+        <span className="text-xs text-neutral-400 flex-1 truncate">{t('Muted text reads like this.')}</span>
       </section>
 
       <div className="flex items-center gap-2 pt-1">
@@ -301,7 +304,7 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
           }}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
         >
-          <RotateCcw className="w-3.5 h-3.5" /> Default
+          <RotateCcw className="w-3.5 h-3.5" /> {t('Default')}
         </button>
         <span className="flex-1 text-[11px] truncate">
           {status && <span className={status.kind === 'ok' ? 'text-emerald-400' : 'text-red-300'}>{status.text}</span>}
@@ -314,7 +317,7 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
             }}
             className="px-3 py-1.5 rounded-xl text-xs text-neutral-300 hover:text-white hover:bg-white/10 transition-colors"
           >
-            Discard
+            {t('Discard')}
           </button>
         )}
         <button
@@ -322,7 +325,7 @@ export const AppearancePanel: React.FC<AppearancePanelProps> = ({ saved, canSave
           disabled={!dirty || saving}
           className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-accent text-accent-fg hover:bg-accent/90 transition-all disabled:opacity-40"
         >
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? t('Saving…') : t('Save')}
         </button>
       </div>
     </div>

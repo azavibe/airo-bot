@@ -6,6 +6,7 @@ import { formatCredits, roomName } from '../utils/format';
 import { Markdown, questionsIn } from '../utils/markdown';
 import { BotAvatar } from './BotAvatar';
 import { RowMenu, RowMenuItem, useContextMenu } from './RowMenu';
+import { useT } from '../i18n';
 
 /** Answer boxes under a bot's questions: each question gets its own field,
  *  and the answer goes back to that bot as your message. */
@@ -141,6 +142,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   // Buttons already pressed in this view, so a task is not sent twice.
   const [pressed, setPressed] = useState<string[]>([]);
   const showLimit = !!creditLimit && limitDismissed !== creditLimit;
+  const t = useT();
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -151,18 +153,18 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   const soleBot = !isGroup && roomBots.length === 1 ? roomBots[0].agent : null;
   const channelTitle = thread
     ? isGroup
-      ? officeName || 'Office'
+      ? officeName || t('Office')
       : soleBot?.name ?? roomName(thread.title)
-    : 'Chat';
+    : t('Chat');
   const contextMenu = useContextMenu();
   const noteItems = (note: Note): RowMenuItem[] => [
     {
-      label: 'Copy message',
+      label: t('Copy message'),
       onSelect: () => {
         navigator.clipboard?.writeText(note.body).catch(() => undefined);
       },
     },
-    ...(onDeleteNote ? [{ label: 'Delete message', danger: true, onSelect: () => onDeleteNote(note) }] : []),
+    ...(onDeleteNote ? [{ label: t('Delete message'), danger: true, onSelect: () => onDeleteNote(note) }] : []),
   ];
   // Right-click on a message: copying selected text keeps the browser's
   // menu; otherwise the message's own menu opens.
@@ -176,56 +178,55 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
         side === 'right' ? '-left-8' : 'right-0'
       } [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-within:opacity-100`}
     >
-      <RowMenu label="Message options" items={noteItems(note)} />
+      <RowMenu label={t('Message options')} items={noteItems(note)} />
     </span>
   );
 
   const emptyState = isGuest ? (
     <>
-      <div className="text-sm font-medium text-neutral-300">Sign in to talk to your bots</div>
+      <div className="text-sm font-medium text-neutral-300">{t('Sign in to talk to your bots')}</div>
       <div className="text-xs text-neutral-400 max-w-sm mt-1">
-        Your rooms, approvals and apps appear here once you are signed in.
+        {t('Your rooms, approvals and apps appear here once you are signed in.')}
       </div>
       <button
         onClick={onOpenAuth}
         className="mt-4 px-4 py-2 rounded-full bg-accent text-accent-fg text-xs font-semibold hover:bg-accent/90 transition-colors"
       >
-        Sign in
+        {t('Sign in')}
       </button>
     </>
   ) : !thread ? (
     <>
-      <div className="text-sm font-medium text-neutral-300">No rooms yet</div>
+      <div className="text-sm font-medium text-neutral-300">{t('No rooms yet')}</div>
       <div className="text-xs text-neutral-400 max-w-sm mt-1">
-        Add a bot with + next to an office, or set up an office for your business.
+        {t('Add a bot with + next to an office, or set up an office for your business.')}
       </div>
       <button
         onClick={onOpenOnboard}
         className="mt-4 px-4 py-2 rounded-full bg-accent text-accent-fg text-xs font-semibold hover:bg-accent/90 transition-colors"
       >
-        Set up office
+        {t('Set up office')}
       </button>
     </>
   ) : isGroup ? (
     <>
-      <div className="text-sm font-medium text-neutral-300">Talk to your whole team</div>
+      <div className="text-sm font-medium text-neutral-300">{t('Talk to your whole team')}</div>
       <div className="text-xs text-neutral-400 max-w-sm mt-1">
-        Write what you need. The Architect hands it to the right bot, and every bot sees the same conversation.
-        To talk to one bot directly, mention it with @name, or open its room.
+        {t('Write what you need. The Architect hands it to the right bot, and every bot sees the same conversation. To talk to one bot directly, mention it with @name, or open its room.')}
       </div>
     </>
   ) : thread.title === '#assistant' ? (
     <>
-      <div className="text-sm font-medium text-neutral-300">Ask your Assistant anything</div>
+      <div className="text-sm font-medium text-neutral-300">{t('Ask your Assistant anything')}</div>
       <div className="text-xs text-neutral-400 max-w-sm mt-1">
-        Questions, writing, plans or code. No setup needed.
+        {t('Questions, writing, plans or code. No setup needed.')}
       </div>
     </>
   ) : (
     <>
-      <div className="text-sm font-medium text-neutral-300">No messages yet</div>
+      <div className="text-sm font-medium text-neutral-300">{t('No messages yet')}</div>
       <div className="text-xs text-neutral-400 max-w-sm mt-1">
-        Ask your bots below to research leads, schedule videos, generate invoices, or review proposals.
+        {t('Ask your bots below to research leads, schedule videos, generate invoices, or review proposals.')}
       </div>
     </>
   );
@@ -239,7 +240,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
           {onBackMobile && (
             <button
               onClick={onBackMobile}
-              aria-label="Open rooms"
+              aria-label={t('Open rooms')}
               className="md:hidden -ml-1 text-neutral-400 hover:text-white p-1 rounded-full hover:bg-white/10"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -261,7 +262,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
               <button
                 key={agent.id}
                 onClick={() => onOpenBot?.(agent)}
-                title={`${agent.name} answers with ${model}. Change it in its settings.`}
+                title={t('{bot} answers with {model}. Change it in its settings.', { bot: agent.name, model })}
                 className="hidden sm:flex min-w-0 max-w-[240px] items-center gap-1.5 h-7 px-2.5 rounded-full border border-white/10 text-[11.5px] text-neutral-300 hover:text-white hover:border-white/20 transition-colors"
               >
                 <span className="font-medium truncate">{agent.name}</span>
@@ -271,10 +272,10 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
             {isGroup && roomBots.length > 0 && (
               <button
                 onClick={onOpenTeam}
-                title="The bots of this office"
+                title={t('The bots of this office')}
                 className="h-7 px-2.5 rounded-full border border-white/10 text-[11.5px] text-neutral-300 hover:text-white hover:border-white/20 transition-colors flex-shrink-0"
               >
-                {roomBots.length} {roomBots.length === 1 ? 'bot' : 'bots'}
+                {roomBots.length === 1 ? t('1 bot') : t('{n} bots', { n: roomBots.length })}
               </button>
             )}
             {!isGroup && roomBots.length > 2 && (
@@ -285,8 +286,10 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                 onClick={onOpenSpend}
                 title={
                   spend.cap
-                    ? `Spent this month of this office's monthly cap. ${spend.reached ? 'Paid work is stopped until you raise it or the 1st.' : 'Click to change the cap.'}`
-                    : 'Spent this month. Click to set a monthly cap.'
+                    ? `${t("Spent this month of this office's monthly cap.")} ${
+                        spend.reached ? t('Paid work is stopped until you raise it or the 1st.') : t('Click to change the cap.')
+                      }`
+                    : t('Spent this month. Click to set a monthly cap.')
                 }
                 className={`h-7 px-2.5 rounded-full text-[11.5px] flex items-center gap-1.5 flex-shrink-0 transition-colors border ${
                   spend.reached
@@ -299,16 +302,16 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                 {spend.reached && <span className="w-1.5 h-1.5 rounded-full bg-red-400" aria-hidden="true" />}
                 <span className="font-medium">{formatCredits(spend.spent)}</span>
                 <span className="text-neutral-500">
-                  {spend.cap ? `/ ${formatCredits(spend.cap)} this month` : 'credits this month'}
+                  {spend.cap ? t('/ {cap} this month', { cap: formatCredits(spend.cap) }) : t('credits this month')}
                 </span>
-                {spend.reached && <span className="sr-only">Cap reached</span>}
+                {spend.reached && <span className="sr-only">{t('Cap reached')}</span>}
               </button>
             )}
             {onToggleRun && (
               <button
                 onClick={onToggleRun}
-                title={paused ? 'Run: let this office\'s bots work again' : 'Stop: this office\'s bots start no new work'}
-                aria-label={paused ? 'Run the office' : 'Stop the office'}
+                title={paused ? t("Run: let this office's bots work again") : t("Stop: this office's bots start no new work")}
+                aria-label={paused ? t('Run the office') : t('Stop the office')}
                 aria-pressed={!paused}
                 className={`h-7 flex items-center gap-1.5 px-2.5 rounded-full text-[11.5px] font-medium transition-colors flex-shrink-0 ${
                   paused
@@ -317,7 +320,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                 }`}
               >
                 {paused ? <Play className="w-3 h-3 fill-current" /> : <Square className="w-2.5 h-2.5 fill-current" />}
-                {paused ? 'Run' : 'Stop'}
+                {paused ? t('Run') : t('Stop')}
               </button>
             )}
           </div>
@@ -333,8 +336,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
         >
           <Square className="w-2.5 h-2.5 fill-current text-neutral-500 flex-shrink-0" />
           <span>
-            <span className="font-medium text-white">This office is stopped.</span> Its bots won't answer or start work
-            until you press Run.
+            <span className="font-medium text-white">{t('This office is stopped.')}</span>{' '}
+            {t("Its bots won't answer or start work until you press Run.")}
           </span>
         </div>
       )}

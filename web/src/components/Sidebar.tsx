@@ -21,6 +21,7 @@ import type { Tab } from '../App';
 import { RowMenu, RowMenuItem, useContextMenu } from './RowMenu';
 import { BotAvatar } from './BotAvatar';
 import { roomName } from '../utils/format';
+import { useT } from '../i18n';
 
 interface SidebarProps {
   offices: Office[];
@@ -164,45 +165,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   // Right-click shows the same choices as "⋯", never the browser's menu.
   const contextMenu = useContextMenu();
+  // `tr`, not `t`: rooms are `t` throughout this file.
+  const tr = useT();
   const [showArchived, setShowArchived] = useState<string[]>([]);
   const officeItems = (office: Office): RowMenuItem[] => [
-    { label: 'Edit office…', onSelect: () => onEditOffice(office) },
-    { label: 'Goal & milestones…', onSelect: () => onEditOffice(office, 'goal') },
-    { label: 'Memory…', onSelect: () => onEditOffice(office, 'memory') },
-    { label: 'Documents…', onSelect: () => onEditOffice(office, 'documents') },
-    { label: 'New bot', onSelect: () => onNewBot(office) },
-    { label: 'New room', onSelect: () => onNewRoom(office) },
-    { label: 'Set up for a business', onSelect: () => onSetUpOffice(office) },
-    { label: 'Rename', onSelect: () => onRenameOffice(office) },
+    { label: tr('Edit office…'), onSelect: () => onEditOffice(office) },
+    { label: tr('Goal & milestones…'), onSelect: () => onEditOffice(office, 'goal') },
+    { label: tr('Memory…'), onSelect: () => onEditOffice(office, 'memory') },
+    { label: tr('Documents…'), onSelect: () => onEditOffice(office, 'documents') },
+    { label: tr('New bot'), onSelect: () => onNewBot(office) },
+    { label: tr('New room'), onSelect: () => onNewRoom(office) },
+    { label: tr('Set up for a business'), onSelect: () => onSetUpOffice(office) },
+    { label: tr('Rename'), onSelect: () => onRenameOffice(office) },
     {
-      label: office.daily_plan === false ? 'Turn on daily plan' : 'Turn off daily plan',
+      label: office.daily_plan === false ? tr('Turn on daily plan') : tr('Turn off daily plan'),
       onSelect: () => onToggleDailyPlan(office),
     },
-    ...(office.primary ? [] : [{ label: 'Delete office', danger: true, onSelect: () => onDeleteOffice(office) }]),
+    ...(office.primary ? [] : [{ label: tr('Delete office'), danger: true, onSelect: () => onDeleteOffice(office) }]),
   ];
   // A bot's room offers the bot's choices; a shared room, the room's.
   const roomItems = (t: Thread): RowMenuItem[] => {
     const bot = botOfRoom(t, agents);
     if (t.archived_at) {
       return [
-        { label: 'Restore', onSelect: () => onUnarchiveRoom(t) },
+        { label: tr('Restore'), onSelect: () => onUnarchiveRoom(t) },
         bot
-          ? { label: 'Delete bot', danger: true, onSelect: () => onDeleteBot(bot) }
-          : { label: 'Delete room', danger: true, onSelect: () => onDeleteRoom(t) },
+          ? { label: tr('Delete bot'), danger: true, onSelect: () => onDeleteBot(bot) }
+          : { label: tr('Delete room'), danger: true, onSelect: () => onDeleteRoom(t) },
       ];
     }
     if (bot) {
       return [
-        { label: 'Bot settings', onSelect: () => onOpenBot(bot) },
-        { label: 'Rename bot', onSelect: () => onRenameBot(bot) },
-        { label: 'Archive', onSelect: () => onArchiveRoom(t) },
-        { label: 'Delete bot', danger: true, onSelect: () => onDeleteBot(bot) },
+        { label: tr('Bot settings'), onSelect: () => onOpenBot(bot) },
+        { label: tr('Rename bot'), onSelect: () => onRenameBot(bot) },
+        { label: tr('Archive'), onSelect: () => onArchiveRoom(t) },
+        { label: tr('Delete bot'), danger: true, onSelect: () => onDeleteBot(bot) },
       ];
     }
     return [
-      { label: 'Rename room', onSelect: () => onRenameRoom(t) },
-      { label: 'Archive room', onSelect: () => onArchiveRoom(t) },
-      { label: 'Delete room', danger: true, onSelect: () => onDeleteRoom(t) },
+      { label: tr('Rename room'), onSelect: () => onRenameRoom(t) },
+      { label: tr('Archive room'), onSelect: () => onArchiveRoom(t) },
+      { label: tr('Delete room'), danger: true, onSelect: () => onDeleteRoom(t) },
     ];
   };
   const isAuthenticated = userProfile?.authenticated ?? false;
@@ -231,22 +234,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: { tab: Tab; label: string; icon: React.ReactNode; meta?: React.ReactNode }[] = [
     {
       tab: 'approvals',
-      label: 'Approvals',
+      label: tr('Approvals'),
       icon: <CircleDashedCheck className="w-4 h-4" />,
       meta:
         pendingApprovalsCount > 0 ? (
           <span className="text-[11px] bg-white/15 text-white px-1.5 rounded-full font-mono">{pendingApprovalsCount}</span>
         ) : null,
     },
-    { tab: 'apps', label: 'Apps', icon: <LayoutGrid className="w-4 h-4" /> },
+    { tab: 'apps', label: tr('Apps'), icon: <LayoutGrid className="w-4 h-4" /> },
     {
       tab: 'bots',
-      label: 'Bots',
+      label: tr('Bots'),
       icon: <Users className="w-4 h-4" />,
       meta: agentCount > 0 ? <span className="text-[11px] text-neutral-500 font-mono">{agentCount}</span> : null,
     },
-    { tab: 'contacts', label: 'Contacts', icon: <Contact className="w-4 h-4" /> },
-    { tab: 'workflows', label: 'Workflows', icon: <GitBranch className="w-4 h-4" /> },
+    { tab: 'contacts', label: tr('Contacts'), icon: <Contact className="w-4 h-4" /> },
+    { tab: 'workflows', label: tr('Workflows'), icon: <GitBranch className="w-4 h-4" /> },
   ];
   // Connections, devices and admin are sections of Settings (account row below).
 
@@ -258,7 +261,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         active ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/[0.06]'
       }`;
     return (
-      <aside className="w-full h-full flex flex-col items-center text-neutral-300 overflow-hidden select-none" aria-label="Sidebar">
+      <aside className="w-full h-full flex flex-col items-center text-neutral-300 overflow-hidden select-none" aria-label={tr('Sidebar')}>
         {contextMenu.menu}
         <div className="flex-1 min-h-0 w-full overflow-y-auto no-scrollbar flex flex-col items-center gap-1 pt-2.5 pb-3">
           {onToggleRail && (
@@ -269,8 +272,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             onClick={isAuthenticated ? onNewOffice : onOpenAuth}
             className={railButton(false)}
-            title="New office"
-            aria-label="New office"
+            title={tr('New office')}
+            aria-label={tr('New office')}
           >
             <span className="w-6 h-6 rounded-full bg-accent text-accent-fg flex items-center justify-center">
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -285,7 +288,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => go(item.tab)}
               aria-current={activeTab === item.tab ? 'page' : undefined}
               className={railButton(activeTab === item.tab)}
-              title={item.tab === 'approvals' && pendingApprovalsCount > 0 ? `Approvals (${pendingApprovalsCount} waiting)` : item.label}
+              title={item.tab === 'approvals' && pendingApprovalsCount > 0 ? tr('Approvals ({n} waiting)', { n: pendingApprovalsCount }) : item.label}
               aria-label={item.label}
             >
               {item.icon}
@@ -308,8 +311,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => onOpenOffice(office)}
                     onContextMenu={(e) => contextMenu.open(e, officeItems(office))}
                     className={railButton(chatActive)}
-                    title={`${office.name} · group chat`}
-                    aria-label={`${office.name} group chat`}
+                    title={tr('{office} · group chat', { office: office.name })}
+                    aria-label={tr('{office} group chat', { office: office.name })}
                   >
                     <span className="w-7 h-7 rounded-lg bg-white/10 border border-white/10 text-[12px] font-semibold text-white flex items-center justify-center">
                       {office.name.trim().charAt(0).toUpperCase() || 'O'}
@@ -342,8 +345,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={isAuthenticated ? onOpenSettings : onOpenAuth}
             aria-current={activeTab === 'settings' ? 'page' : undefined}
             className={railButton(activeTab === 'settings')}
-            title={isAuthenticated ? `@${displayHandle} · Account & settings` : 'Sign in'}
-            aria-label={isAuthenticated ? 'Account & settings' : 'Sign in'}
+            title={isAuthenticated ? `@${displayHandle} · ${tr('Account & settings')}` : tr('Sign in')}
+            aria-label={isAuthenticated ? tr('Account & settings') : tr('Sign in')}
           >
             <span className="w-8 h-8 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-xs font-semibold text-white">
               {isAuthenticated ? avatarLetter : <User className="w-4 h-4" />}
@@ -364,13 +367,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="w-5 h-5 -ml-0.5 rounded-full bg-accent text-accent-fg flex items-center justify-center flex-shrink-0">
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             </span>
-            New office
+            {tr('New office')}
           </button>
           {onToggleRail && !onCloseMobile && (
             <button
               onClick={onToggleRail}
-              title="Shrink the sidebar to icons"
-              aria-label="Shrink the sidebar to icons"
+              title={tr('Shrink the sidebar to icons')}
+              aria-label={tr('Shrink the sidebar to icons')}
               className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center hover:bg-white/10 text-neutral-400 hover:text-white"
             >
               <PanelLeftClose className="w-4 h-4" />
@@ -379,7 +382,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {onCloseMobile && (
             <button
               onClick={onCloseMobile}
-              aria-label="Close menu"
+              aria-label={tr('Close menu')}
               className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/10 text-neutral-400"
             >
               <X className="w-4 h-4" />
@@ -395,7 +398,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className={rowClass(false)}
         >
           <Search className="w-4 h-4" />
-          <span className="flex-1 text-left">Search</span>
+          <span className="flex-1 text-left">{tr('Search')}</span>
           <kbd className="hidden md:inline text-[10px] font-mono text-neutral-500">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
         </button>
 
@@ -404,7 +407,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {onCloseMobile && (
             <button onClick={() => go('chat')} className={rowClass(activeTab === 'chat')}>
               <MessageSquare className="w-4 h-4" />
-              <span className="flex-1 text-left">Chat</span>
+              <span className="flex-1 text-left">{tr('Chat')}</span>
             </button>
           )}
           {navItems.map((item) => (
@@ -428,7 +431,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={onOpenAuth}
               className="w-full text-left px-3 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-xs text-neutral-400 hover:text-white transition-colors"
             >
-              Sign in to see your offices and rooms.
+              {tr('Sign in to see your offices and rooms.')}
             </button>
           ) : (
             offices.map((office) => {
@@ -451,7 +454,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onOpenOffice(office);
                         onCloseMobile?.();
                       }}
-                      title={`${office.name}: group chat with all its bots`}
+                      title={tr('{office}: group chat with all its bots', { office: office.name })}
                       aria-current={chatActive ? 'page' : undefined}
                       className={`flex-1 min-w-0 h-7 px-1.5 -ml-1.5 rounded-lg text-left text-[12.5px] font-medium truncate transition-colors ${
                         chatActive ? 'bg-white/10 text-white' : 'text-neutral-300 hover:text-white hover:bg-white/[0.06]'
@@ -462,16 +465,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <button
                       onClick={() => toggleOffice(office.id)}
                       aria-expanded={!isCollapsed}
-                      aria-label={`${isCollapsed ? 'Show' : 'Hide'} rooms in ${office.name}`}
+                      aria-label={isCollapsed ? tr('Show rooms in {office}', { office: office.name }) : tr('Hide rooms in {office}', { office: office.name })}
                       className="w-6 h-6 rounded-md flex items-center justify-center text-neutral-500 hover:text-white hover:bg-white/10 transition-colors"
                     >
                       <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                     </button>
-                    <RowMenu label={`${office.name} options`} className={hoverReveal} items={officeItems(office)} />
+                    <RowMenu label={tr('{name} options', { name: office.name })} className={hoverReveal} items={officeItems(office)} />
                     <button
                       onClick={() => onNewBot(office)}
-                      title={`New bot in ${office.name}`}
-                      aria-label={`New bot in ${office.name}`}
+                      title={tr('New bot in {office}', { office: office.name })}
+                      aria-label={tr('New bot in {office}', { office: office.name })}
                       className="w-6 h-6 rounded-md flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -485,7 +488,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           onClick={() => onNewBot(office)}
                           className="w-full text-left px-3 py-1.5 text-[12px] text-neutral-500 hover:text-white transition-colors"
                         >
-                          No rooms yet. Add a bot to start.
+                          {tr('No rooms yet. Add a bot to start.')}
                         </button>
                       ) : (
                         rooms.map((t) => {
@@ -507,7 +510,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 <RoomIcon thread={t} agents={agents} />
                                 <span className="truncate">{label}</span>
                               </button>
-                              <RowMenu label={`${label} options`} className={`mr-1.5 ${hoverReveal}`} items={roomItems(t)} />
+                              <RowMenu label={tr('{name} options', { name: label })} className={`mr-1.5 ${hoverReveal}`} items={roomItems(t)} />
                             </div>
                           );
                         })
@@ -524,7 +527,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             className="w-full h-7 flex items-center gap-2 px-3 rounded-lg text-[12px] text-neutral-500 hover:text-white hover:bg-white/[0.04] transition-colors"
                           >
                             <Archive className="w-3.5 h-3.5" />
-                            <span className="flex-1 text-left">Archived</span>
+                            <span className="flex-1 text-left">{tr('Archived')}</span>
                             <span className="font-mono text-[11px]">{archived.length}</span>
                           </button>
                           {archivedOpen &&
@@ -547,7 +550,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     <RoomIcon thread={t} agents={agents} />
                                     <span className="truncate">{label}</span>
                                   </button>
-                                  <RowMenu label={`${label} options`} className={`mr-1.5 ${hoverReveal}`} items={roomItems(t)} />
+                                  <RowMenu label={tr('{name} options', { name: label })} className={`mr-1.5 ${hoverReveal}`} items={roomItems(t)} />
                                 </div>
                               );
                             })}
@@ -571,7 +574,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`flex-1 min-w-0 h-11 flex items-center justify-between gap-2 px-2 rounded-xl transition-colors text-left ${
               activeTab === 'settings' ? 'bg-white/10' : 'hover:bg-white/[0.05]'
             }`}
-            title="Account & settings"
+            title={tr('Account & settings')}
           >
             <span className="flex items-center gap-2.5 min-w-0">
               <span className="w-8 h-8 rounded-full bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-white">
@@ -579,7 +582,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
               <span className="min-w-0">
                 <span className="block text-[13px] font-medium text-white truncate">@{displayHandle}</span>
-                <span className="block text-[11px] text-neutral-400">Account & settings</span>
+                <span className="block text-[11px] text-neutral-400">{tr('Account & settings')}</span>
               </span>
             </span>
             <Settings className="w-4 h-4 text-neutral-400 flex-shrink-0" />
@@ -590,13 +593,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-neutral-400">
                 <User className="w-4 h-4" />
               </span>
-              <span className="text-xs text-neutral-400">Guest</span>
+              <span className="text-xs text-neutral-400">{tr('Guest')}</span>
             </span>
             <span className="flex items-center gap-1">
               <button
                 onClick={onOpenSettings}
-                title="Settings"
-                aria-label="Settings"
+                title={tr('Settings')}
+                aria-label={tr('Settings')}
                 className="w-8 h-8 rounded-xl flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/[0.06] transition-colors"
               >
                 <Settings className="w-4 h-4" />
@@ -605,7 +608,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={onOpenAuth}
                 className="px-3 py-1.5 rounded-full bg-accent text-accent-fg text-xs font-semibold hover:bg-accent/90 transition-colors"
               >
-                Sign in
+                {tr('Sign in')}
               </button>
             </span>
           </div>

@@ -65,6 +65,10 @@ pub const LANGUAGES: &[Language] = &[
     lang("zh-TW", "Traditional Chinese", "繁體中文"),
 ];
 
+/// The languages the app itself is translated into (`web/src/i18n`).
+/// English is the source; others fall back to it string by string.
+pub const UI_LANGUAGES: &[&str] = &["en", "es", "fr", "de", "pt-BR", "ru"];
+
 /// The language with this code, if offered.
 pub fn find(code: &str) -> Option<&'static Language> {
     LANGUAGES.iter().find(|l| l.code == code)
@@ -89,9 +93,10 @@ pub fn prompt_block(code: Option<&str>) -> String {
     )
 }
 
-/// GET /api/languages: the languages an office can work in.
+/// GET /api/languages: the languages an office can work in, and the
+/// codes of those the app itself can be shown in.
 pub async fn list_languages() -> Json<Value> {
-    Json(json!({ "languages": LANGUAGES }))
+    Json(json!({ "languages": LANGUAGES, "ui": UI_LANGUAGES }))
 }
 
 #[cfg(test)]
@@ -112,6 +117,13 @@ mod tests {
                 region.is_empty()
                     || (region.len() == 2 && region.chars().all(|c| c.is_ascii_uppercase()))
             );
+        }
+    }
+
+    #[test]
+    fn app_languages_are_offered_languages() {
+        for code in UI_LANGUAGES {
+            assert!(find(code).is_some(), "{code}");
         }
     }
 

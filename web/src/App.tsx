@@ -20,6 +20,7 @@ import type { RecordEventMessage } from './state/records';
 import { SearchPalette } from './components/SearchPalette';
 import { TeamModal } from './components/TeamModal';
 import { NameDialog, ConfirmDialog, NewRoomDialog, EditOfficeDialog } from './components/Dialogs';
+import { applyAccountLanguage, useT } from './i18n';
 import type { OfficeEdit } from './components/Dialogs';
 import { roomsOf, roomLabel } from './components/Sidebar';
 import type { OfficeSetup } from './components/OnboardModal';
@@ -120,6 +121,8 @@ type Dialog =
   | null;
 
 export const App: React.FC = () => {
+  // `tr`, not `t`: threads are `t` throughout this file.
+  const tr = useT();
   // Navigation State
   const [activeTab, setActiveTab] = useState<Tab>(() => tabFromPath(window.location.pathname));
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -436,6 +439,8 @@ export const App: React.FC = () => {
         setTheme(accountTheme);
         applyTheme(accountTheme);
         cacheTheme(accountTheme);
+        // The same for the language the app is shown in.
+        applyAccountLanguage((uData as UserProfile).ui_language);
       }
     }
     if (wData) setWallet(wData);
@@ -1204,7 +1209,7 @@ export const App: React.FC = () => {
             }
           : handleSendMessage
       }
-      placeholder={isOnboardOpen ? 'Answer the Architect…' : undefined}
+      placeholder={isOnboardOpen ? tr('Answer the Architect…') : undefined}
       composerText={composerText}
       onComposerChange={(text) => setComposerText(text)}
       activeAgentPlan={activeAgentPlan}
