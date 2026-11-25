@@ -598,6 +598,7 @@ pub fn app(state: AppState) -> Router {
         // --- Airobot Virtual Office Routes ---
         .route("/api/me", get(handlers::auth::current_user))
         .route("/api/me/theme", put(handlers::auth::save_theme))
+        .route("/api/me/language", put(handlers::auth::save_language))
         .route("/api/app/update", get(handlers::updates::check_update))
         .route(
             "/api/languages",

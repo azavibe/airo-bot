@@ -322,6 +322,8 @@ export interface UserProfile {
   is_admin?: boolean;
   is_agent?: boolean;
   ui_theme?: Record<string, unknown> | null;
+  /** The language the app is shown in; null for automatic. */
+  ui_language?: string | null;
   /** Airobot running inside the desktop app, on this computer only. */
   local_mode?: boolean;
 }

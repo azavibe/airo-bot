@@ -30,3 +30,13 @@ Human interfaces must be readable, sparse, one-line-per-job, and free of infrast
 - **One Job = One Line:** In the Yours and Tasks lists, every job renders with its title, bot indicator, and clear one-line status.
 - **Approvals Prominence:** Actions requiring human confirmation show clear `[Approve]` and `[Reject]` buttons with context summaries.
 - **Fast Obsidian Glass React SPA:** Built with React 19, Vite, TypeScript, and Tailwind CSS (`web/`), served directly by Axum with zero-VM coroutine bot telemetry and real-time SSE note streams. Legacy Askama templates provide resilient server-rendered fallbacks with matching Obsidian dark glass tokens.
+
+## Translations
+
+The app is shown in English, Spanish, French, German, Brazilian Portuguese or Russian (Settings → Appearance → Language; automatic follows the browser or computer). Text is translated in `web/src/i18n`:
+
+- Write the English in the component and wrap it: `const t = useT();` then `t('Save')`, with variables as `t('Update to {version}', { version })`. Outside components use `translate()`; for a string translated where it is shown (a list of labels), mark it with `msg('Apps')`.
+- English is the key, so a string with no translation yet shows in English. Write whole sentences, not pieces glued together, and keep counts as their own strings (`'1 bot'`, `'{n} bots'`): word order and plurals differ between languages.
+- Add the words to each language file (`es.ts`, `fr.ts`, `de.ts`, `pt-BR.ts`, `ru.ts`). `npm run i18n:check` in `web/` lists what each language is missing and fails when a translation drops or renames a `{placeholder}`.
+- Names people and bots chose, records and what bots write are never translated. Bots write to customers in the office's own language (Edit office → Profile).
+

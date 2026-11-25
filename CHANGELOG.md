@@ -23,6 +23,11 @@ app and the desktop app share one version number. A release is tagged
 - **A language per office**: Edit office → Profile → "Language the bots
   write to customers in". Posts, emails, quotes and replies to customers are
   written in it; bots still answer you in the language you write in.
+- **The app in your language**: Spanish, French, German, Brazilian Portuguese
+  and Russian, in Settings → Appearance → Language. Automatic follows your
+  browser or computer; a choice is kept on your account for every device.
+  The sidebar, message bar, chat, Apps panel, search, approvals and
+  settings are translated so far; other screens follow.
 
 ## 0.7.1 — 2026-11-23
 
