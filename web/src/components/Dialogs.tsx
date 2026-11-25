@@ -7,6 +7,7 @@ import { useEscape, closeOnBackdrop } from '../utils/useEscape';
 import { translate, useT } from '../i18n';
 import { TeamPanel } from './TeamPanel';
 import { TelegramPanel } from './TelegramPanel';
+import { SlackPanel } from './SlackPanel';
 
 // Small dialogs for naming, renaming and deleting offices and rooms. Each
 // one reports a failure inline and stays open, so nothing fails silently.
@@ -462,8 +463,8 @@ export const EditOfficeDialog: React.FC<{
         <button type="button" role="tab" aria-selected={tab === 'documents'} onClick={() => setTab('documents')} className={tabClass(tab === 'documents')}>
           {t('Documents')}
         </button>
-        <button type="button" role="tab" aria-selected={tab === 'telegram'} onClick={() => setTab('telegram')} className={tabClass(tab === 'telegram')}>
-          Telegram
+        <button type="button" role="tab" aria-selected={tab === 'chat_apps'} onClick={() => setTab('chat_apps')} className={tabClass(tab === 'chat_apps')}>
+          {t('Chat apps')}
         </button>
         </>
         )}
@@ -475,8 +476,18 @@ export const EditOfficeDialog: React.FC<{
       </div>
       {tab === 'team' ? (
         <TeamPanel officeId={officeId} onLeft={onLeft} />
-      ) : tab === 'telegram' ? (
-        <TelegramPanel officeId={officeId} />
+      ) : tab === 'chat_apps' ? (
+        // Telegram and Slack: talk to the office from a chat app.
+        <div className="space-y-5">
+          <section className="space-y-2" aria-label="Telegram">
+            <h3 className="text-[13px] font-semibold text-white">Telegram</h3>
+            <TelegramPanel officeId={officeId} />
+          </section>
+          <section className="space-y-2 pt-4 border-t border-white/10" aria-label="Slack">
+            <h3 className="text-[13px] font-semibold text-white">Slack</h3>
+            <SlackPanel officeId={officeId} />
+          </section>
+        </div>
       ) : tab === 'goal' ? (
         <GoalPanel officeId={officeId} onGoalSaved={(goal) => set({ goal })} />
       ) : tab === 'memory' ? (

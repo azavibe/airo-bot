@@ -37,7 +37,6 @@ use uuid::Uuid;
 use crate::auth::{secret, Caller};
 use crate::error::AppError;
 use crate::handlers::{wants_html, JsonOrForm};
-use crate::models::{NoteKind, User};
 use crate::office::team::{require, Role};
 use crate::state::{AppState, NoteEvent};
 
@@ -512,33 +511,14 @@ async fn handle_update(
     }
     // Posted in the office chat as the owner; the bots answer there and
     // their answers come back here.
-    let user =
-        sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL")
-            .bind(bot.owner_user_id)
-            .fetch_optional(&state.pool)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or("the office's owner is gone")?;
-    let chat_thread =
-        crate::office::group::ensure_office_chat(&state.pool, user.id, bot.workspace_id)
-            .await
-            .map_err(|e| format!("{e:?}"))?;
-    let thread = crate::handlers::threads::find_thread(&state.pool, chat_thread)
-        .await
-        .map_err(|e| format!("{e:?}"))?
-        .ok_or("the office chat is gone")?;
-    let text: String = text.chars().take(10_000).collect();
-    crate::handlers::threads::post_and_answer(
+    crate::chat_apps::post_in_office_chat(
         state,
-        &thread,
-        &Caller::User(user),
-        &text,
-        NoteKind::Status,
-        Some(&format!("telegram:{}:{update_id}", bot.id)),
-        true,
+        bot.owner_user_id,
+        bot.workspace_id,
+        text,
+        &format!("telegram:{}:{update_id}", bot.id),
     )
-    .await
-    .map_err(|e| format!("{e:?}"))?;
+    .await?;
     Ok(())
 }
 
@@ -572,43 +552,19 @@ async fn handle_button(
         answer("That button is out of date.").await?;
         return Ok(());
     };
-    let in_office: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM approvals WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL)",
-    )
-    .bind(approval)
-    .bind(bot.workspace_id)
-    .fetch_one(&state.pool)
-    .await
-    .map_err(|e| e.to_string())?;
-    if !in_office {
-        answer("That approval is gone.").await?;
-        return Ok(());
-    }
-    let user =
-        sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL")
-            .bind(bot.owner_user_id)
-            .fetch_optional(&state.pool)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or("the office's owner is gone")?;
     // The same decision the app makes, as the owner.
-    let decided = crate::handlers::airo::decide_approval(
-        State(state.clone()),
-        Caller::User(user),
-        Path(approval),
-        HeaderMap::new(),
-        JsonOrForm(crate::handlers::airo::DecideApprovalPayload {
-            decision: if approve { "approve" } else { "reject" }.to_string(),
-            reason: None,
-            idempotency_key: None,
-            changes: None,
-        }),
+    let decided = crate::chat_apps::decide_as_owner(
+        state,
+        bot.owner_user_id,
+        bot.workspace_id,
+        approval,
+        approve,
     )
     .await;
     let (toast, line) = match decided {
         Ok(_) if approve => ("Approved", "✓ Approved"),
         Ok(_) => ("Rejected", "✗ Rejected"),
-        Err(_) => ("That didn't work. Try in the app.", ""),
+        Err(why) => (why, ""),
     };
     answer(toast).await?;
     if !line.is_empty() {
@@ -683,25 +639,15 @@ pub async fn send_approvals(state: &AppState) -> usize {
         let (Some(token), Some(chat)) = (token_of(&bot), bot.chat_id) else {
             continue;
         };
-        let pending: Vec<(Uuid, String, String, DateTime<Utc>)> = sqlx::query_as(
-            "SELECT id, requested_action, requested_by, created_at FROM approvals
-             WHERE workspace_id = $1 AND status = 'pending' AND deleted_at IS NULL
-               AND created_at > $2
-             ORDER BY created_at ASC LIMIT 10",
+        let pending = crate::chat_apps::approvals_since(
+            &state.pool,
+            bot.workspace_id,
+            bot.approvals_sent_until,
         )
-        .bind(bot.workspace_id)
-        .bind(bot.approvals_sent_until)
-        .fetch_all(&state.pool)
-        .await
-        .unwrap_or_default();
+        .await;
         let mut until = bot.approvals_sent_until;
-        for (id, action, by, at) in pending {
-            let who = by.trim().trim_start_matches("agent:").replace('_', " ");
-            let who = if who.is_empty() {
-                "A bot".to_string()
-            } else {
-                who
-            };
+        for item in pending {
+            let (id, action, who, at) = (item.id, item.action, item.asked_by, item.created_at);
             let res = call(
                 state,
                 &token,

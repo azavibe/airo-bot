@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod chat_apps;
 pub mod config;
 pub mod connectors;
 pub mod crypto;
@@ -14,6 +15,7 @@ pub mod office;
 pub mod openrouter;
 pub mod push;
 pub mod rate_limit;
+pub mod slack;
 pub mod state;
 pub mod telegram;
 pub mod web;
@@ -610,6 +612,14 @@ pub fn app(state: AppState) -> Router {
             get(telegram::status).post(telegram::connect),
         )
         .route("/api/offices/{id}/telegram/link", post(telegram::new_link))
+        .route(
+            "/api/offices/{id}/slack",
+            get(slack::status).post(slack::connect),
+        )
+        .route("/api/offices/{id}/slack/link", post(slack::new_link))
+        .route("/api/offices/{id}/slack/delete", post(slack::disconnect))
+        .route("/slack/events/{office}", post(slack::events))
+        .route("/slack/actions/{office}", post(slack::actions))
         .route(
             "/api/offices/{id}/telegram/delete",
             post(telegram::disconnect),
