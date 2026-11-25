@@ -88,7 +88,7 @@ async fn new_office(pool: &PgPool, cookie: &str, name: &str) -> Uuid {
         .expect("uuid")
 }
 
-/// A made-up Account sid(), built here so it never reads as a real one.
+/// A made-up Account SID, built here so it never reads as a real one.
 fn sid() -> &'static str {
     static FAKE_SID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     FAKE_SID.get_or_init(|| format!("AC{}", "0123456789abcdef".repeat(2)))
