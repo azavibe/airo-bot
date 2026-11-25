@@ -38,6 +38,11 @@ app and the desktop app share one version number. A release is tagged
 - In an office with a team, bots don't show the owner's own Gmail or
   Calendar in chats the team can read. When a question needs them, the bot
   asks, and only the owner can allow it for that answer.
+- **Talk to your office from Telegram**: Edit office → Telegram. Make a bot
+  with @BotFather, paste its token, and open the link on your phone. Write
+  to it to talk to the office's group chat; the bots' answers and the
+  morning plan come back there, and approvals arrive with Approve and
+  Reject buttons. Works in the desktop app too (no public address needed).
 
 ### Fixed
 - Approvals from every office now show in Approvals, not only the first

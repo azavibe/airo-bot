@@ -70,7 +70,7 @@ impl ConnectorApps {
         }
     }
 
-    fn url(&self, host: &str, path: &str) -> String {
+    pub(crate) fn url(&self, host: &str, path: &str) -> String {
         match &self.test_origin {
             Some(origin) => format!("{}/{host}{path}", origin.trim_end_matches('/')),
             None => format!("https://{host}{path}"),

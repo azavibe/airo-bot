@@ -15,6 +15,7 @@ pub mod openrouter;
 pub mod push;
 pub mod rate_limit;
 pub mod state;
+pub mod telegram;
 pub mod web;
 
 use axum::extract::DefaultBodyLimit;
@@ -604,6 +605,15 @@ pub fn app(state: AppState) -> Router {
         .route("/api/me/theme", put(handlers::auth::save_theme))
         .route("/api/me/language", put(handlers::auth::save_language))
         .route("/api/offices/{id}/team", get(handlers::team::team))
+        .route(
+            "/api/offices/{id}/telegram",
+            get(telegram::status).post(telegram::connect),
+        )
+        .route("/api/offices/{id}/telegram/link", post(telegram::new_link))
+        .route(
+            "/api/offices/{id}/telegram/delete",
+            post(telegram::disconnect),
+        )
         .route("/api/offices/{id}/invites", post(handlers::team::invite))
         .route("/api/invites/accept", post(handlers::team::accept_invite))
         .route(
