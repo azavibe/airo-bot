@@ -440,7 +440,13 @@ ${a}`)
                             }}
                             className="h-7 px-3 rounded-full border border-white/15 text-[12px] text-neutral-200 hover:text-white hover:border-white/30 hover:bg-white/[0.05] transition-colors disabled:opacity-40 disabled:cursor-default"
                           >
-                            {done ? (action.kind === 'forget' ? 'Forgotten' : 'Sent') : action.label}
+                            {done
+                              ? action.kind === 'forget'
+                                ? t('Forgotten')
+                                : t('Sent')
+                              : action.kind === 'allow_private'
+                              ? t('Use the owner’s Gmail and Calendar here')
+                              : action.label}
                           </button>
                         );
                       })}

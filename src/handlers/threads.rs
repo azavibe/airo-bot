@@ -1599,13 +1599,16 @@ pub(crate) struct ReplyMode {
     /// The work this bot was asked to do, as a line shown after the
     /// conversation ("Architect (to Sales Lead): ..."), so it knows why.
     task_line: Option<String>,
+    /// The owner allowed their own inbox and calendar for this one answer
+    /// in a chat their team can read (issue #29).
+    allow_private: bool,
 }
 
 impl ReplyMode {
     pub(crate) fn route() -> Self {
         Self {
             route: true,
-            task_line: None,
+            ..Self::default()
         }
     }
 
@@ -1618,8 +1621,8 @@ impl ReplyMode {
     /// A task the office gives a bot on its own (kickoff, daily plan).
     pub(crate) fn task(bot_name: &str, task: &str) -> Self {
         Self {
-            route: false,
             task_line: Some(format!("Your task now, {bot_name}: {task}")),
+            ..Self::default()
         }
     }
 }
@@ -1705,6 +1708,22 @@ async fn deliver_reply(
     };
     // Recurring jobs it set (`EVERY ...:` lines): proposed, or started for
     // a Trusted bot.
+    // It needs the owner's inbox or calendar in a chat the team reads: the
+    // owner gets a button to allow them for this answer.
+    let (body, needs_private) = crate::office::access::take_needs_private(&body);
+    let actions = if needs_private && !mode.allow_private {
+        let mut all = actions
+            .and_then(|a| a.as_array().cloned())
+            .unwrap_or_default();
+        all.push(json!({
+            "label": "Use the owner's Gmail and Calendar here",
+            "kind": "allow_private",
+            "target": architect.id.to_string(),
+        }));
+        Some(serde_json::Value::Array(all))
+    } else {
+        actions
+    };
     let (body, schedules) =
         crate::office::recurring::apply_schedules(pool, thread_id, architect.id, &body).await;
     let (body, actions) = if schedules.is_empty() {
@@ -1822,8 +1841,8 @@ async fn deliver_reply(
             bot_id,
             user_id,
             ReplyMode {
-                route: false,
                 task_line: Some(format!("Architect (to {name}): {task}")),
+                ..ReplyMode::default()
             },
         );
     }
@@ -1945,9 +1964,18 @@ pub(crate) async fn run_agent_reply(
             if let Some(business) =
                 crate::office::context::business_of_thread(&pool, thread_id).await
             {
+                // The owner's own inbox and calendar only where nobody else
+                // reads, or when the owner allowed it for this answer.
+                let private_ok = mode.allow_private
+                    || !crate::office::access::shared_with_team(&pool, thread_id).await;
                 sys.push_str(
-                    &crate::office::access::tools_block(&state, business.workspace_id, agent_id)
-                        .await,
+                    &crate::office::access::tools_block(
+                        &state,
+                        business.workspace_id,
+                        agent_id,
+                        private_ok,
+                    )
+                    .await,
                 );
                 // The contacts this conversation names, with their facts.
                 sys.push_str(
@@ -2341,6 +2369,71 @@ pub struct RenameThreadRequest {
 }
 
 /// POST /threads/:id/rename -- give a thread a topic title by hand. The
+
+#[derive(Deserialize)]
+pub struct AllowPrivateRequest {
+    /// The bot that asked.
+    pub agent_id: Uuid,
+    pub idempotency_key: Option<String>,
+}
+
+/// POST /threads/:id/allow-private -- the owner lets a bot use their own
+/// inbox and calendar for one answer in a chat their team reads (issue
+/// #29). The bot answers again, with them. Teammates see the button but
+/// only the owner decides.
+pub async fn allow_private(
+    State(state): State<AppState>,
+    caller: Caller,
+    headers: HeaderMap,
+    Path(thread_id): Path<Uuid>,
+    JsonOrForm(body): JsonOrForm<AllowPrivateRequest>,
+) -> Result<Response, AppError> {
+    crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
+    let thread = find_thread(&state.pool, thread_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    if !is_owning_human(&caller, &thread) {
+        return Err(
+            match thread_role(&state.pool, Some(&caller), &thread).await? {
+                Some(_) => AppError::BadRequest("Only the office's owner can allow this.".into()),
+                None => AppError::Forbidden,
+            },
+        );
+    }
+    // One of the owner's bots that answers (or answered) in this chat.
+    let answers_here: bool = sqlx::query_scalar(
+        "SELECT EXISTS(
+            SELECT 1 FROM agents a
+            WHERE a.id = $1 AND a.user_id = $2 AND a.deleted_at IS NULL AND a.revoked_at IS NULL
+              AND (EXISTS (SELECT 1 FROM thread_agents ta WHERE ta.thread_id = $3 AND ta.agent_id = a.id)
+                   OR EXISTS (SELECT 1 FROM notes n
+                              WHERE n.thread_id = $3 AND n.author_agent_id = a.id
+                                AND n.deleted_at IS NULL)))",
+    )
+    .bind(body.agent_id)
+    .bind(thread.user_id)
+    .bind(thread.id)
+    .fetch_one(&state.pool)
+    .await?;
+    if !answers_here {
+        return Err(AppError::NotFound);
+    }
+    spawn_agent_reply(
+        state.clone(),
+        thread.id,
+        body.agent_id,
+        thread.user_id,
+        ReplyMode {
+            allow_private: true,
+            ..ReplyMode::default()
+        },
+    );
+    if wants_html(&headers) {
+        return Ok(Redirect::to("/").into_response());
+    }
+    Ok((StatusCode::ACCEPTED, Json(json!({ "status": "answering" }))).into_response())
+}
+
 /// auto-titler does this automatically; this is the human override.
 pub async fn rename_thread(
     State(state): State<AppState>,

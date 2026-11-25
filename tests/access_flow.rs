@@ -380,7 +380,7 @@ async fn only_the_bot_given_stripe_reads_it(pool: PgPool) {
     let state = state_with_stripe(pool.clone(), &origin);
     let office_id: Uuid = office.parse().expect("uuid");
 
-    let finance_sees = airobot::office::access::tools_block(&state, office_id, finance).await;
+    let finance_sees = airobot::office::access::tools_block(&state, office_id, finance, true).await;
     assert!(
         finance_sees.contains("## Live from your connected tools"),
         "{finance_sees}"
@@ -404,7 +404,7 @@ async fn only_the_bot_given_stripe_reads_it(pool: PgPool) {
     .expect("count");
     assert!(logged >= 1, "every read is logged as the bot's");
 
-    let sales_sees = airobot::office::access::tools_block(&state, office_id, sales).await;
+    let sales_sees = airobot::office::access::tools_block(&state, office_id, sales, true).await;
     assert!(
         sales_sees.is_empty(),
         "the sales bot has no Stripe: {sales_sees}"
@@ -431,6 +431,6 @@ async fn only_the_bot_given_stripe_reads_it(pool: PgPool) {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    let sales_sees = airobot::office::access::tools_block(&state, office_id, sales).await;
+    let sales_sees = airobot::office::access::tools_block(&state, office_id, sales, true).await;
     assert!(sales_sees.contains("Grand Hotel"), "{sales_sees}");
 }

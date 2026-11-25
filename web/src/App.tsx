@@ -1174,6 +1174,16 @@ export const App: React.FC = () => {
       postJson(`/api/documents/${action.target}/outdated`, { outdated: true, idempotency_key: `outdated:${action.target}` })
         .then(() => showOk('Marked outdated. Bots no longer answer from it; mark it current again in Documents.'))
         .catch((e) => showError(e instanceof Error ? e.message : 'That did not work.'));
+    } else if (action.kind === 'allow_private' && action.target && activeThreadId) {
+      // A bot in a chat the team reads asks to use the owner's own inbox
+      // and calendar for this answer; only the owner can allow it.
+      if (activeOfficeRole() !== 'owner') {
+        showError(tr('Only the office’s owner can allow this.'));
+        return;
+      }
+      postJson(`/threads/${activeThreadId}/allow-private`, { agent_id: action.target, idempotency_key: newKey() })
+        .then(() => showOk(tr('Allowed for this answer. The bot answers again with them.')))
+        .catch((e) => showError(e instanceof Error ? e.message : tr('That did not work. Please try again.')));
     } else if (action.kind === 'forget' && action.target) {
       // A bot's "Remembered: ..." Undo.
       postJson(`/api/memories/${action.target}/delete`)

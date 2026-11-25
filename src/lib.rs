@@ -262,6 +262,10 @@ pub fn app(state: AppState) -> Router {
         .route("/t/{id}/events", get(handlers::threads::thread_live_events))
         .route("/threads/{id}/notes", post(handlers::threads::create_note))
         .route(
+            "/threads/{id}/allow-private",
+            post(handlers::threads::allow_private),
+        )
+        .route(
             "/threads/{id}/rename",
             post(handlers::threads::rename_thread),
         )
