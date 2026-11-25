@@ -6,6 +6,7 @@ import { GoalPanel } from './GoalPanel';
 import { useEscape, closeOnBackdrop } from '../utils/useEscape';
 import { translate, useT } from '../i18n';
 import { TeamPanel } from './TeamPanel';
+import { TelegramPanel } from './TelegramPanel';
 
 // Small dialogs for naming, renaming and deleting offices and rooms. Each
 // one reports a failure inline and stays open, so nothing fails silently.
@@ -446,7 +447,7 @@ export const EditOfficeDialog: React.FC<{
       disabled={tab === 'profile' && !values.name.trim()}
       wide
     >
-      <div role="tablist" className="flex gap-1 -mt-1">
+      <div role="tablist" className="flex gap-1 -mt-1 overflow-x-auto no-scrollbar">
         {!shared && (
         <>
         <button type="button" role="tab" aria-selected={tab === 'profile'} onClick={() => setTab('profile')} className={tabClass(tab === 'profile')}>
@@ -461,6 +462,9 @@ export const EditOfficeDialog: React.FC<{
         <button type="button" role="tab" aria-selected={tab === 'documents'} onClick={() => setTab('documents')} className={tabClass(tab === 'documents')}>
           {t('Documents')}
         </button>
+        <button type="button" role="tab" aria-selected={tab === 'telegram'} onClick={() => setTab('telegram')} className={tabClass(tab === 'telegram')}>
+          Telegram
+        </button>
         </>
         )}
         {(!hideTeam || shared) && (
@@ -471,6 +475,8 @@ export const EditOfficeDialog: React.FC<{
       </div>
       {tab === 'team' ? (
         <TeamPanel officeId={officeId} onLeft={onLeft} />
+      ) : tab === 'telegram' ? (
+        <TelegramPanel officeId={officeId} />
       ) : tab === 'goal' ? (
         <GoalPanel officeId={officeId} onGoalSaved={(goal) => set({ goal })} />
       ) : tab === 'memory' ? (

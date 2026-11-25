@@ -30,7 +30,10 @@ const INBOX_THREAD_REFRESH_MS: i64 = 2_000;
 
 // ---------- shared lookups ----------
 
-async fn find_thread(pool: &PgPool, thread_id: Uuid) -> Result<Option<Thread>, AppError> {
+pub(crate) async fn find_thread(
+    pool: &PgPool,
+    thread_id: Uuid,
+) -> Result<Option<Thread>, AppError> {
     let thread =
         sqlx::query_as::<_, Thread>("SELECT * FROM threads WHERE id = $1 AND deleted_at IS NULL")
             .bind(thread_id)
@@ -916,6 +919,85 @@ async fn insert_note(
     Ok((note, true))
 }
 
+/// Posts a person's message in a thread they may write in (already
+/// checked), shows it live, and has the thread's bot answer; in an office
+/// group chat with `routed`, the Architect (or an @mentioned bot) answers
+/// and hands work on. Shared by the app and Telegram.
+pub(crate) async fn post_and_answer(
+    state: &AppState,
+    thread: &Thread,
+    caller: &Caller,
+    text: &str,
+    kind: NoteKind,
+    idempotency_key: Option<&str>,
+    routed: bool,
+) -> Result<(Note, bool), AppError> {
+    let (note, created) = insert_note(state, thread, caller, text, kind, idempotency_key).await?;
+
+    if created {
+        let broadcast_row = sqlx::query_as::<_, NoteRow>(
+            "SELECT n.id, n.author_user_id, n.body, n.kind, n.created_at,
+                    u.handle AS author_handle, a.name AS author_agent_name
+             FROM notes n
+             LEFT JOIN users u ON u.id = n.author_user_id
+             LEFT JOIN agents a ON a.id = n.author_agent_id
+             WHERE n.id = $1",
+        )
+        .bind(note.id)
+        .fetch_optional(&state.pool)
+        .await?;
+
+        if let Some(row) = broadcast_row {
+            let _ = state.note_sender.send(note_event(thread.id, &row));
+        }
+
+        // Free chat: any human message reaches the thread's agent, which
+        // answers in its own character. Commands travel the same path.
+        // Bots answer on the owner's account (their AI, keys and credits),
+        // whoever in the office wrote.
+        if let Caller::User(_) = caller {
+            let owner = thread.user_id;
+            match (thread.kind.as_str(), thread.workspace_id) {
+                // The office group chat: the Architect (or an @mentioned
+                // bot) answers, and hands work to the right bot.
+                ("office", Some(workspace_id)) if routed => {
+                    crate::office::group::on_person_message(
+                        state,
+                        thread.id,
+                        workspace_id,
+                        owner,
+                        text,
+                    )
+                    .await;
+                }
+                _ => {
+                    let aid = sqlx::query_scalar::<_, Uuid>(
+                        "SELECT ta.agent_id FROM thread_agents ta
+                         JOIN agents a ON a.id = ta.agent_id
+                         WHERE ta.thread_id = $1 AND a.deleted_at IS NULL AND a.revoked_at IS NULL
+                         ORDER BY (a.instructions IS NULL) ASC LIMIT 1",
+                    )
+                    .bind(thread.id)
+                    .fetch_optional(&state.pool)
+                    .await
+                    .ok()
+                    .flatten();
+                    if let Some(aid) = aid {
+                        spawn_agent_reply(
+                            state.clone(),
+                            thread.id,
+                            aid,
+                            owner,
+                            ReplyMode::default(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    Ok((note, created))
+}
+
 pub async fn create_note(
     State(state): State<AppState>,
     caller: Caller,
@@ -956,77 +1038,17 @@ pub async fn create_note(
         authorize_note(&caller, &thread, body.kind)?;
     }
 
-    let (note, created) = insert_note(
+    let routed = is_owning_human(&caller, &thread) || invited;
+    let (note, created) = post_and_answer(
         &state,
         &thread,
         &caller,
         text,
         body.kind,
         body.idempotency_key.as_deref(),
+        routed,
     )
     .await?;
-
-    if created {
-        let broadcast_row = sqlx::query_as::<_, NoteRow>(
-            "SELECT n.id, n.author_user_id, n.body, n.kind, n.created_at,
-                    u.handle AS author_handle, a.name AS author_agent_name
-             FROM notes n
-             LEFT JOIN users u ON u.id = n.author_user_id
-             LEFT JOIN agents a ON a.id = n.author_agent_id
-             WHERE n.id = $1",
-        )
-        .bind(note.id)
-        .fetch_optional(&state.pool)
-        .await?;
-
-        if let Some(row) = broadcast_row {
-            let _ = state.note_sender.send(note_event(thread.id, &row));
-        }
-
-        // Free chat: any human message reaches the thread's agent, which
-        // answers in its own character. Commands travel the same path.
-        // Bots answer on the owner's account (their AI, keys and credits),
-        // whoever in the office wrote.
-        if let Caller::User(_) = &caller {
-            let owner = thread.user_id;
-            match (thread.kind.as_str(), thread.workspace_id) {
-                // The office group chat: the Architect (or an @mentioned
-                // bot) answers, and hands work to the right bot.
-                ("office", Some(workspace_id)) if is_owning_human(&caller, &thread) || invited => {
-                    crate::office::group::on_person_message(
-                        &state,
-                        thread.id,
-                        workspace_id,
-                        owner,
-                        text,
-                    )
-                    .await;
-                }
-                _ => {
-                    let aid = sqlx::query_scalar::<_, Uuid>(
-                        "SELECT ta.agent_id FROM thread_agents ta
-                         JOIN agents a ON a.id = ta.agent_id
-                         WHERE ta.thread_id = $1 AND a.deleted_at IS NULL AND a.revoked_at IS NULL
-                         ORDER BY (a.instructions IS NULL) ASC LIMIT 1",
-                    )
-                    .bind(thread.id)
-                    .fetch_optional(&state.pool)
-                    .await
-                    .ok()
-                    .flatten();
-                    if let Some(aid) = aid {
-                        spawn_agent_reply(
-                            state.clone(),
-                            thread.id,
-                            aid,
-                            owner,
-                            ReplyMode::default(),
-                        );
-                    }
-                }
-            }
-        }
-    }
 
     if wants_fragment(&headers) {
         let row = sqlx::query_as::<_, NoteRow>(

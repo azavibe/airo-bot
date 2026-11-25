@@ -277,7 +277,7 @@ export interface OfficeDocument {
 }
 
 /** Which tab the Edit office dialog opens on. */
-export type EditOfficeTab = 'profile' | 'goal' | 'memory' | 'documents' | 'team';
+export type EditOfficeTab = 'profile' | 'goal' | 'memory' | 'documents' | 'team' | 'telegram';
 
 /** A fact an office remembers: the whole office's, or one bot's. */
 export interface Memory {
