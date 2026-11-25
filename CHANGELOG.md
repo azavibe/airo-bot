@@ -38,15 +38,20 @@ app and the desktop app share one version number. A release is tagged
 - In an office with a team, bots don't show the owner's own Gmail or
   Calendar in chats the team can read. When a question needs them, the bot
   asks, and only the owner can allow it for that answer.
-- **Talk to your office from Telegram**: Edit office → Chat apps. Make a bot
+- **Talk to your office from Telegram**: Edit office → Channels. Make a bot
   with @BotFather, paste its token, and open the link on your phone. Write
   to it to talk to the office's group chat; the bots' answers and the
   morning plan come back there, and approvals arrive with Approve and
   Reject buttons. Works in the desktop app too (no public address needed).
-- **…and from Slack** (on a server): Edit office → Chat apps → Slack shows a
+- **…and from Slack** (on a server): Edit office → Channels → Slack shows a
   manifest to create the Slack app from; install it, paste its token and
   signing secret, and send it the code. Your direct messages to it reach the
   office, and approvals come with buttons.
+- **A phone receptionist** (on a server): Edit office → Channels → Phone.
+  Connect a Twilio number and a Receptionist bot answers it in the office's
+  language, books appointments and takes messages into your apps, and puts
+  callers through to you when they ask (or press 0). Calls show live in a
+  Phone calls room, and the office chat gets a line when each call ends.
 
 ### Fixed
 - Approvals from every office now show in Approvals, not only the first

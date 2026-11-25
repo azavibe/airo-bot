@@ -13,6 +13,7 @@ pub mod markdown;
 pub mod models;
 pub mod office;
 pub mod openrouter;
+pub mod phone;
 pub mod push;
 pub mod rate_limit;
 pub mod slack;
@@ -620,6 +621,14 @@ pub fn app(state: AppState) -> Router {
         .route("/api/offices/{id}/slack/delete", post(slack::disconnect))
         .route("/slack/events/{office}", post(slack::events))
         .route("/slack/actions/{office}", post(slack::actions))
+        .route(
+            "/api/offices/{id}/phone",
+            get(phone::status).post(phone::connect),
+        )
+        .route("/api/offices/{id}/phone/delete", post(phone::disconnect))
+        .route("/phone/{office}/voice", post(phone::voice))
+        .route("/phone/{office}/turn", post(phone::turn))
+        .route("/phone/{office}/status", post(phone::status_callback))
         .route(
             "/api/offices/{id}/telegram/delete",
             post(telegram::disconnect),
