@@ -555,8 +555,17 @@ async fn office_prompts(state: &AppState, task: &ClaimedTaskRow) -> (String, Str
                 .join("\n")
         )
     };
+    let language: Option<String> =
+        sqlx::query_scalar("SELECT language FROM workspaces WHERE id = $1")
+            .bind(task.workspace_id)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten()
+            .flatten();
     let sys = format!(
-        "You are an autonomous SMB virtual office agent executing an office task. Be concise, actionable, and professional.{lessons_prompt}{}",
+        "You are an autonomous SMB virtual office agent executing an office task. Be concise, actionable, and professional.{lessons_prompt}{}{}",
+        crate::office::language::prompt_block(language.as_deref()),
         crate::office::outcome::INSTRUCTION
     );
     let user_prompt = format!("Task: {}\nPayload: {}", task.title, task.state_payload);

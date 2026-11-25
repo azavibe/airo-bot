@@ -967,6 +967,7 @@ export const App: React.FC = () => {
         // The goal is saved from its own tab (where a new one asks the
         // Architect for milestones); Profile doesn't send it.
         about: values.about,
+        language: values.language,
         daily_plan: values.daily_plan,
         // Sent only when changed: changing the cap restarts work it stopped.
         ...(values.monthly_cap !== (office.monthly_cap_credits ? String(office.monthly_cap_credits) : '')
@@ -987,6 +988,7 @@ export const App: React.FC = () => {
               focus: saved.focus,
               goal: saved.goal,
               about: saved.about,
+              language: saved.language ?? null,
               daily_plan: saved.daily_plan,
               monthly_cap_credits: saved.monthly_cap_credits ?? null,
               cap_reached:
@@ -1733,6 +1735,7 @@ export const App: React.FC = () => {
             focus: dialog.office.focus ?? '',
             goal: dialog.office.goal ?? '',
             about: dialog.office.about ?? '',
+            language: dialog.office.language ?? '',
             daily_plan: dialog.office.daily_plan !== false,
             monthly_cap: dialog.office.monthly_cap_credits ? String(dialog.office.monthly_cap_credits) : '',
           }}

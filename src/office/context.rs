@@ -23,10 +23,12 @@ const MAX_VALUE_CHARS: usize = 500;
 
 /// A record a bot wrote: which app (index into the office's apps) and its data.
 pub type FoundRecord = (usize, Map<String, Value>);
-/// An office row: id, name, business type, website, focus, goal, about.
+/// An office row: id, name, business type, website, focus, goal, about,
+/// language.
 type OfficeRow = (
     Uuid,
     String,
+    Option<String>,
     Option<String>,
     Option<String>,
     Option<String>,
@@ -142,13 +144,16 @@ pub struct Business {
     pub goal: Option<String>,
     /// What it is like: hours, prices, tone, policies.
     pub about: Option<String>,
+    /// The language its customer-facing text is written in (a code from
+    /// `office::language`), if the owner set one.
+    pub language: Option<String>,
 }
 
 /// The office a room belongs to (rooms made before offices belong to the
 /// owner's first office).
 pub async fn business_of_thread(pool: &PgPool, thread_id: Uuid) -> Option<Business> {
     let row: Option<OfficeRow> = sqlx::query_as(
-        "SELECT w.id, w.name, w.business_type, w.website, w.focus, w.goal, w.about
+        "SELECT w.id, w.name, w.business_type, w.website, w.focus, w.goal, w.about, w.language
              FROM threads t
              JOIN workspaces w ON w.id = COALESCE(t.workspace_id, (
                  SELECT w2.id FROM workspaces w2
@@ -161,7 +166,7 @@ pub async fn business_of_thread(pool: &PgPool, thread_id: Uuid) -> Option<Busine
     .await
     .ok()
     .flatten();
-    let (workspace_id, name, business_type, website, focus, goal, about) = row?;
+    let (workspace_id, name, business_type, website, focus, goal, about, language) = row?;
     Some(Business {
         workspace_id,
         name,
@@ -170,6 +175,7 @@ pub async fn business_of_thread(pool: &PgPool, thread_id: Uuid) -> Option<Busine
         focus,
         goal: goal.filter(|g| !g.trim().is_empty()),
         about: about.filter(|a| !a.trim().is_empty()),
+        language,
     })
 }
 
@@ -214,6 +220,7 @@ pub fn prompt(business: &Business, apps: &[AppInfo]) -> String {
     if let Some(about) = &business.about {
         out.push_str(&format!("\n## About the business\n{about}\n"));
     }
+    out.push_str(&super::language::prompt_block(business.language.as_deref()));
     if !apps.is_empty() {
         out.push_str("\n## Apps you can fill\n");
         for app in apps {
@@ -539,8 +546,18 @@ mod tests {
             focus: None,
             goal: Some("Open a second hotel by summer".into()),
             about: Some("Check-in from 2pm. Breakfast is included.".into()),
+            language: None,
         };
         let text = prompt(&business, &[crm()]);
+        assert!(!text.contains("## Language"));
+        let spanish = prompt(
+            &Business {
+                language: Some("es".into()),
+                ..business.clone()
+            },
+            &[],
+        );
+        assert!(spanish.contains("## Language\nThis office works in Spanish"));
         assert!(text.contains("You work for Bamboo Hotel."));
         assert!(text.contains("Where the business is going: Open a second hotel by summer."));
         assert!(text.contains("## About the business\nCheck-in from 2pm."));

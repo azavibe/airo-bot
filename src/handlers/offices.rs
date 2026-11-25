@@ -42,6 +42,9 @@ pub struct OfficeItem {
     pub focus: Option<String>,
     pub goal: Option<String>,
     pub about: Option<String>,
+    /// The language its bots write customer-facing text in (a code from
+    /// `office::language`); none set when null.
+    pub language: Option<String>,
     /// The office's hard monthly spending cap in credits, if any.
     pub monthly_cap_credits: Option<i64>,
     /// Credits its metered AI calls have cost this month.
@@ -84,7 +87,7 @@ pub async fn list_for(pool: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<OfficeIt
     let primary = get_or_create_default_workspace(pool, user_id).await?;
     let rows = sqlx::query_as::<_, OfficeItem>(
         "SELECT w.id, w.name, (w.id = $2) AS primary, w.daily_plan, w.paused,
-                w.business_type, w.website, w.focus, w.goal, w.about,
+                w.business_type, w.website, w.focus, w.goal, w.about, w.language,
                 w.monthly_cap_credits,
                 (SELECT COALESCE(SUM(l.credits_charged), 0)::bigint FROM credit_ledger l
                   WHERE l.office_id = w.id AND l.created_at >= date_trunc('month', now())
@@ -327,6 +330,10 @@ pub struct RenameOfficeRequest {
     pub goal: Option<String>,
     #[serde(default)]
     pub about: Option<String>,
+    /// The language its bots write to customers in, a code from
+    /// `GET /api/languages`; empty: none.
+    #[serde(default)]
+    pub language: Option<String>,
     /// The hard monthly spending cap in credits; 0 removes it. Changing it
     /// lets work that waited on the old cap run again.
     #[serde(default)]
@@ -395,6 +402,18 @@ pub async fn rename_office(
         None => None,
     };
     let cap = crate::office::spend::cap_setting(body.monthly_cap_credits)?;
+    let language = match body.language.as_deref().map(str::trim) {
+        Some("") => Some(None),
+        Some(code) => match crate::office::language::find(code) {
+            Some(lang) => Some(Some(lang.code.to_string())),
+            None => {
+                return Err(AppError::BadRequest(
+                    "language must be one of the codes from /api/languages".to_string(),
+                ))
+            }
+        },
+        None => None,
+    };
     if let Some(check_in) = body.check_in.as_deref() {
         if !matches!(check_in, "off" | "daily" | "weekly" | "monthly") {
             return Err(AppError::BadRequest(
@@ -407,6 +426,7 @@ pub async fn rename_office(
         || website.is_some()
         || goal.is_some()
         || about.is_some()
+        || language.is_some()
         || cap.is_some()
         || body.check_in.is_some()
         || body.weekly_report.is_some();
@@ -434,6 +454,7 @@ pub async fn rename_office(
         Option<String>,
         Option<String>,
         Option<String>,
+        Option<String>,
         Option<i64>,
         String,
         bool,
@@ -446,6 +467,7 @@ pub async fn rename_office(
         focus,
         goal,
         about,
+        language,
         monthly_cap,
         check_in,
         weekly_report,
@@ -461,9 +483,10 @@ pub async fn rename_office(
                 cap_notice_month = CASE WHEN $15 THEN NULL ELSE cap_notice_month END,
                 check_in = COALESCE($17, check_in),
                 weekly_report = COALESCE($18, weekly_report),
+                language = CASE WHEN $19 THEN $20 ELSE language END,
                 updated_at = now()
          WHERE id = $2
-         RETURNING daily_plan, paused, business_type, website, focus, goal, about,
+         RETURNING daily_plan, paused, business_type, website, focus, goal, about, language,
                    monthly_cap_credits, check_in, weekly_report",
     )
     .bind(&name)
@@ -484,6 +507,8 @@ pub async fn rename_office(
     .bind(cap.flatten())
     .bind(body.check_in.as_deref())
     .bind(body.weekly_report)
+    .bind(language.is_some())
+    .bind(language.flatten())
     .fetch_one(&state.pool)
     .await?;
     // A new goal: the Architect proposes milestones toward it.
@@ -518,6 +543,7 @@ pub async fn rename_office(
         "focus": focus,
         "goal": goal,
         "about": about,
+        "language": language,
         "monthly_cap_credits": monthly_cap,
         "check_in": check_in,
         "weekly_report": weekly_report,

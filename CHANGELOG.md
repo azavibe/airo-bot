@@ -20,6 +20,9 @@ app and the desktop app share one version number. A release is tagged
 - Link a Google Drive folder in Documents: its Docs, Sheets, Slides, PDFs,
   Word and text files become documents and are kept in step every day.
   Connect Google with the new "Drive (read only)" option first.
+- **A language per office**: Edit office → Profile → "Language the bots
+  write to customers in". Posts, emails, quotes and replies to customers are
+  written in it; bots still answer you in the language you write in.
 
 ## 0.7.1 — 2026-11-23
 

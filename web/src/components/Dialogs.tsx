@@ -148,10 +148,31 @@ export interface OfficeEdit {
   focus: string;
   goal: string;
   about: string;
+  /** The language its bots write to customers in; empty for none. */
+  language: string;
   daily_plan: boolean;
   /** Monthly spending cap in credits; empty for none. */
   monthly_cap: string;
 }
+
+interface Language {
+  code: string;
+  name: string;
+  native: string;
+}
+
+let languagesOnce: Promise<Language[]> | null = null;
+/** The languages an office can work in (GET /api/languages), fetched once. */
+const loadLanguages = (): Promise<Language[]> => {
+  languagesOnce ??= fetch('/api/languages', { headers: { Accept: 'application/json' } })
+    .then((res) => (res.ok ? res.json() : Promise.reject(new Error('languages'))))
+    .then((data) => (data.languages ?? []) as Language[])
+    .catch(() => {
+      languagesOnce = null;
+      return [];
+    });
+  return languagesOnce;
+};
 
 /** One request to the server; throws its short message on failure. */
 const request = async (url: string, body: Record<string, unknown> | null, method = 'POST'): Promise<any> => {
@@ -377,6 +398,14 @@ export const EditOfficeDialog: React.FC<{
   const [values, setValues] = useState<OfficeEdit>(initial);
   const [tab, setTab] = useState<EditOfficeTab>(startTab);
   const set = (patch: Partial<OfficeEdit>) => setValues((v) => ({ ...v, ...patch }));
+  const [languages, setLanguages] = useState<Language[]>([]);
+  useEffect(() => {
+    let live = true;
+    loadLanguages().then((list) => live && setLanguages(list));
+    return () => {
+      live = false;
+    };
+  }, []);
   const { busy, error, go } = useAction(
     () =>
       onSubmit({
@@ -474,6 +503,28 @@ export const EditOfficeDialog: React.FC<{
           <option value="Get paid faster" />
           <option value="Save time on admin" />
         </datalist>
+      </label>
+      <label className="block space-y-1.5">
+        <span className="text-[11px] text-neutral-400">Language the bots write to customers in</span>
+        <select
+          value={values.language}
+          onChange={(e) => set({ language: e.target.value })}
+          className={inputClass}
+        >
+          <option value="">Not set: the language each person writes in</option>
+          {values.language && !languages.some((l) => l.code === values.language) && (
+            <option value={values.language}>{values.language}</option>
+          )}
+          {languages.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.native === l.name ? l.name : `${l.native} (${l.name})`}
+            </option>
+          ))}
+        </select>
+        <span className="block text-[11px] text-neutral-500 leading-relaxed">
+          Posts, emails, quotes and replies to customers are written in it. Bots still answer you in the language you
+          write in.
+        </span>
       </label>
       <label className="block space-y-1.5">
         <span className="text-[11px] text-neutral-400">About the business: hours, prices, tone, policies</span>
