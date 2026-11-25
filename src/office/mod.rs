@@ -16,6 +16,7 @@ pub mod outcome;
 pub mod records;
 pub mod recurring;
 pub mod spend;
+pub mod team;
 
 use sqlx::PgPool;
 use uuid::Uuid;
