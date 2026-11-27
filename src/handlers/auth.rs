@@ -23,6 +23,9 @@ struct LoginTemplate<'a> {
     error: Option<&'a str>,
 }
 
+/// Sign-in links one email address can be sent per hour.
+const LOGIN_LINKS_PER_HOUR: i64 = 5;
+
 #[derive(Template)]
 #[template(path = "handle.html")]
 struct HandleTemplate<'a> {
@@ -87,6 +90,20 @@ pub async fn request_login(
             return login_sent_response(&headers);
         }
     }
+    // One inbox gets at most a few links an hour, however many addresses
+    // ask: the answer is the same, so it tells nothing about the account.
+    let recent: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM email_tokens
+         WHERE email = $1 AND purpose = 'login' AND created_at > now() - interval '1 hour'",
+    )
+    .bind(&email)
+    .fetch_one(&mut *tx)
+    .await?;
+    if recent >= LOGIN_LINKS_PER_HOUR {
+        tracing::info!("sign-in links for one address hit the hourly cap");
+        return login_sent_response(&headers);
+    }
+
     let id = Uuid::new_v4();
     let raw_secret = secret::random_hex_token(32);
     let token_hash = secret::hash_secret(&raw_secret).map_err(|_| AppError::Internal)?;

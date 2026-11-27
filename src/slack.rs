@@ -38,7 +38,7 @@ use uuid::Uuid;
 use crate::auth::{secret, Caller};
 use crate::error::AppError;
 use crate::handlers::{wants_html, JsonOrForm};
-use crate::office::team::{require, Role};
+use crate::office::team::{require_person, Role};
 use crate::state::{AppState, NoteEvent};
 
 const LINK_MINUTES: i64 = 60;
@@ -200,7 +200,7 @@ pub async fn status(
     caller: Caller,
     Path(office): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     let app = app_of_office(&state.pool, office).await?;
     let name: String = sqlx::query_scalar("SELECT name FROM workspaces WHERE id = $1")
         .bind(office)
@@ -234,7 +234,7 @@ pub async fn connect(
     Path(office): Path<Uuid>,
     JsonOrForm(body): JsonOrForm<ConnectRequest>,
 ) -> Result<Response, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     not_on_this_computer(&state)?;
     let key = crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
     if let Some(key) = key {
@@ -327,7 +327,7 @@ pub async fn new_link(
     headers: HeaderMap,
     Path(office): Path<Uuid>,
 ) -> Result<Response, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     crate::idempotency::key(&headers, None)?;
     let app = app_of_office(&state.pool, office)
         .await?
@@ -354,7 +354,7 @@ pub async fn disconnect(
     headers: HeaderMap,
     Path(office): Path<Uuid>,
 ) -> Result<Response, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     crate::idempotency::key(&headers, None)?;
     sqlx::query(
         "UPDATE slack_apps SET deleted_at = now(), updated_at = now()

@@ -369,9 +369,12 @@ async fn fetch_board_workflows(
         .collect())
 }
 
+/// Runs of the board's workflows the viewer may see: public ones, and
+/// their own private ones (as `fetch_board_workflows`).
 async fn fetch_board_runs(
     pool: &PgPool,
     board_id: Uuid,
+    viewer_id: Option<Uuid>,
 ) -> Result<Vec<crate::handlers::workflows::RunSummaryItem>, AppError> {
     #[derive(sqlx::FromRow)]
     struct Row {
@@ -394,11 +397,13 @@ async fn fetch_board_runs(
                 r.started_at, r.finished_at, r.thread_id
          FROM runs r
          JOIN procedures p ON p.id = r.procedure_id
-         WHERE p.board_id = $1 AND r.deleted_at IS NULL
+         WHERE p.board_id = $1 AND r.deleted_at IS NULL AND p.deleted_at IS NULL
+           AND (p.visibility = 'public' OR ($2::uuid IS NOT NULL AND p.user_id = $2))
          ORDER BY r.created_at DESC
          LIMIT 50",
     )
     .bind(board_id)
+    .bind(viewer_id)
     .fetch_all(pool)
     .await?;
 
@@ -575,7 +580,7 @@ pub async fn board(
     let assigned_agents = fetch_board_agents(&state.pool, board.id).await?;
     let agents = connected_agents(&state.pool, viewer_id).await?;
     let workflows = fetch_board_workflows(&state.pool, board.id, viewer_id).await?;
-    let runs = fetch_board_runs(&state.pool, board.id).await?;
+    let runs = fetch_board_runs(&state.pool, board.id, viewer_id).await?;
     let view = query
         .view
         .as_deref()
@@ -2004,11 +2009,18 @@ pub async fn connect_openrouter_agent(
     .await?;
 
     if wants_html(&headers) {
-        let dest = headers
+        // Back to the agents page the form was on; never to the Referer
+        // itself (it could name another site).
+        let from_settings = headers
             .get("referer")
             .and_then(|r| r.to_str().ok())
-            .filter(|r| r.contains("/settings/agents"))
-            .unwrap_or("/connect?view=agents");
+            .and_then(|r| reqwest::Url::parse(r).ok())
+            .is_some_and(|u| u.path().starts_with("/settings/agents"));
+        let dest = if from_settings {
+            "/settings/agents"
+        } else {
+            "/connect?view=agents"
+        };
         return Ok(Redirect::to(dest).into_response());
     }
 

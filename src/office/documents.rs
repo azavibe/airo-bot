@@ -114,6 +114,25 @@ fn file_text(filename: &str, bytes: &[u8]) -> Result<String, String> {
     }
 }
 
+/// `file_text` for an upload or a Drive file. PDF parsing is CPU work
+/// that may be slow, or panic, on a hostile file: it runs off the async
+/// threads, a panic is a read failure, and it is given up on after 30
+/// seconds.
+/// TODO(air): a timed-out parse keeps its blocking thread until it ends; a
+/// separate process could be killed instead.
+async fn file_text_off_thread(name: String, bytes: Vec<u8>) -> Result<String, String> {
+    match tokio::time::timeout(
+        Duration::from_secs(30),
+        tokio::task::spawn_blocking(move || file_text(&name, &bytes)),
+    )
+    .await
+    {
+        Err(_) => Err("That file took too long to read.".into()),
+        Ok(Err(_)) => Err("That file couldn't be read.".into()),
+        Ok(Ok(result)) => result,
+    }
+}
+
 fn utf8(bytes: &[u8]) -> String {
     let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
     String::from_utf8_lossy(bytes).into_owned()
@@ -1057,18 +1076,9 @@ pub async fn create_document(
             return Err(AppError::BadRequest("files are at most 8 MB".into()));
         }
         let name = filename.clone();
-        // PDF parsing is CPU work that may be slow on a hostile file; it
-        // runs off the async threads and is given up on after 30 seconds.
-        // TODO(air): a timed-out parse keeps its blocking thread until it
-        // ends; a separate process could be killed instead.
-        let parsed = tokio::time::timeout(
-            Duration::from_secs(30),
-            tokio::task::spawn_blocking(move || file_text(&name, &bytes)),
-        )
-        .await
-        .map_err(|_| AppError::BadRequest("That file took too long to read.".into()))?
-        .map_err(|_| AppError::BadRequest("That file couldn't be read.".into()))?
-        .map_err(AppError::BadRequest)?;
+        let parsed = file_text_off_thread(name, bytes)
+            .await
+            .map_err(AppError::BadRequest)?;
         let title = given_title.unwrap_or_else(|| {
             let stem = filename
                 .rsplit_once('.')
@@ -1632,7 +1642,9 @@ async fn read_folder(
             }
             Some(crate::connectors::DriveContent::Text(t)) => t,
             Some(crate::connectors::DriveContent::Bytes(b)) => {
-                match file_text(&drive_filename(&file.name, &file.mime_type), &b) {
+                // Off the async threads: a hostile PDF in a shared folder
+                // must not stall the server or end the background loop.
+                match file_text_off_thread(drive_filename(&file.name, &file.mime_type), b).await {
                     Ok(t) => t,
                     Err(why) => {
                         report.skipped.push(format!("{}: {why}", file.name));

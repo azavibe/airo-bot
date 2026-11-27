@@ -37,7 +37,7 @@ use uuid::Uuid;
 use crate::auth::{secret, Caller};
 use crate::error::AppError;
 use crate::handlers::{wants_html, JsonOrForm};
-use crate::office::team::{require, Role};
+use crate::office::team::{require_person, Role};
 use crate::state::{AppState, NoteEvent};
 
 /// How long a link to the bot works.
@@ -182,7 +182,7 @@ pub async fn status(
     caller: Caller,
     Path(office): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     let bot = bot_of_office(&state.pool, office).await?;
     let last_error: Option<String> = match &bot {
         Some(b) => {
@@ -211,7 +211,7 @@ pub async fn connect(
     Path(office): Path<Uuid>,
     JsonOrForm(body): JsonOrForm<ConnectRequest>,
 ) -> Result<Response, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     let key = crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
     if let Some(key) = key {
         let earlier: Option<BotRow> = sqlx::query_as::<_, BotRow>(&format!(
@@ -312,7 +312,7 @@ pub async fn new_link(
     headers: HeaderMap,
     Path(office): Path<Uuid>,
 ) -> Result<Response, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     crate::idempotency::key(&headers, None)?;
     let bot = bot_of_office(&state.pool, office)
         .await?
@@ -339,7 +339,7 @@ pub async fn disconnect(
     headers: HeaderMap,
     Path(office): Path<Uuid>,
 ) -> Result<Response, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     crate::idempotency::key(&headers, None)?;
     sqlx::query(
         "UPDATE telegram_bots SET deleted_at = now(), updated_at = now()
