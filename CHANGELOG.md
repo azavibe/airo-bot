@@ -81,6 +81,8 @@ app and the desktop app share one version number. A release is tagged
   Phone calls room, and the office chat gets a line when each call ends.
 
 ### Fixed
+- A workflow step's result sent twice (an agent retrying after a timeout)
+  no longer posts a second result or moves the run on twice.
 - With more than one office, the task list could show the tasks of an office
   other than your first one.
 - Approvals from every office now show in Approvals, not only the first

@@ -1896,6 +1896,29 @@ pub fn submit_step_result_inner(
             output
         );
 
+        // Finish the step only if it isn't finished yet. An agent that sends
+        // its result again (a retry after a timeout), or two at once, finds
+        // it done and changes nothing: no second note, no second advance.
+        let finished_now = sqlx::query(
+            "UPDATE run_steps
+             SET status = $1, output = $2, finished_at = now()
+             WHERE id = $3 AND status NOT IN ('completed', 'failed')",
+        )
+        .bind(if is_pass { "completed" } else { "failed" })
+        .bind(&output)
+        .bind(step.id)
+        .execute(&state.pool)
+        .await?
+        .rows_affected()
+            == 1;
+        if !finished_now {
+            let current = sqlx::query_as::<_, Run>("SELECT * FROM runs WHERE id = $1")
+                .bind(run.id)
+                .fetch_one(&state.pool)
+                .await?;
+            return Ok((current, false));
+        }
+
         let result_note = sqlx::query_as::<_, Note>(
             "INSERT INTO notes (thread_id, author_agent_id, author_user_id, body, kind)
              VALUES ($1, $2, $3, $4, 'status')
@@ -1907,19 +1930,11 @@ pub fn submit_step_result_inner(
         .bind(note_body)
         .fetch_one(&state.pool)
         .await?;
-
-        // Update current step
-        sqlx::query(
-            "UPDATE run_steps
-             SET status = $1, output = $2, result_note_id = $3, finished_at = now()
-             WHERE id = $4",
-        )
-        .bind(if is_pass { "completed" } else { "failed" })
-        .bind(&output)
-        .bind(result_note.id)
-        .bind(step.id)
-        .execute(&state.pool)
-        .await?;
+        sqlx::query("UPDATE run_steps SET result_note_id = $1 WHERE id = $2")
+            .bind(result_note.id)
+            .bind(step.id)
+            .execute(&state.pool)
+            .await?;
 
         if !is_pass {
             // Run failed

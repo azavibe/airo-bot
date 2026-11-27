@@ -1287,6 +1287,24 @@ async fn workflow_orchestration_multi_step_flow(pool: PgPool) {
     assert_eq!(step1_done.body["run"]["status"], "running");
     assert_eq!(step1_done.body["run"]["current_step_order"], 2);
 
+    // The scraper sends its result again (a retry after a timeout): nothing
+    // changes, and the run doesn't move on a second time.
+    let step1_again = send(
+        pool.clone(),
+        bearer_json_request(
+            "POST",
+            &format!("/runs/{run_id}/steps/1/result"),
+            json!({
+                "output": "A different answer sent by mistake"
+            }),
+            &scraper_key,
+        ),
+    )
+    .await;
+    assert_eq!(step1_again.status, StatusCode::OK);
+    assert_eq!(step1_again.body["advanced"], false);
+    assert_eq!(step1_again.body["run"]["current_step_order"], 2);
+
     // 8. Analyst agent now sees step 2 as its current assigned step with step 1 output passed as input!
     let analyst_step_now = send(
         pool.clone(),
@@ -1353,6 +1371,14 @@ async fn workflow_orchestration_multi_step_flow(pool: PgPool) {
     )
     .await;
     assert_eq!(thread_res.status, StatusCode::OK);
+    let step1_results: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM notes WHERE thread_id = $1::uuid AND body LIKE '[Step 1 Result%'",
+    )
+    .bind(thread_id)
+    .fetch_one(&pool)
+    .await
+    .expect("notes");
+    assert_eq!(step1_results, 1, "one result note for step 1");
 }
 
 #[sqlx::test]
