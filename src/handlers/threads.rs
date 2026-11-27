@@ -1133,7 +1133,7 @@ pub async fn archive_thread(
     .await?;
 
     if wants_html(&headers) {
-        return Ok(Redirect::to("/yours").into_response());
+        return Ok(Redirect::to("/inbox").into_response());
     }
     Ok((StatusCode::OK, Json(updated)).into_response())
 }

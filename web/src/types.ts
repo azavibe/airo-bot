@@ -153,16 +153,6 @@ export interface OfficeApp {
   updated_at: string;
 }
 
-export interface WorkspaceLesson {
-  id: string;
-  workspace_id: string;
-  rule: string;
-  source: string;
-  context: Record<string, any>;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface AgentTaskPlan {
   id: string;
   title: string;

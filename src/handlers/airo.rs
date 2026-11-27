@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::auth::Caller;
 use crate::error::AppError;
 use crate::models::{
-    Approval, AuditEvent, ContextPack, Group, Lease, Node, Note, Task, Thread, Workspace,
+    Approval, AuditEvent, ContextPack, Lease, Node, Note, Task, Thread, Workspace,
 };
 use crate::state::AppState;
 
@@ -255,16 +255,10 @@ pub struct TaskView {
     pub id: Uuid,
     pub title: String,
     pub status: String,
-    pub status_badge_class: String,
     pub priority: String,
     pub bot_label: String,
     pub created_ago: String,
     pub thread_id: Option<Uuid>,
-}
-
-pub struct BotJob {
-    pub title: String,
-    pub outcome: String,
 }
 
 pub struct ApprovalView {
@@ -278,7 +272,6 @@ pub struct ApprovalView {
     pub task_title: String,
     pub requested_action: String,
     pub risk_level: String,
-    pub risk_class: String,
     pub status: String,
     pub requested_by: String,
     pub bot_label: String,
@@ -307,17 +300,6 @@ pub struct AuditEventView {
 // ---------- Templates ----------
 
 #[derive(Template)]
-#[template(path = "yours.html")]
-pub struct YoursTemplate {
-    pub active_tab: &'static str,
-    pub workspace: Workspace,
-    pub workspaces: Vec<Workspace>,
-    pub groups: Vec<Group>,
-    pub tasks: Vec<TaskView>,
-    pub pending_approvals_count: usize,
-}
-
-#[derive(Template)]
 #[template(path = "tasks.html")]
 pub struct TasksTemplate {
     pub active_tab: &'static str,
@@ -341,7 +323,6 @@ pub struct TaskDetailTemplate {
 #[template(path = "approvals.html")]
 pub struct ApprovalsTemplate {
     pub active_tab: &'static str,
-    pub workspace: Workspace,
     pub approvals: Vec<ApprovalView>,
     pub bots: Vec<AgentChoice>,
     pub handled_without_you: i64,
@@ -352,126 +333,10 @@ pub struct ApprovalsTemplate {
 #[template(path = "activity.html")]
 pub struct ActivityTemplate {
     pub active_tab: &'static str,
-    pub workspace: Workspace,
     pub events: Vec<AuditEventView>,
 }
 
 // ---------- Handlers ----------
-
-/// GET /yours — One-line status view of user's active workspaces, groups, and jobs
-pub async fn yours(
-    State(state): State<AppState>,
-    caller: Caller,
-    headers: axum::http::HeaderMap,
-) -> Result<Response, AppError> {
-    let ws = get_or_create_default_workspace(&state.pool, caller.user_id()).await?;
-
-    let workspaces = sqlx::query_as::<_, Workspace>(
-        "SELECT w.* FROM workspaces w
-         LEFT JOIN workspace_members m ON m.workspace_id = w.id AND m.deleted_at IS NULL
-         WHERE (w.owner_user_id = $1 OR m.user_id = $1) AND w.deleted_at IS NULL
-         ORDER BY w.name ASC",
-    )
-    .bind(caller.user_id())
-    .fetch_all(&state.pool)
-    .await?;
-
-    let groups = sqlx::query_as::<_, Group>(
-        "SELECT * FROM groups WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY name ASC",
-    )
-    .bind(ws.id)
-    .fetch_all(&state.pool)
-    .await?;
-
-    let raw_tasks = sqlx::query_as::<_, Task>(
-        "SELECT * FROM tasks WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 50",
-    )
-    .bind(ws.id)
-    .fetch_all(&state.pool)
-    .await?;
-
-    let mut task_views = Vec::new();
-    for t in raw_tasks {
-        let badge_class = match t.status.as_str() {
-            "queued" => "badge-queued",
-            "assigned" | "running" => "badge-running",
-            "waiting_approval" => "badge-approval",
-            "completed" => "badge-completed",
-            "failed" => "badge-failed",
-            _ => "badge-queued",
-        }
-        .to_string();
-
-        let bot_label = if let Some(agent_id) = t.assigned_agent_id {
-            let name = sqlx::query_scalar::<_, String>(
-                "SELECT name FROM agents WHERE id = $1 AND deleted_at IS NULL",
-            )
-            .bind(agent_id)
-            .fetch_optional(&state.pool)
-            .await?
-            .unwrap_or_else(|| "agent".to_string());
-            format!("@{}", name)
-        } else if let Some(node_id) = t.assigned_node_id {
-            let name = sqlx::query_scalar::<_, String>(
-                "SELECT name FROM nodes WHERE id = $1 AND deleted_at IS NULL",
-            )
-            .bind(node_id)
-            .fetch_optional(&state.pool)
-            .await?
-            .unwrap_or_else(|| "node".to_string());
-            format!("node:{}", name)
-        } else {
-            "unassigned".to_string()
-        };
-
-        task_views.push(TaskView {
-            id: t.id,
-            title: t.title,
-            status: t.status,
-            status_badge_class: badge_class,
-            priority: t.priority,
-            bot_label,
-            created_ago: time_ago(t.created_at),
-            thread_id: t.thread_id,
-        });
-    }
-
-    let pending_approvals = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM approvals WHERE workspace_id = $1 AND status = 'pending' AND deleted_at IS NULL",
-    )
-    .bind(ws.id)
-    .fetch_one(&state.pool)
-    .await? as usize;
-
-    if wants_html(&headers) {
-        let html = render(YoursTemplate {
-            active_tab: "yours",
-            workspace: ws,
-            workspaces,
-            groups,
-            tasks: task_views,
-            pending_approvals_count: pending_approvals,
-        })?;
-        Ok(html.into_response())
-    } else {
-        Ok(Json(json!({
-            "workspace": ws,
-            "workspaces": workspaces,
-            "groups": groups,
-            "tasks": task_views.iter().map(|tv| json!({
-                "id": tv.id,
-                "title": tv.title,
-                "status": tv.status,
-                "priority": tv.priority,
-                "bot": tv.bot_label,
-                "created_ago": tv.created_ago,
-                "thread_id": tv.thread_id
-            })).collect::<Vec<_>>(),
-            "pending_approvals": pending_approvals
-        }))
-        .into_response())
-    }
-}
 
 // ---------- Tasks ----------
 
@@ -524,16 +389,6 @@ pub async fn list_tasks(
 
     let mut task_views = Vec::new();
     for t in raw_tasks {
-        let badge_class = match t.status.as_str() {
-            "queued" => "badge-queued",
-            "assigned" | "running" => "badge-running",
-            "waiting_approval" => "badge-approval",
-            "completed" => "badge-completed",
-            "failed" => "badge-failed",
-            _ => "badge-queued",
-        }
-        .to_string();
-
         let bot_label = if let Some(agent_id) = t.assigned_agent_id {
             let name = sqlx::query_scalar::<_, String>(
                 "SELECT name FROM agents WHERE id = $1 AND deleted_at IS NULL",
@@ -560,7 +415,6 @@ pub async fn list_tasks(
             id: t.id,
             title: t.title,
             status: t.status,
-            status_badge_class: badge_class,
             priority: t.priority,
             bot_label,
             created_ago: time_ago(t.created_at),
@@ -1446,14 +1300,6 @@ pub async fn list_approvals(
         .await?
         .unwrap_or_else(|| ("Task".to_string(), None));
 
-        let risk_class = match a.risk_level.as_str() {
-            "critical" => "risk-critical",
-            "high" => "risk-high",
-            "medium" => "risk-medium",
-            _ => "risk-low",
-        }
-        .to_string();
-
         // The card must say who did the work and show the real message, so
         // the human decides on the thing itself, not a job title.
         let message_body = match thread_id {
@@ -1489,7 +1335,6 @@ pub async fn list_approvals(
             task_title,
             requested_action: a.requested_action,
             risk_level: a.risk_level,
-            risk_class,
             status: a.status,
             requested_by: a.requested_by,
             bot_label,
@@ -1539,7 +1384,6 @@ pub async fn list_approvals(
     if wants_html(&headers) {
         let html = render(ApprovalsTemplate {
             active_tab: "approvals",
-            workspace: ws,
             approvals: approval_views,
             bots: bot_choices,
             handled_without_you,
@@ -1820,7 +1664,6 @@ pub async fn list_activity(
     if wants_html(&headers) {
         let html = render(ActivityTemplate {
             active_tab: "activity",
-            workspace: ws,
             events: event_views,
         })?;
         Ok(html.into_response())
@@ -2017,7 +1860,6 @@ pub struct AgentCardView {
     pub description: String,
     pub status_line: String,
     pub status_dot_class: String,
-    pub has_character: bool,
     pub is_agent: bool,
 }
 
@@ -2077,7 +1919,6 @@ pub async fn agents_overview(
             } else {
                 "dot-idle".to_string()
             },
-            has_character: a.instructions.is_some(),
             is_agent: true,
         });
     }
@@ -2110,7 +1951,6 @@ pub async fn agents_overview(
             description: format!("A paired {}.", n.node_type),
             status_line: status_line.to_string(),
             status_dot_class: dot_class.to_string(),
-            has_character: false,
             is_agent: false,
         });
     }

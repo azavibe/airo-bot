@@ -71,10 +71,6 @@ pub fn wants_html(headers: &HeaderMap) -> bool {
 /// gets the raw markdown back, not HTML and not JSON-wrapped-HTML. Kept
 /// alongside `wants_html` since both read the same `Accept` header for the
 /// same reason: the wire format follows what's asked for, not who's asking.
-///
-/// No route serves markdown yet -- Phase 1 is auth only -- so this has no
-/// caller until one does.
-#[allow(dead_code)]
 pub fn wants_plain_text(headers: &HeaderMap) -> bool {
     headers
         .get(axum::http::header::ACCEPT)

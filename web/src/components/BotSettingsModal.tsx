@@ -29,9 +29,6 @@ const ENGINE_LABELS: Record<LocalEngineId, string> = {
   ollama: 'Ollama',
 };
 
-export const engineLabel = (id: LocalEngineId | string): string =>
-  ENGINE_LABELS[id as LocalEngineId] ?? id;
-
 /** What to type as a model, per tool. Empty = the tool's own default. */
 const MODEL_HINTS: Record<LocalEngineId, { suggestions: string[]; placeholder: string; help: string }> = {
   claude_code: {

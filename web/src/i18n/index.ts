@@ -80,8 +80,6 @@ export function translate(text: string, vars?: Record<string, string | number>):
   return fill(current.dict[text] ?? text, vars);
 }
 
-/** The person's choice: a language, or null for automatic. */
-export const languageChoice = (): UiLanguage | null => choice;
 /** The language the app is shown in now. */
 export const currentLanguage = (): UiLanguage => current.lang;
 

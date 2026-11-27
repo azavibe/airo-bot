@@ -39,7 +39,6 @@ const call = async (url: string, method = 'GET', body?: unknown): Promise<any> =
 
 const fieldClass =
   'px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-[13px] text-white placeholder:text-neutral-500 outline-none focus:border-accent/60';
-const inputClass = `w-full ${fieldClass}`;
 
 const dateLabel = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });

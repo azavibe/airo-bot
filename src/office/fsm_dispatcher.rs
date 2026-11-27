@@ -12,7 +12,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::Json;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
 use tokio::sync::Semaphore;
@@ -37,29 +37,6 @@ const CLAIMED_STALE_MINUTES: i32 = 15;
 /// How long an external job may stay unanswered before the task fails.
 const EXTERNAL_JOB_DEADLINE_HOURS: i64 = 24;
 const OFFICE_MODEL: &str = "anthropic/claude-3.5-haiku";
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum FsmTaskState {
-    Queued,
-    Claimed,
-    WaitingIo,
-    WaitingApproval,
-    Completed,
-    Failed,
-}
-
-impl FsmTaskState {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Queued => "QUEUED",
-            Self::Claimed => "CLAIMED",
-            Self::WaitingIo => "WAITING_IO",
-            Self::WaitingApproval => "WAITING_APPROVAL",
-            Self::Completed => "COMPLETED",
-            Self::Failed => "FAILED",
-        }
-    }
-}
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct ClaimedTaskRow {

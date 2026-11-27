@@ -335,23 +335,6 @@ pub struct Comment {
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]
-pub struct Notification {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub kind: String,
-    pub actor_user_id: Option<Uuid>,
-    pub target_type: String,
-    pub target_id: Uuid,
-    pub read_at: Option<DateTime<Utc>>,
-    pub pushed_at: Option<DateTime<Utc>>,
-    #[serde(skip)]
-    pub idempotency_key: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub deleted_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
 pub struct Board {
     pub id: Uuid,
     pub name: String,
@@ -412,20 +395,6 @@ pub struct Workspace {
     pub slug: String,
     pub description: Option<String>,
     pub owner_user_id: Uuid,
-    #[serde(skip)]
-    pub idempotency_key: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub deleted_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
-pub struct Group {
-    pub id: Uuid,
-    pub workspace_id: Uuid,
-    pub name: String,
-    pub slug: String,
-    pub description: Option<String>,
     #[serde(skip)]
     pub idempotency_key: Option<String>,
     pub created_at: DateTime<Utc>,

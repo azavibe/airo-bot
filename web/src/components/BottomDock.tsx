@@ -73,7 +73,6 @@ const SpeakingBar: React.FC = () => {
 };
 
 interface BottomDockProps {
-  activeTab: Tab;
   onChangeTab: (tab: Tab) => void;
   pendingApprovalsCount: number;
   onToggleSidebarMobile?: () => void;
@@ -107,7 +106,6 @@ const enterAddsLine = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
 
 export const BottomDock: React.FC<BottomDockProps> = ({
-  activeTab,
   onChangeTab,
   pendingApprovalsCount,
   onToggleSidebarMobile,
