@@ -1,27 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatStream } from './components/ChatStream';
 import { AppsPanel } from './components/AppsPanel';
-import { AppsHub } from './components/AppsHub';
-import { ApprovalsView } from './components/ApprovalsView';
-import { BotsView } from './components/BotsView';
-import { WorkflowsView } from './components/WorkflowsView';
-import { OnboardModal } from './components/OnboardModal';
 import { AuthModal } from './components/AuthModal';
-import { SettingsView, SETTINGS_PATHS, settingsSectionFromPath } from './components/SettingsView';
-import type { SettingsSection } from './components/SettingsView';
-import { ConnectModal } from './components/ConnectModal';
+import { SETTINGS_PATHS, settingsSectionFromPath } from './components/settingsPaths';
+import type { SettingsSection } from './components/settingsPaths';
 import { BottomDock } from './components/BottomDock';
 import { DesktopTitleBar, isDesktopApp } from './components/DesktopTitleBar';
-import { BotSettingsModal } from './components/BotSettingsModal';
-import { ContactsView } from './components/ContactsView';
 import { RecordsProvider } from './state/records';
 import type { RecordEventMessage } from './state/records';
-import { SearchPalette } from './components/SearchPalette';
-import { TeamModal } from './components/TeamModal';
-import { NameDialog, ConfirmDialog, NewRoomDialog, EditOfficeDialog } from './components/Dialogs';
+import { lazyScreen, preloadScreens } from './utils/lazyScreen';
+import { NameDialog, ConfirmDialog, NewRoomDialog } from './components/Dialogs';
 import { applyAccountLanguage, useT } from './i18n';
-import type { OfficeEdit } from './components/Dialogs';
+import type { OfficeEdit } from './components/EditOfficeDialog';
 import { roomsOf, roomLabel } from './components/Sidebar';
 import type { OfficeSetup } from './components/OnboardModal';
 import { botModelLabel, roomName } from './utils/format';
@@ -44,6 +35,20 @@ import {
   NoteAction,
   EditOfficeTab,
 } from './types';
+
+// Screens and dialogs that aren't on the first page load on first use.
+const AppsHub = lazyScreen(() => import('./components/AppsHub'), (m) => m.AppsHub);
+const ApprovalsView = lazyScreen(() => import('./components/ApprovalsView'), (m) => m.ApprovalsView);
+const BotsView = lazyScreen(() => import('./components/BotsView'), (m) => m.BotsView);
+const WorkflowsView = lazyScreen(() => import('./components/WorkflowsView'), (m) => m.WorkflowsView);
+const OnboardModal = lazyScreen(() => import('./components/OnboardModal'), (m) => m.OnboardModal);
+const SettingsView = lazyScreen(() => import('./components/SettingsView'), (m) => m.SettingsView);
+const ConnectModal = lazyScreen(() => import('./components/ConnectModal'), (m) => m.ConnectModal);
+const BotSettingsModal = lazyScreen(() => import('./components/BotSettingsModal'), (m) => m.BotSettingsModal);
+const ContactsView = lazyScreen(() => import('./components/ContactsView'), (m) => m.ContactsView);
+const SearchPalette = lazyScreen(() => import('./components/SearchPalette'), (m) => m.SearchPalette);
+const TeamModal = lazyScreen(() => import('./components/TeamModal'), (m) => m.TeamModal);
+const EditOfficeDialog = lazyScreen(() => import('./components/EditOfficeDialog'), (m) => m.EditOfficeDialog);
 
 export type Tab = 'chat' | 'apps' | 'approvals' | 'bots' | 'contacts' | 'workflows' | 'settings';
 
@@ -515,6 +520,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
+
+  // The screens that aren't on the first page download once it's idle.
+  useEffect(() => preloadScreens(), []);
 
   // An invite link (/?invite=…, issue #29): kept on this device until the
   // person is signed in (the sign-in email may open a new tab), then
@@ -1240,30 +1248,32 @@ export const App: React.FC = () => {
   // One bot's settings (or a new bot), shown in the Bots page.
   const botDetail =
     editingBot || newBotOffice ? (
-      <BotSettingsModal
-        key={editingBot ? editingBot.id : `new-${newBotOffice?.id}`}
-        inline
-        bot={editingBot}
-        createIn={editingBot ? null : newBotOffice}
-        office={officeOfBot(editingBot) ?? newBotOffice}
-        localMode={!!userProfile?.local_mode}
-        localEngine={localEngine}
-        onClose={() => openBot(null)}
-        onSaved={(updated) => {
-          setAgents((prev) => prev.map((a) => (a.id === updated.id ? { ...a, ...updated } : a)));
-          setEditingBot((cur) => (cur && cur.id === updated.id ? { ...cur, ...updated } : cur));
-          showOk(`${updated.name} saved.`);
-          // The server works out which model now answers for it.
-          fetchInitialData();
-        }}
-        onCreated={async (bot) => {
-          // Stay on the new bot; its room is in the sidebar.
-          setNewBotOffice(null);
-          await fetchInitialData();
-          setEditingBot(bot);
-          showOk(`${bot.name} is ready in its own room.`);
-        }}
-      />
+      <Suspense fallback={null}>
+        <BotSettingsModal
+          key={editingBot ? editingBot.id : `new-${newBotOffice?.id}`}
+          inline
+          bot={editingBot}
+          createIn={editingBot ? null : newBotOffice}
+          office={officeOfBot(editingBot) ?? newBotOffice}
+          localMode={!!userProfile?.local_mode}
+          localEngine={localEngine}
+          onClose={() => openBot(null)}
+          onSaved={(updated) => {
+            setAgents((prev) => prev.map((a) => (a.id === updated.id ? { ...a, ...updated } : a)));
+            setEditingBot((cur) => (cur && cur.id === updated.id ? { ...cur, ...updated } : cur));
+            showOk(`${updated.name} saved.`);
+            // The server works out which model now answers for it.
+            fetchInitialData();
+          }}
+          onCreated={async (bot) => {
+            // Stay on the new bot; its room is in the sidebar.
+            setNewBotOffice(null);
+            await fetchInitialData();
+            setEditingBot(bot);
+            showOk(`${bot.name} is ready in its own room.`);
+          }}
+        />
+      </Suspense>
     ) : null;
 
   const dockElement = (
@@ -1427,16 +1437,18 @@ export const App: React.FC = () => {
         {isOnboardOpen && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
-              <OnboardModal
-                inline
-                isOpen
-                mode={onboardTarget.mode}
-                officeName={onboardTarget.office?.name}
-                onClose={() => setIsOnboardOpen(false)}
-                onComplete={handleOfficeSetup}
-                sendRef={setupSendRef}
-                bottomDock={dockElement}
-              />
+              <Suspense fallback={null}>
+                <OnboardModal
+                  inline
+                  isOpen
+                  mode={onboardTarget.mode}
+                  officeName={onboardTarget.office?.name}
+                  onClose={() => setIsOnboardOpen(false)}
+                  onComplete={handleOfficeSetup}
+                  sendRef={setupSendRef}
+                  bottomDock={dockElement}
+                />
+              </Suspense>
             </div>
           </div>
         )}
@@ -1516,28 +1528,30 @@ export const App: React.FC = () => {
         {!isOnboardOpen && activeTab === 'apps' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
-              <AppsHub
-                apps={apps}
-                activeAppSlug={activeAppSlug}
-                onSelectApp={(slug) => handleSelectApp(slug)}
-                onOpenOnboard={openOnboard}
-                onInstallApp={handleInstallApp}
-                records={records}
-                onUpdateRecordStatus={handleUpdateRecordStatus}
-                onCreateRecord={handleCreateRecord}
-                designMode={designMode}
-                onToggleDesignMode={() => setDesignMode(!designMode)}
-                onInspectWidget={handleInspectWidget}
-                onResetMod={handleResetMod}
-                onArchiveApp={isGuest ? undefined : (app) => setAppArchived(app, true)}
-                onUnarchiveApp={isGuest ? undefined : (app) => setAppArchived(app, false)}
-                onDeleteApp={isGuest ? undefined : (app) => setDialog({ kind: 'deleteApp', app })}
-                onDeleteRecord={isGuest ? undefined : (record) => setDialog({ kind: 'deleteRecord', record })}
-                officeName={(activeOffice ?? offices.find((o) => o.primary))?.name}
-                bottomDock={dockElement}
-                onQuickAction={isGuest ? undefined : askTeam}
-                onConvertRecord={isGuest ? undefined : convertRecord}
-              />
+              <Suspense fallback={null}>
+                <AppsHub
+                  apps={apps}
+                  activeAppSlug={activeAppSlug}
+                  onSelectApp={(slug) => handleSelectApp(slug)}
+                  onOpenOnboard={openOnboard}
+                  onInstallApp={handleInstallApp}
+                  records={records}
+                  onUpdateRecordStatus={handleUpdateRecordStatus}
+                  onCreateRecord={handleCreateRecord}
+                  designMode={designMode}
+                  onToggleDesignMode={() => setDesignMode(!designMode)}
+                  onInspectWidget={handleInspectWidget}
+                  onResetMod={handleResetMod}
+                  onArchiveApp={isGuest ? undefined : (app) => setAppArchived(app, true)}
+                  onUnarchiveApp={isGuest ? undefined : (app) => setAppArchived(app, false)}
+                  onDeleteApp={isGuest ? undefined : (app) => setDialog({ kind: 'deleteApp', app })}
+                  onDeleteRecord={isGuest ? undefined : (record) => setDialog({ kind: 'deleteRecord', record })}
+                  officeName={(activeOffice ?? offices.find((o) => o.primary))?.name}
+                  bottomDock={dockElement}
+                  onQuickAction={isGuest ? undefined : askTeam}
+                  onConvertRecord={isGuest ? undefined : convertRecord}
+                />
+              </Suspense>
             </div>
           </div>
         )}
@@ -1545,12 +1559,14 @@ export const App: React.FC = () => {
         {!isOnboardOpen && activeTab === 'approvals' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
-              <ApprovalsView
-                approvals={approvals}
-                onDecide={handleDecideApproval}
-                onOpenBots={() => handleTabChange('bots')}
-                bottomDock={dockElement}
-              />
+              <Suspense fallback={null}>
+                <ApprovalsView
+                  approvals={approvals}
+                  onDecide={handleDecideApproval}
+                  onOpenBots={() => handleTabChange('bots')}
+                  bottomDock={dockElement}
+                />
+              </Suspense>
             </div>
           </div>
         )}
@@ -1558,28 +1574,30 @@ export const App: React.FC = () => {
         {!isOnboardOpen && activeTab === 'bots' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
-              <BotsView
-                agents={agents}
-                wallet={userProfile?.local_mode ? null : wallet}
-                isGuest={isGuest}
-                onOpenOnboard={openOnboard}
-                selectedId={editingBot?.id ?? null}
-                creatingIn={editingBot ? null : newBotOffice}
-                onSelect={openBot}
-                onNewBot={() => openNewBot()}
-                detail={botDetail}
-                officeNameOf={(a) => officeOfBot(a)?.name}
-                onOpenChat={openBotChat}
-                onRenameBot={(agent) => setDialog({ kind: 'renameBot', agent })}
-                onDeleteBot={(agent) => setDialog({ kind: 'deleteBot', agent })}
-                localEngine={localEngine}
-                webUsage={
-                  wallet && (wallet.web_runs_limit ?? 0) > 0
-                    ? { today: wallet.web_runs_today ?? 0, limit: wallet.web_runs_limit ?? 0 }
-                    : null
-                }
-                bottomDock={dockElement}
-              />
+              <Suspense fallback={null}>
+                <BotsView
+                  agents={agents}
+                  wallet={userProfile?.local_mode ? null : wallet}
+                  isGuest={isGuest}
+                  onOpenOnboard={openOnboard}
+                  selectedId={editingBot?.id ?? null}
+                  creatingIn={editingBot ? null : newBotOffice}
+                  onSelect={openBot}
+                  onNewBot={() => openNewBot()}
+                  detail={botDetail}
+                  officeNameOf={(a) => officeOfBot(a)?.name}
+                  onOpenChat={openBotChat}
+                  onRenameBot={(agent) => setDialog({ kind: 'renameBot', agent })}
+                  onDeleteBot={(agent) => setDialog({ kind: 'deleteBot', agent })}
+                  localEngine={localEngine}
+                  webUsage={
+                    wallet && (wallet.web_runs_limit ?? 0) > 0
+                      ? { today: wallet.web_runs_today ?? 0, limit: wallet.web_runs_limit ?? 0 }
+                      : null
+                  }
+                  bottomDock={dockElement}
+                />
+              </Suspense>
             </div>
           </div>
         )}
@@ -1587,10 +1605,12 @@ export const App: React.FC = () => {
         {!isOnboardOpen && activeTab === 'contacts' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
-              <ContactsView
-                office={activeOffice ?? offices.find((o) => o.primary) ?? null}
-                bottomDock={dockElement}
-              />
+              <Suspense fallback={null}>
+                <ContactsView
+                  office={activeOffice ?? offices.find((o) => o.primary) ?? null}
+                  bottomDock={dockElement}
+                />
+              </Suspense>
             </div>
           </div>
         )}
@@ -1598,17 +1618,19 @@ export const App: React.FC = () => {
         {!isOnboardOpen && activeTab === 'workflows' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
-              <WorkflowsView
-                procedures={procedures}
-                focusId={focusWorkflowId}
-                currentUserId={userProfile?.id}
-                isGuest={isGuest}
-                onRequireAuth={() => setIsAuthModalOpen(true)}
-                onEvolveProcedure={handleEvolveProcedure}
-                onProceduresChanged={refreshProcedures}
-                onOpenOnboard={openOnboard}
-                bottomDock={dockElement}
-              />
+              <Suspense fallback={null}>
+                <WorkflowsView
+                  procedures={procedures}
+                  focusId={focusWorkflowId}
+                  currentUserId={userProfile?.id}
+                  isGuest={isGuest}
+                  onRequireAuth={() => setIsAuthModalOpen(true)}
+                  onEvolveProcedure={handleEvolveProcedure}
+                  onProceduresChanged={refreshProcedures}
+                  onOpenOnboard={openOnboard}
+                  bottomDock={dockElement}
+                />
+              </Suspense>
             </div>
           </div>
         )}
@@ -1616,29 +1638,31 @@ export const App: React.FC = () => {
         {!isOnboardOpen && activeTab === 'settings' && (
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
-              <SettingsView
-                section={settingsSection}
-                onChangeSection={openSettings}
-                userProfile={userProfile}
-                onRefreshProfile={async () => {
-                  await fetchInitialData();
-                }}
-                theme={theme}
-                onThemeSaved={(t) => {
-                  setTheme(t);
-                  applyTheme(t);
-                }}
-                voiceSettings={voiceSettings}
-                onVoiceSettingsChange={setVoiceSettings}
-                offices={offices}
-                threads={threads}
-                initialOfficeId={(officeOfThread(activeThreadId) ?? offices.find((o) => o.primary))?.id}
-                isGuest={isGuest}
-                onRequireAuth={() => setIsAuthModalOpen(true)}
-                onNotice={(kind, text) => (kind === 'ok' ? showOk(text) : showError(text))}
-                onOpenDevices={() => setIsConnectModalOpen(true)}
-                bottomDock={dockElement}
-              />
+              <Suspense fallback={null}>
+                <SettingsView
+                  section={settingsSection}
+                  onChangeSection={openSettings}
+                  userProfile={userProfile}
+                  onRefreshProfile={async () => {
+                    await fetchInitialData();
+                  }}
+                  theme={theme}
+                  onThemeSaved={(t) => {
+                    setTheme(t);
+                    applyTheme(t);
+                  }}
+                  voiceSettings={voiceSettings}
+                  onVoiceSettingsChange={setVoiceSettings}
+                  offices={offices}
+                  threads={threads}
+                  initialOfficeId={(officeOfThread(activeThreadId) ?? offices.find((o) => o.primary))?.id}
+                  isGuest={isGuest}
+                  onRequireAuth={() => setIsAuthModalOpen(true)}
+                  onNotice={(kind, text) => (kind === 'ok' ? showOk(text) : showError(text))}
+                  onOpenDevices={() => setIsConnectModalOpen(true)}
+                  bottomDock={dockElement}
+                />
+              </Suspense>
             </div>
           </div>
         )}
@@ -1699,59 +1723,71 @@ export const App: React.FC = () => {
       )}
 
       {/* Connect Devices Modal (QR Phone Login & Local AI Bot) */}
-      <ConnectModal
-        isOpen={isConnectModalOpen}
-        onClose={() => setIsConnectModalOpen(false)}
-        localMode={!!userProfile?.local_mode}
-      />
+      {isConnectModalOpen && (
+        <Suspense fallback={null}>
+          <ConnectModal
+            isOpen={isConnectModalOpen}
+            onClose={() => setIsConnectModalOpen(false)}
+            localMode={!!userProfile?.local_mode}
+          />
+        </Suspense>
+      )}
 
       {/* SaaS Elimination Master Architect Onboarding Modal */}
 
-      <TeamModal
-        open={isTeamOpen}
-        officeName={activeOffice?.name ?? 'Office'}
-        bots={roomBots}
-        localEngine={localEngine}
-        onClose={() => setIsTeamOpen(false)}
-        onOpenBot={(agent) => {
-          setIsTeamOpen(false);
-          openBot(agent);
-        }}
-        onNewBot={
-          activeOffice
-            ? () => {
-                setIsTeamOpen(false);
-                openNewBot(activeOffice);
-              }
-            : undefined
-        }
-      />
+      {isTeamOpen && (
+        <Suspense fallback={null}>
+          <TeamModal
+            open={isTeamOpen}
+            officeName={activeOffice?.name ?? 'Office'}
+            bots={roomBots}
+            localEngine={localEngine}
+            onClose={() => setIsTeamOpen(false)}
+            onOpenBot={(agent) => {
+              setIsTeamOpen(false);
+              openBot(agent);
+            }}
+            onNewBot={
+              activeOffice
+                ? () => {
+                    setIsTeamOpen(false);
+                    openNewBot(activeOffice);
+                  }
+                : undefined
+            }
+          />
+        </Suspense>
+      )}
 
-      <SearchPalette
-        open={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        offices={offices}
-        threads={threads}
-        agents={agents}
-        apps={apps}
-        procedures={procedures}
-        localEngine={localEngine}
-        officeOf={(t) => officeOfThread(t.id)}
-        onOpenOffice={openOffice}
-        onOpenRoom={(id) => {
-          setActiveThreadId(id);
-          handleTabChange('chat');
-        }}
-        onOpenBot={(a) => (isGuest ? setIsAuthModalOpen(true) : openBot(a))}
-        onOpenApp={(slug) => handleSelectApp(slug, true)}
-        onOpenWorkflow={(id) => {
-          setFocusWorkflowId(id);
-          handleTabChange('workflows');
-        }}
-        onOpenTab={handleTabChange}
-        onOpenSettings={openSettings}
-        onOpenDevices={() => setIsConnectModalOpen(true)}
-      />
+      {isSearchOpen && (
+        <Suspense fallback={null}>
+          <SearchPalette
+            open={isSearchOpen}
+            onClose={() => setIsSearchOpen(false)}
+            offices={offices}
+            threads={threads}
+            agents={agents}
+            apps={apps}
+            procedures={procedures}
+            localEngine={localEngine}
+            officeOf={(t) => officeOfThread(t.id)}
+            onOpenOffice={openOffice}
+            onOpenRoom={(id) => {
+              setActiveThreadId(id);
+              handleTabChange('chat');
+            }}
+            onOpenBot={(a) => (isGuest ? setIsAuthModalOpen(true) : openBot(a))}
+            onOpenApp={(slug) => handleSelectApp(slug, true)}
+            onOpenWorkflow={(id) => {
+              setFocusWorkflowId(id);
+              handleTabChange('workflows');
+            }}
+            onOpenTab={handleTabChange}
+            onOpenSettings={openSettings}
+            onOpenDevices={() => setIsConnectModalOpen(true)}
+          />
+        </Suspense>
+      )}
 
       {dialog?.kind === 'renameOffice' && (
         <NameDialog
@@ -1802,38 +1838,40 @@ export const App: React.FC = () => {
         />
       )}
       {dialog?.kind === 'editOffice' && (
-        <EditOfficeDialog
-          officeId={dialog.office.id}
-          agents={agents.filter((a) =>
-            roomsOf(dialog.office, threads, offices).some((t) => t.agent_ids?.includes(a.id))
-          )}
-          startTab={dialog.tab}
-          initial={{
-            name: dialog.office.name,
-            business_type: dialog.office.business_type ?? '',
-            website: dialog.office.website ?? '',
-            focus: dialog.office.focus ?? '',
-            goal: dialog.office.goal ?? '',
-            about: dialog.office.about ?? '',
-            language: dialog.office.language ?? '',
-            daily_plan: dialog.office.daily_plan !== false,
-            monthly_cap: dialog.office.monthly_cap_credits ? String(dialog.office.monthly_cap_credits) : '',
-          }}
-          spend={
-            userProfile?.local_mode
-              ? null
-              : { spent: dialog.office.month_spent_credits ?? 0, reached: !!dialog.office.cap_reached }
-          }
-          role={dialog.office.role}
-          hideTeam={!!userProfile?.local_mode}
-          onLeft={() => {
-            showOk(tr('You left {office}.', { office: dialog.office.name }));
-            setDialog(null);
-            void fetchInitialData();
-          }}
-          onSubmit={(values) => editOffice(dialog.office, values)}
-          onClose={() => setDialog(null)}
-        />
+        <Suspense fallback={null}>
+          <EditOfficeDialog
+            officeId={dialog.office.id}
+            agents={agents.filter((a) =>
+              roomsOf(dialog.office, threads, offices).some((t) => t.agent_ids?.includes(a.id))
+            )}
+            startTab={dialog.tab}
+            initial={{
+              name: dialog.office.name,
+              business_type: dialog.office.business_type ?? '',
+              website: dialog.office.website ?? '',
+              focus: dialog.office.focus ?? '',
+              goal: dialog.office.goal ?? '',
+              about: dialog.office.about ?? '',
+              language: dialog.office.language ?? '',
+              daily_plan: dialog.office.daily_plan !== false,
+              monthly_cap: dialog.office.monthly_cap_credits ? String(dialog.office.monthly_cap_credits) : '',
+            }}
+            spend={
+              userProfile?.local_mode
+                ? null
+                : { spent: dialog.office.month_spent_credits ?? 0, reached: !!dialog.office.cap_reached }
+            }
+            role={dialog.office.role}
+            hideTeam={!!userProfile?.local_mode}
+            onLeft={() => {
+              showOk(tr('You left {office}.', { office: dialog.office.name }));
+              setDialog(null);
+              void fetchInitialData();
+            }}
+            onSubmit={(values) => editOffice(dialog.office, values)}
+            onClose={() => setDialog(null)}
+          />
+        </Suspense>
       )}
       {dialog?.kind === 'renameBot' && (
         <NameDialog

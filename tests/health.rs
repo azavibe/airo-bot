@@ -87,3 +87,49 @@ async fn every_response_carries_the_browser_hardening_headers(pool: PgPool) {
     assert_eq!(res.headers.get("x-frame-options").unwrap(), "DENY");
     assert_eq!(res.headers.get("referrer-policy").unwrap(), "same-origin");
 }
+
+#[sqlx::test]
+async fn built_web_files_are_kept_for_good_and_skip_the_rate_limit(pool: PgPool) {
+    use tower::ServiceExt;
+    let name = std::fs::read_dir("web/dist/assets")
+        .expect("built web files")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .find(|name| name.ends_with(".js"))
+        .expect("a built script");
+    // One router, so the requests share its rate-limit buckets.
+    let app = airobot::app(common::state(pool.clone()));
+    // More than one address's burst: a page fetches many files at once.
+    for _ in 0..120 {
+        let res = app
+            .clone()
+            .oneshot(get_request(&format!("/assets/{name}"), None))
+            .await
+            .expect("request");
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            res.headers()
+                .get("cache-control")
+                .and_then(|value| value.to_str().ok()),
+            Some("public, max-age=31536000, immutable")
+        );
+    }
+    // The same address is still limited everywhere else.
+    let mut limited = false;
+    for _ in 0..120 {
+        let res = app
+            .clone()
+            .oneshot(get_request("/health", None))
+            .await
+            .expect("request");
+        if res.status() == StatusCode::TOO_MANY_REQUESTS {
+            limited = true;
+            break;
+        }
+    }
+    assert!(limited, "API routes keep their rate limit");
+    // A missing file is a plain 404, not the app's page, and isn't kept.
+    let missing = send(pool, get_request("/assets/missing-00000000.js", None)).await;
+    assert_eq!(missing.status, StatusCode::NOT_FOUND);
+    assert!(missing.headers.get("cache-control").is_none());
+}

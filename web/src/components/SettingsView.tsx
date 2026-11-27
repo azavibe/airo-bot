@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Office, Thread, UserProfile } from '../types';
+import type { SettingsSection } from './settingsPaths';
 import { AppearancePanel } from './AppearancePanel';
 import { Theme } from '../utils/theme';
 import { VoicePanel } from './VoicePanel';
@@ -130,25 +131,6 @@ const LanguageCard: React.FC<{
       </p>
     </section>
   );
-};
-
-export type SettingsSection = 'account' | 'appearance' | 'voice' | 'connections' | 'admin';
-
-/** The address of each settings section (the first is plain /settings). */
-export const SETTINGS_PATHS: Record<SettingsSection, string> = {
-  account: '/settings',
-  appearance: '/settings/appearance',
-  voice: '/settings/voice',
-  connections: '/settings/connections',
-  admin: '/settings/admin',
-};
-
-export const settingsSectionFromPath = (path: string): SettingsSection => {
-  if (path.startsWith('/connections') || path.startsWith('/settings/connections')) return 'connections';
-  if (path === '/admin' || path.startsWith('/admin/') || path.startsWith('/settings/admin')) return 'admin';
-  if (path.startsWith('/settings/appearance')) return 'appearance';
-  if (path.startsWith('/settings/voice')) return 'voice';
-  return 'account';
 };
 
 interface SettingsViewProps {
