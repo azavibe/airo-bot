@@ -23,6 +23,17 @@ app and the desktop app share one version number. A release is tagged
 - The redirect after adding an agent never follows the browser's Referer.
 - Updated lettre (email), cookie and url for published security fixes.
 
+### Performance
+- The app's first download is about a third smaller: Approvals, Bots,
+  Workflows, Contacts, Settings, setup and the office and bot settings load
+  when first opened, and are fetched in the background once the page is idle
+  so opening them doesn't wait.
+- The app's files are kept by the browser until a new version replaces them,
+  so a return visit downloads them again only after an update, and loading
+  them no longer counts against the per-address request limit.
+- Approvals and the task list load with a fixed number of database queries
+  instead of one or two per card (88 down to 8 for 40 approvals).
+
 ### Added
 - **Check for updates** in the desktop app: it checks at start and every 6
   hours, and when a new version is out a green "Update to x.y.z" button
@@ -70,6 +81,8 @@ app and the desktop app share one version number. A release is tagged
   Phone calls room, and the office chat gets a line when each call ends.
 
 ### Fixed
+- With more than one office, the task list could show the tasks of an office
+  other than your first one.
 - Approvals from every office now show in Approvals, not only the first
   office's, and approval cards show what the bot asks to do again.
 

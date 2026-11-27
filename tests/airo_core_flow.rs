@@ -1085,3 +1085,143 @@ async fn a_character_without_a_voice_says_so_once(pool: PgPool) {
     }
     assert_eq!(voice_notes, 1, "it says so exactly once");
 }
+
+#[sqlx::test]
+async fn the_task_list_and_approvals_agree_on_your_first_office(pool: PgPool) {
+    let cookie = sign_in(&pool, "two-offices@example.com", "twooffices").await;
+    let made = send(
+        pool.clone(),
+        authed_json_request(
+            "POST",
+            "/tasks",
+            json!({ "title": "Call the plumber" }),
+            Some(&cookie),
+        ),
+    )
+    .await;
+    assert_eq!(made.status, StatusCode::CREATED);
+    let second = send(
+        pool.clone(),
+        authed_json_request(
+            "POST",
+            "/api/offices",
+            json!({ "name": "Second shop" }),
+            Some(&cookie),
+        ),
+    )
+    .await;
+    assert_eq!(second.status, StatusCode::CREATED);
+    let second: Uuid = second.body["office"]["id"]
+        .as_str()
+        .expect("office")
+        .parse()
+        .expect("uuid");
+    // The oldest office is the first one, wherever its row is stored; here
+    // the one stored second.
+    sqlx::query("UPDATE workspaces SET created_at = now() - interval '1 day' WHERE id = $1")
+        .bind(second)
+        .execute(&pool)
+        .await
+        .expect("backdate");
+
+    let json_get = |uri: &str| {
+        let mut req = get_request(uri, Some(&cookie));
+        req.headers_mut()
+            .insert("accept", "application/json".parse().expect("header value"));
+        send(pool.clone(), req)
+    };
+    let tasks = json_get("/tasks").await;
+    assert_eq!(tasks.status, StatusCode::OK);
+    assert_eq!(tasks.body["workspace_id"], json!(second));
+    assert_eq!(tasks.body["tasks"].as_array().map(Vec::len), Some(0));
+    let approvals = json_get("/approvals").await;
+    assert_eq!(approvals.body["workspace"]["id"], json!(second));
+}
+
+#[sqlx::test]
+async fn an_approval_card_shows_the_rooms_newest_message(pool: PgPool) {
+    let cookie = sign_in(&pool, "cards@example.com", "cards").await;
+    let room = send(
+        pool.clone(),
+        authed_json_request(
+            "POST",
+            "/threads",
+            json!({ "title": "Quotes" }),
+            Some(&cookie),
+        ),
+    )
+    .await;
+    assert_eq!(room.status, StatusCode::CREATED);
+    let room: Uuid = room.body["id"]
+        .as_str()
+        .expect("room")
+        .parse()
+        .expect("uuid");
+    let made = send(
+        pool.clone(),
+        authed_json_request(
+            "POST",
+            "/tasks",
+            json!({ "title": "Quote for the Lee family" }),
+            Some(&cookie),
+        ),
+    )
+    .await;
+    let task: Uuid = made.body["task"]["id"]
+        .as_str()
+        .expect("task")
+        .parse()
+        .expect("uuid");
+    let office: Uuid = made.body["task"]["workspace_id"]
+        .as_str()
+        .expect("office")
+        .parse()
+        .expect("uuid");
+    let me: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE handle = 'cards'")
+        .fetch_one(&pool)
+        .await
+        .expect("me");
+    sqlx::query("UPDATE tasks SET thread_id = $1 WHERE id = $2")
+        .bind(room)
+        .bind(task)
+        .execute(&pool)
+        .await
+        .expect("task room");
+    for (body, minutes_ago, deleted) in [
+        ("First draft of the quote", 10, false),
+        ("Final quote: 1,200 for the fence", 5, false),
+        ("A removed message", 1, true),
+    ] {
+        sqlx::query(
+            "INSERT INTO notes (thread_id, author_user_id, body, kind, created_at, deleted_at)
+             VALUES ($1, $2, $3, 'comment', now() - make_interval(mins => $4),
+                     CASE WHEN $5 THEN now() END)",
+        )
+        .bind(room)
+        .bind(me)
+        .bind(body)
+        .bind(minutes_ago)
+        .bind(deleted)
+        .execute(&pool)
+        .await
+        .expect("note");
+    }
+    sqlx::query(
+        "INSERT INTO approvals (workspace_id, task_id, requested_action, risk_level, status, requested_by)
+         VALUES ($1, $2, 'send the quote', 'medium', 'pending', 'agent:quoter')",
+    )
+    .bind(office)
+    .bind(task)
+    .execute(&pool)
+    .await
+    .expect("approval");
+
+    let mut req = get_request("/approvals", Some(&cookie));
+    req.headers_mut()
+        .insert("accept", "text/html".parse().expect("header value"));
+    let page = send(pool.clone(), req).await;
+    assert_eq!(page.status, StatusCode::OK);
+    assert!(page.text.contains("Final quote: 1,200 for the fence"));
+    assert!(!page.text.contains("First draft of the quote"));
+    assert!(!page.text.contains("A removed message"));
+}

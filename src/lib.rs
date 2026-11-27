@@ -220,6 +220,24 @@ async fn spa_index(web_dist: &std::path::Path, production: bool) -> Option<Strin
 
 const ONE_MB: usize = 1024 * 1024;
 
+/// The web app's built files. Their names change whenever their contents
+/// do, so browsers keep them for good instead of asking again on every
+/// visit. A missing one is a plain 404, not the app's page.
+fn built_files(web_dist: &std::path::Path) -> Router<AppState> {
+    async fn cache_for_good(mut response: axum::response::Response) -> axum::response::Response {
+        if response.status().is_success() {
+            response.headers_mut().insert(
+                CACHE_CONTROL,
+                axum::http::HeaderValue::from_static("public, max-age=31536000, immutable"),
+            );
+        }
+        response
+    }
+    Router::new()
+        .route_service("/assets/{*file}", ServeDir::new(web_dist))
+        .layer(axum::middleware::map_response(cache_for_good))
+}
+
 pub fn app(state: AppState) -> Router {
     Router::new()
         .route("/", get(handlers::web::feed))
@@ -799,6 +817,9 @@ pub fn app(state: AppState) -> Router {
         .layer(GovernorLayer {
             config: rate_limit::build(),
         })
+        // Built files, added after the rate limit: a page fetches several at
+        // once, and serving them costs next to nothing.
+        .merge(built_files(&state.config.web_dist))
         .layer(DefaultBodyLimit::max(ONE_MB))
         .layer(axum::middleware::from_fn(request_context))
         .layer(axum::middleware::from_fn_with_state(

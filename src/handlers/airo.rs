@@ -346,6 +346,24 @@ pub struct TaskFilter {
     pub status: Option<String>,
 }
 
+/// `id -> name` for `ids`, by `sql` (which takes the ids as `$1`); no
+/// query when there are none.
+async fn names_by_id(
+    pool: &PgPool,
+    sql: &'static str,
+    ids: &[Uuid],
+) -> Result<std::collections::HashMap<Uuid, String>, AppError> {
+    if ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    Ok(sqlx::query_as::<_, (Uuid, String)>(sql)
+        .bind(ids)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .collect())
+}
+
 /// GET /tasks — List tasks
 pub async fn list_tasks(
     State(state): State<AppState>,
@@ -360,13 +378,9 @@ pub async fn list_tasks(
             .fetch_one(&state.pool)
             .await?
     } else {
-        get_or_create_default_workspace(&state.pool, caller.user_id()).await?;
-        sqlx::query_as::<_, Workspace>(
-            "SELECT * FROM workspaces WHERE owner_user_id = $1 AND deleted_at IS NULL LIMIT 1",
-        )
-        .bind(caller.user_id())
-        .fetch_one(&state.pool)
-        .await?
+        // The caller's first office, the same one the rest of the app means
+        // by "your office" (an unordered pick could land on any of them).
+        get_or_create_default_workspace(&state.pool, caller.user_id()).await?
     };
 
     let status_filter = filter.status.unwrap_or_else(|| "all".to_string());
@@ -387,25 +401,36 @@ pub async fn list_tasks(
         .await?
     };
 
+    // The assignees' names in one query per kind, not one per task.
+    let agent_ids: Vec<Uuid> = raw_tasks
+        .iter()
+        .filter_map(|t| t.assigned_agent_id)
+        .collect();
+    let node_ids: Vec<Uuid> = raw_tasks
+        .iter()
+        .filter(|t| t.assigned_agent_id.is_none())
+        .filter_map(|t| t.assigned_node_id)
+        .collect();
+    let agent_names = names_by_id(
+        &state.pool,
+        "SELECT id, name FROM agents WHERE id = ANY($1) AND deleted_at IS NULL",
+        &agent_ids,
+    )
+    .await?;
+    let node_names = names_by_id(
+        &state.pool,
+        "SELECT id, name FROM nodes WHERE id = ANY($1) AND deleted_at IS NULL",
+        &node_ids,
+    )
+    .await?;
+
     let mut task_views = Vec::new();
     for t in raw_tasks {
         let bot_label = if let Some(agent_id) = t.assigned_agent_id {
-            let name = sqlx::query_scalar::<_, String>(
-                "SELECT name FROM agents WHERE id = $1 AND deleted_at IS NULL",
-            )
-            .bind(agent_id)
-            .fetch_optional(&state.pool)
-            .await?
-            .unwrap_or_else(|| "agent".to_string());
+            let name = agent_names.get(&agent_id).map_or("agent", String::as_str);
             format!("@{}", name)
         } else if let Some(node_id) = t.assigned_node_id {
-            let name = sqlx::query_scalar::<_, String>(
-                "SELECT name FROM nodes WHERE id = $1 AND deleted_at IS NULL",
-            )
-            .bind(node_id)
-            .fetch_optional(&state.pool)
-            .await?
-            .unwrap_or_else(|| "node".to_string());
+            let name = node_names.get(&node_id).map_or("node", String::as_str);
             format!("node:{}", name)
         } else {
             "unassigned".to_string()
@@ -1255,6 +1280,17 @@ pub async fn register_node(
 
 // ---------- Approvals ----------
 
+/// An approval with its task's title and room, and that room's newest
+/// message.
+#[derive(sqlx::FromRow)]
+struct ApprovalRow {
+    #[sqlx(flatten)]
+    approval: Approval,
+    task_title: Option<String>,
+    task_thread_id: Option<Uuid>,
+    last_message: Option<String>,
+}
+
 /// GET /approvals — List pending approval items ("Needs your OK")
 pub async fn list_approvals(
     State(state): State<AppState>,
@@ -1265,9 +1301,20 @@ pub async fn list_approvals(
 
     // Every office the caller can see: their own and the ones shared with
     // them. Viewers see approvals but can't decide them.
-    let raw_approvals = sqlx::query_as::<_, Approval>(
-        "SELECT a.* FROM approvals a
+    // The task's title and the room's newest message come with each
+    // approval in this one query (two queries per card before).
+    let raw_approvals = sqlx::query_as::<_, ApprovalRow>(
+        "SELECT a.*, t.title AS task_title, t.thread_id AS task_thread_id,
+                last.body AS last_message
+         FROM approvals a
          JOIN workspaces w ON w.id = a.workspace_id AND w.deleted_at IS NULL
+         LEFT JOIN tasks t ON t.id = a.task_id AND t.deleted_at IS NULL
+         LEFT JOIN LATERAL (
+             SELECT n.body FROM notes n
+             WHERE n.thread_id = t.thread_id AND n.deleted_at IS NULL
+             ORDER BY n.created_at DESC
+             LIMIT 1
+         ) last ON TRUE
          WHERE a.status = 'pending' AND a.deleted_at IS NULL
            AND (w.owner_user_id = $1 OR EXISTS (
                 SELECT 1 FROM workspace_members m
@@ -1280,10 +1327,11 @@ pub async fn list_approvals(
     .await?;
     let mut roles: std::collections::HashMap<Uuid, crate::office::team::Role> =
         std::collections::HashMap::new();
-    for a in &raw_approvals {
-        if let std::collections::hash_map::Entry::Vacant(slot) = roles.entry(a.workspace_id) {
+    for row in &raw_approvals {
+        let office = row.approval.workspace_id;
+        if let std::collections::hash_map::Entry::Vacant(slot) = roles.entry(office) {
             if let Some(role) =
-                crate::office::team::role_in(&state.pool, caller.user_id(), a.workspace_id).await?
+                crate::office::team::role_in(&state.pool, caller.user_id(), office).await?
             {
                 slot.insert(role);
             }
@@ -1291,28 +1339,14 @@ pub async fn list_approvals(
     }
 
     let mut approval_views = Vec::new();
-    for a in raw_approvals {
-        let (task_title, thread_id) = sqlx::query_as::<_, (String, Option<Uuid>)>(
-            "SELECT title, thread_id FROM tasks WHERE id = $1 AND deleted_at IS NULL",
-        )
-        .bind(a.task_id)
-        .fetch_optional(&state.pool)
-        .await?
-        .unwrap_or_else(|| ("Task".to_string(), None));
+    for row in raw_approvals {
+        let a = row.approval;
+        let task_title = row.task_title.unwrap_or_else(|| "Task".to_string());
+        let thread_id = row.task_thread_id;
 
         // The card must say who did the work and show the real message, so
         // the human decides on the thing itself, not a job title.
-        let message_body = match thread_id {
-            Some(tid) => sqlx::query_scalar::<_, String>(
-                "SELECT body FROM notes WHERE thread_id = $1 AND deleted_at IS NULL
-                 ORDER BY created_at DESC LIMIT 1",
-            )
-            .bind(tid)
-            .fetch_optional(&state.pool)
-            .await?
-            .unwrap_or_else(|| task_title.clone()),
-            None => task_title.clone(),
-        };
+        let message_body = row.last_message.unwrap_or_else(|| task_title.clone());
         let bot_label = {
             let cleaned = a
                 .requested_by

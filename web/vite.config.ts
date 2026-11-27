@@ -33,5 +33,14 @@ export default defineConfig({
     // The voice engines (transformers.js, Kokoro) are large but only load
     // on demand through dynamic import(), never with the app itself.
     chunkSizeWarningLimit: 1500,
+    rolldownOptions: {
+      output: {
+        // Screens load on demand; the icons they share go in one file
+        // instead of one tiny file each, which would be dozens of requests.
+        codeSplitting: {
+          groups: [{ name: 'icons', test: /[\\/]node_modules[\\/]lucide-react[\\/]/ }],
+        },
+      },
+    },
   },
 });
