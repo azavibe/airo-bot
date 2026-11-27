@@ -1308,15 +1308,6 @@ pub async fn inbox_attention(
     })))
 }
 
-pub async fn yours(
-    state: State<AppState>,
-    caller: Caller,
-    headers: HeaderMap,
-    query: Query<YoursQuery>,
-) -> Result<Response, AppError> {
-    inbox(state, caller, headers, query).await
-}
-
 // TODO(air): /yours/attention still lands in the inbox attention list; once
 // the Airo tabs own "needs your OK", point this at /approvals instead. Never
 // use a permanent redirect for app navigation: browsers cache 301s forever,
@@ -1891,16 +1882,6 @@ pub struct AgentItem {
     pub quiet: bool,
     pub provider_type: Option<String>,
     pub provider_model: Option<String>,
-}
-
-#[derive(Template)]
-#[template(path = "agents.html")]
-#[allow(dead_code)]
-struct AgentsTemplate {
-    handle: String,
-    email: String,
-    agents: Vec<AgentItem>,
-    active_tab: &'static str,
 }
 
 pub async fn agents(

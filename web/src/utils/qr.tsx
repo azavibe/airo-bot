@@ -1,6 +1,5 @@
 // Zero-dependency pure TypeScript QR Code SVG generator
 // Compliant with standard ISO/IEC 18004 Byte Mode (Versions 1-10)
-import React from 'react';
 
 export function generateQRCodeMatrix(text: string): boolean[][] {
   const utf8 = new TextEncoder().encode(text);

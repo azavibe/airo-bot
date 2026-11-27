@@ -109,23 +109,6 @@ pub async fn require_person(
     require(pool, caller, office, needed).await
 }
 
-/// The offices `user_id` was invited to (not their own), with their role.
-pub async fn shared_offices(pool: &PgPool, user_id: Uuid) -> Result<Vec<(Uuid, Role)>, AppError> {
-    let rows: Vec<(Uuid, String)> = sqlx::query_as(
-        "SELECT m.workspace_id, m.role FROM workspace_members m
-         JOIN workspaces w ON w.id = m.workspace_id
-         WHERE m.user_id = $1 AND m.deleted_at IS NULL AND w.deleted_at IS NULL
-           AND w.owner_user_id <> $1",
-    )
-    .bind(user_id)
-    .fetch_all(pool)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|(id, role)| (id, Role::stored(&role)))
-        .collect())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

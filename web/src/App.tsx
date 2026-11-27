@@ -1268,7 +1268,6 @@ export const App: React.FC = () => {
 
   const dockElement = (
     <BottomDock
-      activeTab={activeTab}
       onChangeTab={handleTabChange}
       onToggleSidebarMobile={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
       pendingApprovalsCount={pendingApprovalsCount}
