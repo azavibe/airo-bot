@@ -364,6 +364,20 @@ pub(crate) fn clean(data: Map<String, Value>) -> Map<String, Value> {
 /// Saves the records a bot wrote into its office's apps and returns what
 /// the chat shows instead, plus a button to the apps when anything was
 /// added. Without records the answer is unchanged.
+/// Where `apply_records` starts the "Added ..." line it appends for the
+/// office's people.
+const SUMMARY_START: &str = "\n\n*Added ";
+
+/// What of a bot's text (after `apply_records`) a customer should get: not
+/// the "Added 1 to Appointments" line, which is for the office's people.
+pub fn customer_text(body: &str) -> &str {
+    match body.rfind(SUMMARY_START) {
+        Some(at) if body.ends_with(".*") => body[..at].trim_end(),
+        _ if body.starts_with("Added ") && !body.contains('\n') => "",
+        _ => body,
+    }
+}
+
 pub async fn apply_records(
     pool: &PgPool,
     thread_id: Uuid,
@@ -459,7 +473,7 @@ pub async fn apply_records(
     let body = if rest.is_empty() {
         format!("Added {summary}.")
     } else {
-        format!("{rest}\n\n*Added {summary}.*")
+        format!("{rest}{SUMMARY_START}{summary}.*")
     };
     (
         body,
@@ -471,6 +485,17 @@ pub async fn apply_records(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_customer_never_gets_the_added_line() {
+        assert_eq!(
+            customer_text("Booked for seven.\n\n*Added 1 to Appointments.*"),
+            "Booked for seven."
+        );
+        assert_eq!(customer_text("Added 1 to Leads."), "");
+        assert_eq!(customer_text("See you *soon*."), "See you *soon*.");
+        assert_eq!(customer_text("Hi"), "Hi");
+    }
 
     fn crm() -> AppInfo {
         AppInfo::from_schema(

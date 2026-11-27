@@ -341,7 +341,24 @@ const words: Dictionary = {
   "Online": "Online",
   "Needs AI": "Braucht KI",
   "Ready": "Bereit",
-  "just now": "gerade eben"
+  "just now": "gerade eben",
+  "WhatsApp needs Airobot on a server Meta can reach.": "WhatsApp braucht Airobot auf einem Server, den Meta erreichen kann.",
+  "Customers write to your WhatsApp business number and a Receptionist bot answers: it takes bookings and leads into your apps, adds people to Contacts, and hands over to you when they ask.": "Kunden schreiben an deine WhatsApp-Business-Nummer und ein Empfangs-Bot antwortet: Er trägt Buchungen und Interessenten in deine Apps ein, fügt Personen zu den Kontakten hinzu und übergibt an dich, wenn sie danach fragen.",
+  "In Meta for Developers, make an app with WhatsApp and add your business number.": "Erstelle in Meta for Developers eine App mit WhatsApp und füge deine Geschäftsnummer hinzu.",
+  "Paste the number’s Phone number ID, a permanent access token and the app secret.": "Füge die Telefonnummer-ID, ein dauerhaftes Zugriffstoken und das App-Geheimnis ein.",
+  "Phone number ID": "Telefonnummer-ID",
+  "Access token": "Zugriffstoken",
+  "App secret": "App-Geheimnis",
+  "The token and secret are stored encrypted. Each answer uses a few credits.": "Token und Geheimnis werden verschlüsselt gespeichert. Jede Antwort kostet ein paar Credits.",
+  "Answering {number}. Conversations show in the WhatsApp room.": "Antwortet auf {number}. Unterhaltungen erscheinen im WhatsApp-Raum.",
+  "In your Meta app’s WhatsApp settings, set the webhook to this address and verify token, and subscribe to messages:": "Stelle in den WhatsApp-Einstellungen deiner Meta-App den Webhook auf diese Adresse und dieses Verifizierungstoken ein und abonniere Nachrichten:",
+  "Callback URL": "Callback-URL",
+  "Verify token": "Verifizierungstoken",
+  "The Receptionist answers customers": "Der Empfang antwortet Kunden",
+  "Off: messages still arrive in the WhatsApp room, and you answer them.": "Aus: Nachrichten kommen weiter im WhatsApp-Raum an, und du beantwortest sie.",
+  "To answer a customer yourself, write in the WhatsApp room starting with their number, like +15551234567 Thanks!": "Um einem Kunden selbst zu antworten, schreibe im WhatsApp-Raum und beginne mit seiner Nummer, z. B. +15551234567 Danke!",
+  "Recent conversations": "Letzte Unterhaltungen",
+  "{n} messages": "{n} Nachrichten"
 };
 
 export default words;

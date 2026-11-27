@@ -341,7 +341,24 @@ const words: Dictionary = {
   "Online": "En ligne",
   "Needs AI": "IA requise",
   "Ready": "Prêt",
-  "just now": "à l’instant"
+  "just now": "à l’instant",
+  "WhatsApp needs Airobot on a server Meta can reach.": "WhatsApp nécessite Airobot sur un serveur que Meta peut joindre.",
+  "Customers write to your WhatsApp business number and a Receptionist bot answers: it takes bookings and leads into your apps, adds people to Contacts, and hands over to you when they ask.": "Les clients écrivent à votre numéro WhatsApp Business et un bot Réceptionniste répond : il enregistre réservations et prospects dans vos apps, ajoute les personnes aux Contacts et vous passe la main quand ils le demandent.",
+  "In Meta for Developers, make an app with WhatsApp and add your business number.": "Dans Meta for Developers, créez une app avec WhatsApp et ajoutez votre numéro professionnel.",
+  "Paste the number’s Phone number ID, a permanent access token and the app secret.": "Collez l’identifiant du numéro de téléphone, un jeton d’accès permanent et la clé secrète de l’app.",
+  "Phone number ID": "Identifiant du numéro de téléphone",
+  "Access token": "Jeton d’accès",
+  "App secret": "Clé secrète de l’app",
+  "The token and secret are stored encrypted. Each answer uses a few credits.": "Le jeton et la clé sont stockés chiffrés. Chaque réponse utilise quelques crédits.",
+  "Answering {number}. Conversations show in the WhatsApp room.": "Réponse sur {number}. Les conversations s’affichent dans le salon WhatsApp.",
+  "In your Meta app’s WhatsApp settings, set the webhook to this address and verify token, and subscribe to messages:": "Dans les réglages WhatsApp de votre app Meta, configurez le webhook avec cette adresse et ce jeton de vérification, puis abonnez-vous aux messages :",
+  "Callback URL": "URL de rappel",
+  "Verify token": "Jeton de vérification",
+  "The Receptionist answers customers": "La Réceptionniste répond aux clients",
+  "Off: messages still arrive in the WhatsApp room, and you answer them.": "Désactivé : les messages arrivent toujours dans le salon WhatsApp et c’est vous qui répondez.",
+  "To answer a customer yourself, write in the WhatsApp room starting with their number, like +15551234567 Thanks!": "Pour répondre vous-même à un client, écrivez dans le salon WhatsApp en commençant par son numéro, par exemple +15551234567 Merci !",
+  "Recent conversations": "Conversations récentes",
+  "{n} messages": "{n} messages"
 };
 
 export default words;

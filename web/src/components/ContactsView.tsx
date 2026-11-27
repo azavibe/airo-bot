@@ -64,6 +64,7 @@ const SOURCE_LABEL: Record<string, string> = {
   shopify: 'From Shopify',
   google: 'From Google',
   import: 'Imported',
+  whatsapp: 'From WhatsApp',
 };
 
 const ContactDetail: React.FC<{

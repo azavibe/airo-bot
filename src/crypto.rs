@@ -149,6 +149,26 @@ pub fn verify_connection_hook_token(connection_id: uuid::Uuid, salt: &str, token
         .is_ok()
 }
 
+/// The verify token Meta presents when checking an office's WhatsApp
+/// webhook. Derived from the number's row id, so it can be shown to the
+/// owner again without being stored, and changes when they reconnect.
+pub fn whatsapp_verify_token(number_id: uuid::Uuid) -> String {
+    use hmac::Mac;
+    let mut mac = derived_mac("whatsapp-verify-v1");
+    mac.update(number_id.as_bytes());
+    to_hex(&mac.finalize().into_bytes())
+}
+
+pub fn verify_whatsapp_token(number_id: uuid::Uuid, token: &str) -> bool {
+    use hmac::Mac;
+    let Some(bytes) = from_hex(token.trim()) else {
+        return false;
+    };
+    let mut mac = derived_mac("whatsapp-verify-v1");
+    mac.update(number_id.as_bytes());
+    mac.verify_slice(&bytes).is_ok()
+}
+
 /// The PKCE verifier for an OAuth sign-in, derived from the state's secret
 /// so it never has to be stored. 64 hex characters, as RFC 7636 allows.
 pub fn pkce_verifier(state_secret: &str) -> String {
