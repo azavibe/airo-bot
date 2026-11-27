@@ -66,7 +66,13 @@ pub struct AdminAgentView {
 // add server-side search and paging instead of raising the limit.
 const ADMIN_LIST_LIMIT: i64 = 200;
 
-async fn require_admin(pool: &sqlx::PgPool, user_id: Uuid) -> Result<User, AppError> {
+/// The signed-in person, if they are an admin. A bot's key never acts as
+/// an admin, even its owner's: a leaked key must not run the platform.
+async fn require_admin(pool: &sqlx::PgPool, caller: &Caller) -> Result<User, AppError> {
+    let Caller::User(person) = caller else {
+        return Err(AppError::Forbidden);
+    };
+    let user_id = person.id;
     let user =
         sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL")
             .bind(user_id)
@@ -120,7 +126,7 @@ pub async fn admin_home(
     caller: Caller,
     headers: HeaderMap,
 ) -> Result<Response, AppError> {
-    let me = require_admin(&state.pool, caller.user_id()).await?;
+    let me = require_admin(&state.pool, &caller).await?;
 
     let onboarding_mode = onboarding_mode(&state.pool).await;
 
@@ -265,7 +271,7 @@ pub async fn admin_settings(
     headers: HeaderMap,
     JsonOrForm(body): JsonOrForm<AdminSettingsPayload>,
 ) -> Result<Response, AppError> {
-    require_admin(&state.pool, caller.user_id()).await?;
+    require_admin(&state.pool, &caller).await?;
     let mode = match body.onboarding_mode.as_str() {
         m @ ("every" | "once" | "never") => m.to_string(),
         _ => {
@@ -304,7 +310,7 @@ pub async fn toggle_admin(
     Path(user_id): Path<Uuid>,
     JsonOrForm(body): JsonOrForm<AdminTogglePayload>,
 ) -> Result<Response, AppError> {
-    let me = require_admin(&state.pool, caller.user_id()).await?;
+    let me = require_admin(&state.pool, &caller).await?;
     let target =
         sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL")
             .bind(user_id)
@@ -344,7 +350,7 @@ pub async fn revoke_agent(
     headers: HeaderMap,
     Path(agent_id): Path<Uuid>,
 ) -> Result<Response, AppError> {
-    require_admin(&state.pool, caller.user_id()).await?;
+    require_admin(&state.pool, &caller).await?;
     let revoked = sqlx::query(
         "UPDATE agents SET revoked_at = COALESCE(revoked_at, now()), updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL",

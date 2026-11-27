@@ -1716,19 +1716,34 @@ pub(crate) fn is_public_ip(ip: IpAddr) -> bool {
                 || v4.is_multicast()
                 // Carrier-grade NAT and "this network".
                 || (a == 100 && (64..128).contains(&b))
-                || a == 0)
+                || a == 0
+                // IETF protocol assignments, benchmarking, reserved.
+                || (a == 192 && b == 0 && v4.octets()[2] == 0)
+                || (a == 198 && (b == 18 || b == 19))
+                || a >= 240)
         }
         IpAddr::V6(v6) => {
             if let Some(v4) = v6.to_ipv4_mapped() {
                 return is_public_ip(IpAddr::V4(v4));
             }
-            let first = v6.segments()[0];
+            let seg = v6.segments();
+            // NAT64 (64:ff9b::/96) reaches the IPv4 address in its last 32 bits.
+            if seg[..6] == [0x64, 0xff9b, 0, 0, 0, 0] {
+                let [a, b] = seg[6].to_be_bytes();
+                let [c, d] = seg[7].to_be_bytes();
+                return is_public_ip(IpAddr::V4(std::net::Ipv4Addr::new(a, b, c, d)));
+            }
+            let first = seg[0];
             !(v6.is_loopback()
                 || v6.is_unspecified()
                 || v6.is_multicast()
-                // Unique local (fc00::/7) and link-local (fe80::/10).
+                // Unique local (fc00::/7), link-local (fe80::/10) and the
+                // old site-local (fec0::/10).
                 || (first & 0xfe00) == 0xfc00
-                || (first & 0xffc0) == 0xfe80)
+                || (first & 0xffc0) == 0xfe80
+                || (first & 0xffc0) == 0xfec0
+                // Documentation (2001:db8::/32).
+                || (first == 0x2001 && seg[1] == 0x0db8))
         }
     }
 }
@@ -1906,10 +1921,18 @@ mod tests {
             "::1",
             "fd00::1",
             "::ffff:10.0.0.1",
+            "198.18.0.1",
+            "240.0.0.1",
+            "255.255.255.255",
+            "192.0.0.8",
+            "64:ff9b::a00:1",
+            "64:ff9b::7f00:1",
+            "fec0::1",
+            "2001:db8::1",
         ] {
             assert!(!is_public_ip(ip.parse().expect("ip")), "{ip}");
         }
-        for ip in ["8.8.8.8", "2606:4700::1111"] {
+        for ip in ["8.8.8.8", "2606:4700::1111", "64:ff9b::808:808"] {
             assert!(is_public_ip(ip.parse().expect("ip")), "{ip}");
         }
     }

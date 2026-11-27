@@ -1659,3 +1659,67 @@ async fn agent_rename_and_chat_and_settings_redirect(pool: PgPool) {
         "/connect?view=agents"
     );
 }
+
+#[sqlx::test]
+async fn a_board_shows_only_the_runs_the_viewer_may_see(pool: PgPool) {
+    let owner = sign_in(&pool, "runner@example.com", "runner").await;
+    let agent = create_agent(&pool, &owner, "runner-bot").await;
+    let private = create_procedure(&pool, &agent, "Private method").await;
+    let public = create_public_procedure(&pool, &agent, "Public method").await;
+    let ids: Vec<Uuid> = [&private, &public]
+        .iter()
+        .map(|p| p["id"].as_str().expect("id").parse().expect("uuid"))
+        .collect();
+    sqlx::query(
+        "UPDATE procedures SET board_id = (SELECT id FROM boards WHERE name = 'testing')
+         WHERE id = ANY($1)",
+    )
+    .bind(&ids)
+    .execute(&pool)
+    .await
+    .expect("on the board");
+    for (procedure, key) in [(&private, "run-private"), (&public, "run-public")] {
+        let response = send(
+            pool.clone(),
+            bearer_json_request(
+                "POST",
+                "/runs",
+                json!({
+                    "procedure_id": procedure["id"],
+                    "model": "test-model",
+                    "outcome": "pass",
+                    "attempts": 1,
+                    "duration_ms": 10,
+                    "idempotency_key": key
+                }),
+                &agent,
+            ),
+        )
+        .await;
+        assert_eq!(response.status, StatusCode::CREATED, "{:?}", response.body);
+    }
+    let runs_of = |body: &Value| -> Vec<String> {
+        body["runs"]
+            .as_array()
+            .map(|r| {
+                r.iter()
+                    .map(|x| x["procedure_id"].as_str().unwrap_or_default().to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    // Someone else (and anyone signed out) sees only the public method's run.
+    let stranger = sign_in(&pool, "passerby@example.com", "passerby").await;
+    for cookie in [Some(stranger.as_str()), None] {
+        let board = send(pool.clone(), get_request("/b/testing", cookie)).await;
+        assert_eq!(board.status, StatusCode::OK);
+        assert_eq!(runs_of(&board.body), vec![ids[1].to_string()], "{cookie:?}");
+    }
+    // The owner sees both.
+    let board = send(pool.clone(), get_request("/b/testing", Some(&owner))).await;
+    let mut seen = runs_of(&board.body);
+    seen.sort();
+    let mut both: Vec<String> = ids.iter().map(Uuid::to_string).collect();
+    both.sort();
+    assert_eq!(seen, both);
+}

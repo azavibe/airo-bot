@@ -93,6 +93,22 @@ pub async fn require(
     Ok(role)
 }
 
+/// `require`, for the signed-in person only: sharing the office (invites,
+/// roles) and connecting outside channels (Telegram, Slack, a phone
+/// number) never happen with a bot's key, even its owner's, so a leaked
+/// key can't hand the office's messages to someone else.
+pub async fn require_person(
+    pool: &PgPool,
+    caller: &Caller,
+    office: Uuid,
+    needed: Role,
+) -> Result<Role, AppError> {
+    if !matches!(caller, Caller::User(_)) {
+        return Err(AppError::Forbidden);
+    }
+    require(pool, caller, office, needed).await
+}
+
 /// The offices `user_id` was invited to (not their own), with their role.
 pub async fn shared_offices(pool: &PgPool, user_id: Uuid) -> Result<Vec<(Uuid, Role)>, AppError> {
     let rows: Vec<(Uuid, String)> = sqlx::query_as(

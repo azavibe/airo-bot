@@ -7,6 +7,22 @@ app and the desktop app share one version number. A release is tagged
 
 ## Unreleased
 
+### Security
+- A board's page no longer lists the runs of other people's private
+  workflows.
+- A bot's key can no longer use admin pages, invite people to an office,
+  change roles, or connect Telegram, Slack or a phone number: those need
+  the signed-in person.
+- One email address gets at most 5 sign-in links an hour, and an office can
+  send at most 20 invites an hour, so neither can be used to flood an inbox.
+- PDFs from a linked Google Drive folder are read off the server's main
+  threads with a time limit, so a broken or hostile file can't stall the
+  server or stop background work.
+- Website pages and webhooks refuse more reserved network addresses
+  (benchmarking, reserved and NAT64 ranges).
+- The redirect after adding an agent never follows the browser's Referer.
+- Updated lettre (email), cookie and url for published security fixes.
+
 ### Added
 - **Check for updates** in the desktop app: it checks at start and every 6
   hours, and when a new version is out a green "Update to x.y.z" button

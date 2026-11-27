@@ -37,7 +37,7 @@ use uuid::Uuid;
 use crate::auth::Caller;
 use crate::error::AppError;
 use crate::handlers::{wants_html, JsonOrForm};
-use crate::office::team::{require, Role};
+use crate::office::team::{require_person, Role};
 use crate::state::AppState;
 
 const RECEPTIONIST: &str = "Receptionist";
@@ -241,7 +241,7 @@ pub async fn status(
     caller: Caller,
     Path(office): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     let line = line_of_office(&state.pool, office).await?;
     let calls: Vec<(Option<String>, i32, bool, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
         "SELECT from_number, records_added, transferred, created_at FROM phone_calls
@@ -318,7 +318,7 @@ pub async fn connect(
     Path(office): Path<Uuid>,
     JsonOrForm(body): JsonOrForm<ConnectRequest>,
 ) -> Result<Response, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     if state.config.local.is_some() {
         return Err(AppError::BadRequest(
             "The phone needs Airobot on a server Twilio can reach.".into(),
@@ -517,7 +517,7 @@ pub async fn disconnect(
     headers: HeaderMap,
     Path(office): Path<Uuid>,
 ) -> Result<Response, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     crate::idempotency::key(&headers, None)?;
     if let Some(line) = line_of_office(&state.pool, office).await? {
         // Best effort: Twilio stops sending calls here.

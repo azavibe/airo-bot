@@ -29,7 +29,7 @@ use uuid::Uuid;
 use super::{wants_html, JsonOrForm};
 use crate::auth::{secret, Caller};
 use crate::error::AppError;
-use crate::office::team::{require, role_in, Role};
+use crate::office::team::{require, require_person, role_in, Role};
 use crate::state::AppState;
 
 /// How long an invite link works.
@@ -38,6 +38,8 @@ const INVITE_DAYS: i64 = 14;
 const MAX_OPEN_INVITES: i64 = 50;
 /// People in an office besides its owner.
 const MAX_MEMBERS: i64 = 50;
+/// Invites (each one an email) an office may send per hour.
+const INVITES_PER_HOUR: i64 = 20;
 
 fn normal_email(raw: &str) -> Result<String, AppError> {
     let email = raw.trim().to_lowercase();
@@ -170,7 +172,7 @@ pub async fn invite(
     let Caller::User(user) = &caller else {
         return Err(AppError::Forbidden);
     };
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     not_on_this_computer(&state)?;
     let key = crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
     let email = normal_email(&body.email)?;
@@ -209,11 +211,14 @@ pub async fn invite(
     if already {
         return Err(AppError::Conflict("they're already in this office".into()));
     }
-    let (open, members): (i64, i64) = sqlx::query_as(
+    let (open, members, last_hour): (i64, i64, i64) = sqlx::query_as(
         "SELECT
             (SELECT COUNT(*) FROM office_invites WHERE workspace_id = $1 AND deleted_at IS NULL
                AND accepted_at IS NULL AND expires_at > now()),
-            (SELECT COUNT(*) FROM workspace_members WHERE workspace_id = $1 AND deleted_at IS NULL)",
+            (SELECT COUNT(*) FROM workspace_members WHERE workspace_id = $1 AND deleted_at IS NULL),
+            -- Replaced and revoked ones too: each sent an email.
+            (SELECT COUNT(*) FROM office_invites
+               WHERE workspace_id = $1 AND created_at > now() - interval '1 hour')",
     )
     .bind(office)
     .fetch_one(&state.pool)
@@ -221,6 +226,11 @@ pub async fn invite(
     if open >= MAX_OPEN_INVITES || members > MAX_MEMBERS {
         return Err(AppError::BadRequest(
             "this office has as many people and invites as it can hold".into(),
+        ));
+    }
+    if last_hour >= INVITES_PER_HOUR {
+        return Err(AppError::BadRequest(
+            "that's a lot of invites at once; try again in an hour".into(),
         ));
     }
 
@@ -318,7 +328,7 @@ pub async fn revoke_invite(
     .fetch_optional(&state.pool)
     .await?
     .ok_or(AppError::NotFound)?;
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     sqlx::query(
         "UPDATE office_invites SET deleted_at = now(), updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL AND accepted_at IS NULL",
@@ -488,7 +498,7 @@ pub async fn change_role(
     Path((office, person)): Path<(Uuid, Uuid)>,
     JsonOrForm(body): JsonOrForm<RoleRequest>,
 ) -> Result<Response, AppError> {
-    require(&state.pool, &caller, office, Role::Owner).await?;
+    require_person(&state.pool, &caller, office, Role::Owner).await?;
     crate::idempotency::key(&headers, body.idempotency_key.as_deref())?;
     let role = Role::invitable(body.role.trim())
         .ok_or_else(|| AppError::BadRequest("role must be member or viewer".into()))?;
@@ -527,7 +537,7 @@ pub async fn remove_member(
     Path((office, person)): Path<(Uuid, Uuid)>,
 ) -> Result<Response, AppError> {
     crate::idempotency::key(&headers, None)?;
-    let role = require(&state.pool, &caller, office, Role::Viewer).await?;
+    let role = require_person(&state.pool, &caller, office, Role::Viewer).await?;
     let leaving = person == caller.user_id();
     if leaving && role == Role::Owner {
         return Err(AppError::BadRequest(
