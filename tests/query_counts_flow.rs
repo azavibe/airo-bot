@@ -16,12 +16,21 @@ thread_local! {
     static QUERIES: Cell<usize> = const { Cell::new(0) };
 }
 
-/// Counts sqlx's per-statement log events.
+/// Counts sqlx's per-statement log events made while handling a request
+/// (inside the router's `request` span). Background work a request started
+/// with `tokio::spawn` runs outside it, whenever the runtime gets to it, so
+/// it isn't the request's own cost.
 struct CountQueries;
 
-impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for CountQueries {
-    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        if event.metadata().target() == "sqlx::query" {
+impl<S> tracing_subscriber::Layer<S> for CountQueries
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        let in_request = ctx
+            .event_scope(event)
+            .is_some_and(|mut scope| scope.any(|span| span.name() == "request"));
+        if event.metadata().target() == "sqlx::query" && in_request {
             QUERIES.with(|n| n.set(n.get() + 1));
         }
     }
