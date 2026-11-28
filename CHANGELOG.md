@@ -8,6 +8,19 @@ app and the desktop app share one version number. A release is tagged
 ## Unreleased
 
 ### Changed
+- Visitors who aren't signed in can try the app instead of hitting "Sign in"
+  everywhere. The chat explains what the bots do and offers example
+  requests to tap. Approvals, Bots, Contacts and Workflows each show what
+  the page is for, with a marked example. Anything a visitor writes is kept
+  through sign-up and waits in the message box once they're in.
+- Sign-in says "Get started" for new people; the email link still creates the
+  account. The sign-in screen is now translated.
+
+### Fixed
+- On phones the message box could sit behind the browser's address bar;
+  the app now fits the visible screen.
+
+### Changed
 - Phones and computers show the same design. Every page (Approvals, Apps,
   Bots, Contacts, Workflows, Settings) has the same header, and on a phone a
   menu button at its left opens the full sidebar, as does one in the chat.

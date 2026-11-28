@@ -1,13 +1,22 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Zap, X, Play, Square } from 'lucide-react';
 import { MobileMenuButton } from './PageHeader';
+import { GuestActions, OpenAuth } from './GuestWelcome';
+
+/** What a guest can ask for in one tap; each is something the bots do today. */
+const GUEST_EXAMPLES = [
+  msg('Answer my customers on WhatsApp'),
+  msg('Keep track of my leads and follow up'),
+  msg('Send invoices and remind people who haven’t paid'),
+  msg('Plan this week’s social media posts'),
+];
 import { Thread, Note, Agent, NoteAction, OfficeApp } from '../types';
 import { AppRecordCard } from './AppRecordCard';
 import { formatCredits, roomName } from '../utils/format';
 import { Markdown, questionsIn } from '../utils/markdown';
 import { BotAvatar } from './BotAvatar';
 import { RowMenu, RowMenuItem, useContextMenu } from './RowMenu';
-import { useT } from '../i18n';
+import { msg, useT } from '../i18n';
 
 /** Answer boxes under a bot's questions: each question gets its own field,
  *  and the answer goes back to that bot as your message. */
@@ -104,7 +113,9 @@ interface ChatStreamProps {
   onOpenTeam?: () => void;
   isGuest?: boolean;
   onOpenOnboard: () => void;
-  onOpenAuth: () => void;
+  onOpenAuth: OpenAuth;
+  /** Puts an example request in the message box (for guests). */
+  onUseExample?: (text: string) => void;
   bottomDock: React.ReactNode;
   /** Which credit limit the workspace has hit, if any. */
   creditLimit?: 'daily' | 'balance' | null;
@@ -131,6 +142,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   isGuest = false,
   onOpenOnboard,
   onOpenAuth,
+  onUseExample,
   bottomDock,
   creditLimit,
   upgradeUrl,
@@ -182,18 +194,32 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   );
 
   const emptyState = isGuest ? (
-    <>
-      <div className="text-sm font-medium text-neutral-300">{t('Sign in to talk to your bots')}</div>
-      <div className="text-xs text-neutral-400 max-w-sm mt-1">
-        {t('Your rooms, approvals and apps appear here once you are signed in.')}
+    <div className="w-full max-w-md flex flex-col items-center gap-4">
+      <div className="space-y-1.5">
+        <div className="text-base font-semibold text-white tracking-tight">{t('An office run by AI bots')}</div>
+        <div className="text-xs text-neutral-400 leading-relaxed">
+          {t('Tell it what your business needs. Bots answer customers, keep track of leads and invoices, and ask you before anything important goes out.')}
+        </div>
       </div>
-      <button
-        onClick={onOpenAuth}
-        className="mt-4 px-4 py-2 rounded-full bg-accent text-accent-fg text-xs font-semibold hover:bg-accent/90 transition-colors"
-      >
-        {t('Sign in')}
-      </button>
-    </>
+      {onUseExample && (
+        <div className="w-full space-y-2">
+          <div className="text-[11px] text-neutral-500">{t('Try one, or write your own below:')}</div>
+          <div className="flex flex-col gap-2">
+            {GUEST_EXAMPLES.map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => onUseExample(t(example))}
+                className="w-full text-left px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-[13px] text-neutral-200 hover:text-white hover:bg-white/[0.07] hover:border-white/20 transition-colors"
+              >
+                {t(example)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <GuestActions onAuth={onOpenAuth} />
+    </div>
   ) : !thread ? (
     <>
       <div className="text-sm font-medium text-neutral-300">{t('No rooms yet')}</div>

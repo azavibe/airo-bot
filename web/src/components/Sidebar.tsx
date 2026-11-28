@@ -39,7 +39,8 @@ interface SidebarProps {
   activeTab: Tab;
   onChangeTab: (tab: Tab) => void;
   onOpenSettings: () => void;
-  onOpenAuth: () => void;
+  /** 'start' for someone new, 'signin' for an existing account. */
+  onOpenAuth: (intent: 'start' | 'signin') => void;
   onOpenSearch: () => void;
   onNewOffice: () => void;
   onNewBot: (office: Office) => void;
@@ -280,7 +281,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
           <button
-            onClick={isAuthenticated ? onNewOffice : onOpenAuth}
+            onClick={isAuthenticated ? onNewOffice : () => onOpenAuth('start')}
             className={railButton(false)}
             title={tr('New office')}
             aria-label={tr('New office')}
@@ -352,7 +353,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         <div className="panel-footer w-full !px-0 justify-center">
           <button
-            onClick={isAuthenticated ? onOpenSettings : onOpenAuth}
+            onClick={isAuthenticated ? onOpenSettings : () => onOpenAuth('signin')}
             aria-current={activeTab === 'settings' ? 'page' : undefined}
             className={railButton(activeTab === 'settings')}
             title={isAuthenticated ? `@${displayHandle} · ${tr('Account & settings')}` : tr('Sign in')}
@@ -373,7 +374,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-3 pb-3">
         {/* New and Search: level with the other panels' headers */}
         <div className="h-14 flex items-center gap-1">
-          <button onClick={isAuthenticated ? onNewOffice : onOpenAuth} className={`${rowClass(false)} !text-white flex-1`}>
+          <button onClick={isAuthenticated ? onNewOffice : () => onOpenAuth('start')} className={`${rowClass(false)} !text-white flex-1`}>
             <span className="w-5 h-5 -ml-0.5 rounded-full bg-accent text-accent-fg flex items-center justify-center flex-shrink-0">
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             </span>
@@ -437,12 +438,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Offices and their rooms */}
         <div className="mt-4 pt-3 border-t border-white/[0.06] space-y-3">
           {!isAuthenticated ? (
-            <button
-              onClick={onOpenAuth}
-              className="w-full text-left px-3 py-3 rounded-xl bg-white/[0.03] border border-white/5 text-xs text-neutral-400 hover:text-white transition-colors"
-            >
-              {tr('Sign in to see your offices and rooms.')}
-            </button>
+            <div className="px-3 py-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-2.5">
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                {tr('Your offices and their rooms show up here. Each office is one business, with its own bots and apps.')}
+              </p>
+              <button
+                onClick={() => onOpenAuth('start')}
+                className="px-3 py-1.5 rounded-full bg-white/10 text-white text-xs font-semibold hover:bg-white/15 transition-colors"
+              >
+                {tr('Get started')}
+              </button>
+            </div>
           ) : (
             offices.map((office) => {
               const all = roomsOf(office, threads, offices);
@@ -628,7 +634,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Settings className="w-4 h-4" />
               </button>
               <button
-                onClick={onOpenAuth}
+                onClick={() => onOpenAuth('signin')}
                 className="px-3 py-1.5 rounded-full bg-accent text-accent-fg text-xs font-semibold hover:bg-accent/90 transition-colors"
               >
                 {tr('Sign in')}
