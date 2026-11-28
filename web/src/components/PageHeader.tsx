@@ -60,7 +60,7 @@ export const PageHeader: React.FC<{
   title: React.ReactNode;
   /** One line under the title; hidden on phones, where room is short. */
   description?: React.ReactNode;
-  /** Small text after the title (the office, a count). */
+  /** Small text after the title (the office, a count); hidden on phones. */
   meta?: React.ReactNode;
   actions?: React.ReactNode;
   /** A second row, such as tabs. */
@@ -72,7 +72,7 @@ export const PageHeader: React.FC<{
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 min-w-0">
           <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight truncate">{title}</h1>
-          {meta && <span className="text-xs text-neutral-500 truncate">{meta}</span>}
+          {meta && <span className="text-xs text-neutral-500 truncate hidden sm:inline">{meta}</span>}
         </div>
         {description && <p className="text-xs text-neutral-400 mt-0.5 hidden sm:block">{description}</p>}
       </div>

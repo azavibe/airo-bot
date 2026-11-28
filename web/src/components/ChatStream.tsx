@@ -291,6 +291,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                 }`}
               >
                 {spend.reached && <span className="w-1.5 h-1.5 rounded-full bg-red-400" aria-hidden="true" />}
+                <Zap className="w-3 h-3 text-neutral-500 sm:hidden" aria-hidden="true" />
                 <span className="font-medium">{formatCredits(spend.spent)}</span>
                 <span className="text-neutral-500 hidden sm:inline">
                   {spend.cap ? t('/ {cap} this month', { cap: formatCredits(spend.cap) }) : t('credits this month')}
