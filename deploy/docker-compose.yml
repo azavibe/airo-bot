@@ -1,0 +1,96 @@
+# Airobot on one small server: the published image, PostgreSQL and Caddy
+# (automatic HTTPS). Nothing is built here: GitHub builds the image when a
+# release tag is pushed, and this file only pulls it.
+#
+#   cp env.example .env     # fill it in (see README.md)
+#   docker compose pull && docker compose up -d
+#
+# Only Caddy is published (ports 80 and 443). The app and PostgreSQL are
+# reachable only inside the Compose network.
+name: airobot
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: airobot
+      POSTGRES_USER: airobot_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - airobot_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airobot_user -d airobot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - airobot
+
+  app:
+    # AIROBOT_VERSION pins a release (e.g. 0.8.0) so an update or a rollback
+    # is a one-line change; "latest" follows the newest release.
+    image: ghcr.io/azavibe/airobot:${AIROBOT_VERSION:-latest}
+    restart: unless-stopped
+    stop_grace_period: 45s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://airobot_user:${POSTGRES_PASSWORD}@postgres:5432/airobot
+      PORT: "8080"
+      RUST_LOG: ${RUST_LOG:-info}
+      APP_ENV: production
+      APP_BASE_URL: https://${DOMAIN:?set DOMAIN in .env}
+      PROVIDER_KEY_SECRET: ${PROVIDER_KEY_SECRET:?set PROVIDER_KEY_SECRET in .env}
+      # Caddy's fixed address below: the only peer whose forwarded client
+      # address (X-Forwarded-For) is believed, for the per-address limits.
+      TRUSTED_PROXY_IPS: 172.30.0.2
+      SMTP_HOST: ${SMTP_HOST:?set SMTP_HOST in .env}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-Airobot <noreply@airo-bot.com>}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?set VAPID_PRIVATE_KEY in .env}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:noreply@airo-bot.com}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      UPGRADE_URL: ${UPGRADE_URL:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      STRIPE_CONNECT_CLIENT_ID: ${STRIPE_CONNECT_CLIENT_ID:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      SHOPIFY_CLIENT_ID: ${SHOPIFY_CLIENT_ID:-}
+      SHOPIFY_CLIENT_SECRET: ${SHOPIFY_CLIENT_SECRET:-}
+    networks:
+      - airobot
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The certificates: keep them across restarts (Let's Encrypt rate limits).
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      airobot:
+        ipv4_address: 172.30.0.2
+
+networks:
+  airobot:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  airobot_postgres_data:
+  caddy_data:
+  caddy_config:

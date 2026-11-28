@@ -35,6 +35,10 @@ app and the desktop app share one version number. A release is tagged
   instead of one or two per card (88 down to 8 for 40 approvals).
 
 ### Added
+- **Run Airobot on your own server** with `deploy/`: a Compose file that
+  pulls the published image (nothing is built on the server) with PostgreSQL
+  and Caddy for automatic HTTPS, an example `.env`, and a guide covering DNS,
+  setup, updates and backups.
 - **Sync the desktop app with Airobot Cloud** (issue #28): Settings → Account
   → Sync with Airobot Cloud on the desktop, then **Allow** in the cloud's
   Settings. Offices, rooms, messages, bots, apps and records, contacts,
