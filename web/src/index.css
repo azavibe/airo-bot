@@ -41,6 +41,14 @@ body {
   min-height: 100vh;
 }
 
+/* The app fills the visible screen. On phones 100vh includes the space
+   under the browser's address bar, which hid the message box; 100dvh is
+   the part you can see (older browsers keep 100vh). */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+
 /* Frosted glass surfaces; colour, blur and corners follow the theme. */
 .glass-panel {
   background: rgb(var(--c-surface) / var(--glass-alpha));

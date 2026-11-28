@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Sparkles, X, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useEscape, closeOnBackdrop } from '../utils/useEscape';
+import { useT } from '../i18n';
 
 // The server refuses dev sign-in in production; only offer it where it can work.
 // TODO(air): ask the server whether AIR_DEV_LOGIN is on instead of guessing from the host.
@@ -11,9 +12,14 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => Promise<void>;
+  /** 'start' for someone new, 'signin' for an existing account; the same link does both. */
+  intent?: 'start' | 'signin';
+  /** A message the guest wrote; it waits in the message box after sign-in. */
+  draft?: string;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, intent = 'start', draft }) => {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -60,10 +66,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
         setMagicLinkSent(true);
       } else {
         const errData = await res.json().catch(() => ({}));
-        setError(errData.error || 'Could not send the sign-in link. Check the address and try again.');
+        setError(errData.error || t('Could not send the sign-in link. Check the address and try again.'));
       }
     } catch {
-      setError('Could not reach the server. Check your connection and try again.');
+      setError(t('Could not reach the server. Check your connection and try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -103,15 +109,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-semibold text-white mb-2">
               <Sparkles className="w-3.5 h-3.5" /> Airobot
             </div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Sign in</h2>
+            <h2 className="text-xl font-bold text-white tracking-tight">
+              {intent === 'signin' ? t('Sign in') : t('Get started')}
+            </h2>
             <p className="text-xs text-neutral-400 mt-1">
-              No password needed. We email you a sign-in link; new addresses get an account automatically.
+              {intent === 'signin'
+                ? t('No password needed. We email you a sign-in link; new addresses get an account automatically.')
+                : t('Enter your email and we’ll send you a link. Opening it creates your account; there’s no password.')}
             </p>
           </div>
-          <button onClick={close} aria-label="Close" className="text-neutral-400 hover:text-white p-1">
+          <button onClick={close} aria-label={t('Close')} className="text-neutral-400 hover:text-white p-1">
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {draft && !magicLinkSent && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-neutral-400">{t('Your message is kept. It will be in the message box when you’re in:')}</p>
+            <p className="text-xs text-neutral-200 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 line-clamp-3 whitespace-pre-wrap break-words">
+              {draft}
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-300">
@@ -122,7 +141,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
         {!magicLinkSent ? (
           <form onSubmit={handleRequestMagicLink} className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="auth-email" className="text-xs font-medium text-neutral-300">Email</label>
+              <label htmlFor="auth-email" className="text-xs font-medium text-neutral-300">{t('Email')}</label>
               <div className="relative">
                 <Mail className="w-4 h-4 absolute left-3 top-3 text-neutral-500" />
                 <input
@@ -133,7 +152,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="founder@company.com"
+                  placeholder="you@business.com"
                   className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-xs outline-none focus:border-white/30"
                 />
               </div>
@@ -145,10 +164,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold bg-accent text-accent-fg hover:bg-accent/90 transition-all flex items-center justify-center gap-2 shadow-glow-white disabled:opacity-40"
             >
               {isLoading ? (
-                <span className="animate-pulse">Sending…</span>
+                <span className="animate-pulse">{t('Sending…')}</span>
               ) : (
                 <>
-                  <span>Email Me a Sign-In Link</span>
+                  <span>{t('Email me a link')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </>
               )}
@@ -173,9 +192,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">Check your email</h3>
+              <h3 className="text-sm font-semibold text-white">{t('Check your email')}</h3>
               <p className="text-xs text-neutral-400 mt-1 max-w-xs mx-auto">
-                We sent a sign-in link to <span className="text-white">{email}</span>. Open it on this device to continue.
+                {t('We sent a link to {email}. Open it on this device to continue.', { email })}
               </p>
             </div>
 
@@ -184,13 +203,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
                 onClick={() => setMagicLinkSent(false)}
                 className="flex-1 py-2 px-4 rounded-xl text-xs font-medium text-neutral-400 hover:text-white bg-white/5 border border-white/10 transition-all"
               >
-                Use another email
+                {t('Use another email')}
               </button>
               <button
                 onClick={close}
                 className="flex-1 py-2 px-4 rounded-xl text-xs font-semibold bg-accent text-accent-fg hover:bg-accent/90 transition-all"
               >
-                Done
+                {t('Done')}
               </button>
             </div>
           </div>

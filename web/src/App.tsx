@@ -19,6 +19,7 @@ import { botModelLabel, roomName } from './utils/format';
 import { Bell, X, Check } from 'lucide-react';
 import { startUpdateChecks } from './state/updates';
 import { MobileNavContext } from './components/PageHeader';
+import { keepGuestDraft, takeGuestDraft } from './utils/guestDraft';
 import { Theme, applyTheme, cacheTheme, loadCachedTheme, normalizeTheme, reapplyTheme, watchSystemMode, DEFAULT_THEME } from './utils/theme';
 import { VoiceSettings, loadVoiceSettings, speak } from './utils/voice';
 import {
@@ -47,6 +48,10 @@ const SettingsView = lazyScreen(() => import('./components/SettingsView'), (m) =
 const ConnectModal = lazyScreen(() => import('./components/ConnectModal'), (m) => m.ConnectModal);
 const BotSettingsModal = lazyScreen(() => import('./components/BotSettingsModal'), (m) => m.BotSettingsModal);
 const ContactsView = lazyScreen(() => import('./components/ContactsView'), (m) => m.ContactsView);
+const GuestApprovals = lazyScreen(() => import('./components/GuestPages'), (m) => m.GuestApprovals);
+const GuestBots = lazyScreen(() => import('./components/GuestPages'), (m) => m.GuestBots);
+const GuestContacts = lazyScreen(() => import('./components/GuestPages'), (m) => m.GuestContacts);
+const GuestWorkflows = lazyScreen(() => import('./components/GuestPages'), (m) => m.GuestWorkflows);
 const SearchPalette = lazyScreen(() => import('./components/SearchPalette'), (m) => m.SearchPalette);
 const TeamModal = lazyScreen(() => import('./components/TeamModal'), (m) => m.TeamModal);
 const EditOfficeDialog = lazyScreen(() => import('./components/EditOfficeDialog'), (m) => m.EditOfficeDialog);
@@ -162,6 +167,14 @@ export const App: React.FC = () => {
   // undefined: not known yet / not the desktop app).
   const [localEngine, setLocalEngine] = useState<string | null | undefined>(undefined);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  // 'start' for someone new (the default), 'signin' for an existing account.
+  const [authIntent, setAuthIntent] = useState<'start' | 'signin'>('start');
+  // What a guest wrote before signing in; it waits in the message box after.
+  const [guestDraft, setGuestDraft] = useState('');
+  const openAuth = (intent: 'start' | 'signin') => {
+    setAuthIntent(intent);
+    setIsAuthModalOpen(true);
+  };
   const [settingsSection, setSettingsSection] = useState<SettingsSection>(() =>
     settingsSectionFromPath(window.location.pathname)
   );
@@ -254,6 +267,20 @@ export const App: React.FC = () => {
   const showOk = (text: string) => setNotice({ kind: 'ok', text });
 
   const isGuest = userProfile?.authenticated === false;
+
+  // A message written before signing in comes back in the message box (the
+  // sign-in link may open in a new tab, so it is kept in this browser).
+  // TODO(air): it is put back, not sent, so following an email link never
+  // spends credits by itself; sending it would save one tap.
+  useEffect(() => {
+    if (!userProfile?.authenticated) return;
+    const draft = takeGuestDraft();
+    if (draft) {
+      setComposerText(draft);
+      setActiveTab('chat');
+      setNotice({ kind: 'ok', text: tr('Your message is in the box below. Send it when you’re ready.') });
+    }
+  }, [userProfile?.authenticated]);
 
   // /signin is a modal over the app; a signed-in visitor has nothing to do there.
   useEffect(() => {
@@ -749,7 +776,9 @@ export const App: React.FC = () => {
 
   const handleSendMessage = async (text: string) => {
     if (isGuest) {
-      setIsAuthModalOpen(true);
+      keepGuestDraft(text);
+      setGuestDraft(text);
+      openAuth('start');
       throw new Error('sign-in required');
     }
     if (activeOfficeRole() === 'viewer') {
@@ -1321,6 +1350,8 @@ export const App: React.FC = () => {
       placeholder={
         isOnboardOpen
           ? tr('Answer the Architect…')
+          : isGuest
+          ? tr('What do you need help with?')
           : activeTab === 'chat' && activeOffice?.role === 'viewer'
           ? tr('You can view this office')
           : undefined
@@ -1394,7 +1425,7 @@ export const App: React.FC = () => {
     <RecordsProvider officeId={isGuest ? null : appsOfficeId} onRecordEvent={onRecordEvent}>
     <MobileNavContext.Provider value={openMobileNav}>
     <div
-      className={`w-screen h-screen bg-transparent text-white flex flex-col overflow-hidden select-none p-3 md:p-4 box-border ${
+      className={`app-shell w-screen bg-transparent text-white flex flex-col overflow-hidden select-none p-3 md:p-4 box-border ${
         inDesktopApp ? '!pt-0' : ''
       }`}
     >
@@ -1458,7 +1489,7 @@ export const App: React.FC = () => {
               onOpenSettings={() => {
                 openSettings();
               }}
-              onOpenAuth={() => setIsAuthModalOpen(true)}
+              onOpenAuth={openAuth}
             />
           </div>
         </div>
@@ -1519,7 +1550,8 @@ export const App: React.FC = () => {
                   onOpenTeam={() => setIsTeamOpen(true)}
                   isGuest={isGuest}
                   onOpenOnboard={openOnboard}
-                  onOpenAuth={() => setIsAuthModalOpen(true)}
+                  onOpenAuth={openAuth}
+                  onUseExample={isGuest ? setComposerText : undefined}
                   bottomDock={dockElement}
                   creditLimit={isGuest || userProfile?.local_mode ? null : wallet?.limit_reached}
                   upgradeUrl={wallet?.upgrade_url}
@@ -1590,12 +1622,16 @@ export const App: React.FC = () => {
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <Suspense fallback={null}>
+                {isGuest ? (
+                  <GuestApprovals onAuth={openAuth} bottomDock={dockElement} />
+                ) : (
                 <ApprovalsView
                   approvals={approvals}
                   onDecide={handleDecideApproval}
                   onOpenBots={() => handleTabChange('bots')}
                   bottomDock={dockElement}
                 />
+                )}
               </Suspense>
             </div>
           </div>
@@ -1605,6 +1641,9 @@ export const App: React.FC = () => {
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <Suspense fallback={null}>
+                {isGuest ? (
+                  <GuestBots onAuth={openAuth} bottomDock={dockElement} />
+                ) : (
                 <BotsView
                   agents={agents}
                   wallet={userProfile?.local_mode ? null : wallet}
@@ -1627,6 +1666,7 @@ export const App: React.FC = () => {
                   }
                   bottomDock={dockElement}
                 />
+                )}
               </Suspense>
             </div>
           </div>
@@ -1636,10 +1676,14 @@ export const App: React.FC = () => {
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <Suspense fallback={null}>
+                {isGuest ? (
+                  <GuestContacts onAuth={openAuth} bottomDock={dockElement} />
+                ) : (
                 <ContactsView
                   office={activeOffice ?? offices.find((o) => o.primary) ?? null}
                   bottomDock={dockElement}
                 />
+                )}
               </Suspense>
             </div>
           </div>
@@ -1649,6 +1693,9 @@ export const App: React.FC = () => {
           <div className={`col-span-12 h-full min-h-0 overflow-hidden ${wideSpan}`}>
             <div className="glass-panel h-full min-h-0 overflow-hidden flex flex-col">
               <Suspense fallback={null}>
+                {isGuest && procedures.length === 0 ? (
+                  <GuestWorkflows onAuth={openAuth} bottomDock={dockElement} />
+                ) : (
                 <WorkflowsView
                   procedures={procedures}
                   focusId={focusWorkflowId}
@@ -1660,6 +1707,7 @@ export const App: React.FC = () => {
                   onOpenOnboard={openOnboard}
                   bottomDock={dockElement}
                 />
+                )}
               </Suspense>
             </div>
           </div>
@@ -1747,7 +1795,7 @@ export const App: React.FC = () => {
               onOpenSettings={closeDrawerThen(() => {
                 openSettings();
               })}
-              onOpenAuth={closeDrawerThen(() => setIsAuthModalOpen(true))}
+              onOpenAuth={(intent) => closeDrawerThen(() => openAuth(intent))()}
             />
           </div>
         </div>
@@ -1955,8 +2003,11 @@ export const App: React.FC = () => {
       {/* Auth / Magic Link Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
+        intent={authIntent}
+        draft={guestDraft}
         onClose={() => {
           setIsAuthModalOpen(false);
+          setAuthIntent('start');
           if (window.location.pathname.startsWith('/signin')) {
             window.history.replaceState(null, '', '/');
           }
