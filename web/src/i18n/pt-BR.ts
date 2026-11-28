@@ -358,7 +358,29 @@ const words: Dictionary = {
   "Off: messages still arrive in the WhatsApp room, and you answer them.": "Desligado: as mensagens continuam chegando na sala do WhatsApp e você responde.",
   "To answer a customer yourself, write in the WhatsApp room starting with their number, like +15551234567 Thanks!": "Para responder você mesmo a um cliente, escreva na sala do WhatsApp começando pelo número dele, por exemplo +15551234567 Obrigado!",
   "Recent conversations": "Conversas recentes",
-  "{n} messages": "{n} mensagens"
+  "{n} messages": "{n} mensagens",
+  "Airobot address": "Endereço do Airobot",
+  "Allow “{name}” ({code}) to sync your offices?": "Permitir que “{name}” ({code}) sincronize seus escritórios?",
+  "Allow": "Permitir",
+  "Allowed. The computer starts syncing in a moment.": "Permitido. O computador começa a sincronizar em instantes.",
+  "Computers that sync": "Computadores que sincronizam",
+  "Desktop app": "App para desktop",
+  "Don’t allow": "Não permitir",
+  "It keeps a copy of your offices, rooms, messages, bots, apps, contacts, memory and documents, and sends its changes here.": "Ele mantém uma cópia dos seus escritórios, salas, mensagens, bots, apps, contatos, memória e documentos, e envia as alterações para cá.",
+  "Keep this computer’s offices the same as in your Airobot Cloud account, to use them from your phone and the web. Your AI tool settings and keys stay on this computer.": "Mantenha os escritórios deste computador iguais aos da sua conta do Airobot Cloud, para usá-los no celular e na web. As configurações da sua ferramenta de IA e suas chaves ficam neste computador.",
+  "Last synced {when}.": "Última sincronização {when}.",
+  "Link this computer": "Vincular este computador",
+  "Not allowed.": "Não permitido.",
+  "Not synced yet.": "Ainda não sincronizado.",
+  "Offices, rooms, messages, bots, apps, contacts, memory and documents stay the same here and in the cloud. The cloud runs the morning plan and reports. Your AI tool settings and keys stay on this computer.": "Escritórios, salas, mensagens, bots, apps, contatos, memória e documentos ficam iguais aqui e na nuvem. A nuvem faz o plano da manhã e os relatórios. As configurações da sua ferramenta de IA e suas chaves ficam neste computador.",
+  "Open Airobot Cloud": "Abrir o Airobot Cloud",
+  "Open Airobot Cloud, sign in, and allow this computer. Its code is {code}.": "Abra o Airobot Cloud, entre e permita este computador. O código dele é {code}.",
+  "Stop syncing": "Parar de sincronizar",
+  "Sync now": "Sincronizar agora",
+  "Sync with Airobot Cloud": "Sincronizar com o Airobot Cloud",
+  "Synced with {address} as @{handle}.": "Sincronizado com {address} como @{handle}.",
+  "That code expired. Start again on the computer.": "Esse código expirou. Comece de novo no computador.",
+  "Waiting…": "Aguardando…"
 };
 
 export default words;

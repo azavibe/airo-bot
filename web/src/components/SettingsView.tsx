@@ -7,6 +7,7 @@ import { VoicePanel } from './VoicePanel';
 import { VoiceSettings } from '../utils/voice';
 import { ConnectionsView } from './ConnectionsView';
 import { AdminView } from './AdminView';
+import { DesktopSync, LinkedComputers } from './SyncPanel';
 import { checkForUpdates, openUpdate, useUpdates } from '../state/updates';
 import { RefreshCw, Download, CheckCircle2, Languages } from 'lucide-react';
 import { LANGUAGE_NAMES, UI_LANGUAGES, UiLanguage, setLanguage, useLanguage, useT } from '../i18n';
@@ -259,6 +260,8 @@ const AccountPanel: React.FC<{ userProfile: UserProfile | null; onRefreshProfile
           </div>
         </form>
       )}
+
+      {userProfile?.local_mode ? <DesktopSync /> : isSignedIn && <LinkedComputers />}
 
       {isSignedIn && (
         <button

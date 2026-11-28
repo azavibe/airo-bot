@@ -375,7 +375,7 @@ fn tidy(text: &str) -> (String, bool) {
 
 /// Passages of about [`CHUNK_CHARS`]: whole paragraphs where they fit,
 /// long paragraphs split between words.
-fn chunks(text: &str) -> Vec<String> {
+pub(crate) fn chunks(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current = String::new();
     let flush = |current: &mut String, out: &mut Vec<String>| {
@@ -588,7 +588,7 @@ async fn store(
 }
 
 /// Writes a document's passages, indexed with its title weighted higher.
-async fn write_chunks(
+pub(crate) async fn write_chunks(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document: Uuid,
     office: Uuid,

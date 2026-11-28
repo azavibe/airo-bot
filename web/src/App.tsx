@@ -3,7 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatStream } from './components/ChatStream';
 import { AppsPanel } from './components/AppsPanel';
 import { AuthModal } from './components/AuthModal';
-import { SETTINGS_PATHS, settingsSectionFromPath } from './components/settingsPaths';
+import { SETTINGS_PATHS, SYNC_CODE_KEY, settingsSectionFromPath } from './components/settingsPaths';
 import type { SettingsSection } from './components/settingsPaths';
 import { BottomDock } from './components/BottomDock';
 import { DesktopTitleBar, isDesktopApp } from './components/DesktopTitleBar';
@@ -527,6 +527,34 @@ export const App: React.FC = () => {
   // An invite link (/?invite=…, issue #29): kept on this device until the
   // person is signed in (the sign-in email may open a new tab), then
   // accepted, and the office opens.
+  // A computer asking to sync (/settings?sync_code=…, issue #28): kept on
+  // this device until the person is signed in, then Settings → Account asks
+  // them to allow it.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('sync_code');
+    if (!code) return;
+    try {
+      localStorage.setItem(SYNC_CODE_KEY, code);
+    } catch {}
+    const url = new URL(window.location.href);
+    url.searchParams.delete('sync_code');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }, []);
+  useEffect(() => {
+    if (!userProfile || userProfile.local_mode) return;
+    let code: string | null = null;
+    try {
+      code = localStorage.getItem(SYNC_CODE_KEY);
+    } catch {}
+    if (!code) return;
+    if (!userProfile.authenticated) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    openSettings('account');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile]);
+
   const INVITE_KEY = 'airobot.invite';
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get('invite');

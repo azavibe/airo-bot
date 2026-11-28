@@ -110,6 +110,15 @@ pub async fn run_daily_plan_loop(state: AppState) {
     tracing::info!("daily plan loop starting");
     loop {
         tokio::time::sleep(TICK).await;
+        // A desktop linked to the cloud leaves the offices' daily jobs to
+        // it, so they aren't posted twice once synced; its own recurring
+        // jobs still run here.
+        if crate::sync::leaves_jobs_to_cloud(&state).await {
+            if let Err(error) = super::recurring::run_due(&state).await {
+                tracing::warn!(?error, "recurring jobs tick failed");
+            }
+            continue;
+        }
         match run_due(&state).await {
             Ok(0) => {}
             Ok(n) => tracing::info!(offices = n, "daily plans started"),

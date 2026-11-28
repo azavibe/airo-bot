@@ -17,7 +17,7 @@ use crate::state::AppState;
 use super::auth::is_unique_violation;
 use super::{message_response, render, wants_html};
 
-const CODE_LEN: usize = 8;
+pub(crate) const CODE_LEN: usize = 8;
 
 #[derive(Serialize)]
 pub struct DeviceCodeResponse {
@@ -94,7 +94,7 @@ pub async fn create_code(
     Err(AppError::Internal)
 }
 
-fn normalize_code(raw: &str) -> String {
+pub(crate) fn normalize_code(raw: &str) -> String {
     raw.chars()
         .filter(|c| !c.is_whitespace() && *c != '-')
         .flat_map(char::to_uppercase)
@@ -112,7 +112,7 @@ struct DeviceTemplate<'a> {
 
 /// "XXXX-XXXX" per the UI spec's device screen -- CODE_LEN is 8, so the
 /// hyphen always lands in the middle.
-fn format_code_for_display(code: &str) -> String {
+pub(crate) fn format_code_for_display(code: &str) -> String {
     if code.len() == CODE_LEN {
         format!("{}-{}", &code[..CODE_LEN / 2], &code[CODE_LEN / 2..])
     } else {
@@ -235,7 +235,8 @@ pub async fn approve(
 
     let result = sqlx::query(
         "UPDATE login_codes SET user_id = $1, agent_name = $2, approved_at = now(), updated_at = now()
-         WHERE code = $3 AND approved_at IS NULL AND denied_at IS NULL AND expires_at > now()",
+         WHERE code = $3 AND purpose = 'agent' AND approved_at IS NULL AND denied_at IS NULL
+           AND expires_at > now()",
     )
     .bind(user.id)
     .bind(agent_name)
@@ -333,7 +334,10 @@ pub async fn poll_token(
             return Ok(Json(TokenResponse::Expired));
         };
         let row =
-            sqlx::query_as::<_, LoginCode>("SELECT * FROM login_codes WHERE id = $1 FOR UPDATE")
+            // Codes that link a computer for sync are redeemed in `sync`.
+            sqlx::query_as::<_, LoginCode>(
+                "SELECT * FROM login_codes WHERE id = $1 AND purpose = 'agent' FOR UPDATE",
+            )
                 .bind(id)
                 .fetch_optional(&mut *tx)
                 .await?;
@@ -346,7 +350,7 @@ pub async fn poll_token(
         let code = normalize_code(code);
         sqlx::query_as::<_, LoginCode>(
             "SELECT * FROM login_codes
-             WHERE code = $1 AND device_secret_hash IS NULL FOR UPDATE",
+             WHERE code = $1 AND device_secret_hash IS NULL AND purpose = 'agent' FOR UPDATE",
         )
         .bind(&code)
         .fetch_optional(&mut *tx)
