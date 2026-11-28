@@ -6,6 +6,25 @@ itself. **Nothing is built on the server.** GitHub builds the Docker image when
 a release is tagged and publishes it to `ghcr.io/azavibe/airobot`; the server
 only pulls it.
 
+## Quick install
+
+On a fresh Debian or Ubuntu server, logged in as root (an SSH app on your
+phone, such as Termius, or your provider's browser console works too):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/azavibe/airo-bot/main/deploy/install.sh | bash
+```
+
+It does steps 1, 3 and 4 below for you: Docker, the firewall (SSH, 80 and 443;
+it keeps whatever port SSH uses open), the files in `/opt/airobot`, and the
+settings. It makes the secrets on the server, where they stay (`.env`,
+readable by root only), and asks only for the domain and your mail service's
+SMTP settings. Point the domain at the server first (step 2). Running it again
+keeps the settings and updates to the newest release.
+
+You still do the rest of step 1 yourself: change the root password and switch
+to an SSH key.
+
 ## 1. Prepare the server
 
 Do this once, as root, on a fresh Debian or Ubuntu server.
@@ -71,7 +90,7 @@ to start without:
 
 ```sh
 docker compose pull          # needs a published release, see "Releases" below
-docker compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
+docker run --rm --env-file .env -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 caddy validate --config /etc/caddy/Caddyfile
 docker compose up -d
 docker compose logs -f app   # Ctrl-C to leave
 ```
