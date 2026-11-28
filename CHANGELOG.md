@@ -7,6 +7,8 @@ app and the desktop app share one version number. A release is tagged
 
 ## Unreleased
 
+## 0.8.0 — 2026-11-28
+
 ### Security
 - A board's page no longer lists the runs of other people's private
   workflows.
@@ -35,7 +37,8 @@ app and the desktop app share one version number. A release is tagged
   instead of one or two per card (88 down to 8 for 40 approvals).
 
 ### Added
-- **Run Airobot on your own server** with `deploy/`: a Compose file that
+- **Run Airobot on your own server** in one command
+  (`deploy/install.sh`, see `deploy/README.md`), or by hand with `deploy/`: a Compose file that
   pulls the published image (nothing is built on the server) with PostgreSQL
   and Caddy for automatic HTTPS, an example `.env`, and a guide covering DNS,
   setup, updates and backups.
