@@ -139,7 +139,9 @@ the server log. Released versions are also published as a Docker image:
 - Optional: an OpenRouter key for a shared AI, and OAuth apps for Google,
   Stripe and Shopify.
 
-Every setting is explained in [`.env.example`](.env.example).
+Every setting is explained in [`.env.example`](.env.example). For one small
+server with HTTPS, see [`deploy/`](deploy/README.md): a Compose file that pulls
+the published image (nothing is built on the server), Caddy, backups and updates.
 </details>
 
 ### 3. Airobot Cloud
