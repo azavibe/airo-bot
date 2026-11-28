@@ -4,6 +4,11 @@
 {$DOMAIN} {
 	encode zstd gzip
 
+	# Browsers that have seen this once only ever use HTTPS for a year. Not
+	# includeSubDomains or preload: other subdomains (mail, docs) may not
+	# have HTTPS, and those are hard to undo.
+	header Strict-Transport-Security "max-age=31536000"
+
 	reverse_proxy app:8080 {
 		# Live updates (server-sent events) must not be held back.
 		flush_interval -1

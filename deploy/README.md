@@ -84,6 +84,29 @@ admin**, so sign in yourself before telling anyone the address.
 If the certificate isn't issued, check `docker compose logs caddy`: nearly
 always the DNS record hasn't spread yet, or port 80/443 is blocked.
 
+## Secure connection
+
+What you get without extra setup:
+
+- **HTTPS everywhere.** Caddy gets a free Let's Encrypt certificate for the
+  domain, renews it by itself, speaks only modern TLS (1.2 and 1.3), and
+  redirects plain HTTP to HTTPS.
+- **HSTS.** Browsers that have visited once refuse to use plain HTTP for the
+  site for a year, so nobody can be downgraded on a café network.
+- **Secure sign-in cookies.** With `APP_BASE_URL` on `https://` (the production
+  setup enforces this) the session cookie is sent over HTTPS only, and the
+  server refuses to start otherwise.
+- **Secrets encrypted at rest** (`PROVIDER_KEY_SECRET`), sign-in secrets stored
+  only as hashes, and the database never reachable from outside the server.
+
+Check it after the first start: `curl -sI https://<your domain>` shows
+`HTTP/2 200` and a `strict-transport-security` line, and
+`curl -sI http://<your domain>` answers with a redirect to `https://`. For a
+fuller report, run the domain through <https://www.ssllabs.com/ssltest/>.
+
+Connecting to the server itself is secured by the SSH key and firewall in
+step 1; don't leave password login on.
+
 ## Releases
 
 Maintainers release by pushing a tag, `v<version>` (see `CHANGELOG.md`); GitHub
