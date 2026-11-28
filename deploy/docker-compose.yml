@@ -89,6 +89,9 @@ networks:
     ipam:
       config:
         - subnet: 172.30.0.0/24
+          # Docker picks other containers' addresses from here only, so
+          # Caddy's fixed 172.30.0.2 is never taken first.
+          ip_range: 172.30.0.128/25
 
 volumes:
   airobot_postgres_data:
