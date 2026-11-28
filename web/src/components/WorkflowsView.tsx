@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Procedure, Visibility } from '../types';
 import { timeAgo } from '../utils/format';
+import { HeaderButton, PageHeader } from './PageHeader';
 import {
   Play,
   CheckCircle2,
@@ -514,27 +515,14 @@ export const WorkflowsView: React.FC<WorkflowsViewProps> = ({
 
   return (
     <div className="w-full h-full flex flex-col justify-between overflow-hidden">
-      {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between gap-4 px-6 py-4 border-b border-white/[0.08] bg-black/20 backdrop-blur-md">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold text-white tracking-tight">Workflows</h1>
-            <p className="text-xs text-neutral-400 mt-0.5 hidden sm:block">
-              Step-by-step playbooks your bots follow. Each run teaches them to do it better.
-            </p>
-          </div>
-        </div>
-
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-accent text-accent-fg text-xs font-semibold hover:bg-accent/90 transition-all shadow-glow-white active:scale-95 flex-shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> New playbook
-        </button>
-      </div>
+      <PageHeader
+        title="Workflows"
+        description="Step-by-step playbooks your bots follow. Each run teaches them to do it better."
+        actions={<HeaderButton primary icon={<Plus className="w-3.5 h-3.5 stroke-[2.5]" />} label="New playbook" onClick={openCreate} />}
+      />
 
       {/* Main 2-Column Split Content */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-12 gap-5 p-6 overflow-hidden">
+      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-12 gap-5 p-4 sm:p-6 overflow-hidden">
         {/* Left Column: list */}
         <div className="col-span-12 md:col-span-5 h-full min-h-0 overflow-y-auto space-y-3 pr-1">
           {procedures.length > 0 && (

@@ -132,7 +132,6 @@ const words: Dictionary = {
   "Questions, writing, plans or code. No setup needed.": "Perguntas, textos, planos ou código. Sem configuração.",
   "No messages yet": "Ainda não há mensagens",
   "Ask your bots below to research leads, schedule videos, generate invoices, or review proposals.": "Peça abaixo aos seus bots para pesquisar leads, agendar vídeos, gerar faturas ou revisar propostas.",
-  "Open rooms": "Abrir salas",
   "{bot} answers with {model}. Change it in its settings.": "{bot} responde com {model}. Mude nas configurações dele.",
   "The bots of this office": "Os bots deste escritório",
   "1 bot": "1 bot",

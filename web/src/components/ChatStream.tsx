@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ArrowLeft, Zap, X, Play, Square } from 'lucide-react';
+import { Zap, X, Play, Square } from 'lucide-react';
+import { MobileMenuButton } from './PageHeader';
 import { Thread, Note, Agent, NoteAction, OfficeApp } from '../types';
 import { AppRecordCard } from './AppRecordCard';
 import { formatCredits, roomName } from '../utils/format';
@@ -76,7 +77,6 @@ interface ChatStreamProps {
   /** The office's name, for its group chat (which has no room name of its own). */
   officeName?: string;
   notes: Note[];
-  onBackMobile?: () => void;
   /** The bots answering in this room, with the AI each one uses. */
   roomBots?: { agent: Agent; model: string }[];
   /** Opens a bot's settings (name, character, AI). */
@@ -116,7 +116,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
   thread,
   officeName,
   notes,
-  onBackMobile,
   roomBots = [],
   onOpenBot,
   onAction,
@@ -235,17 +234,9 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
     <div className="w-full h-full flex flex-col justify-between relative overflow-hidden select-none">
       {contextMenu.menu}
       {/* Room header: the room, and who answers here with which AI */}
-      <div className="panel-header justify-between gap-3 px-5 border-b border-white/[0.08]">
-        <div className="flex items-center gap-2 min-w-0">
-          {onBackMobile && (
-            <button
-              onClick={onBackMobile}
-              aria-label={t('Open rooms')}
-              className="md:hidden -ml-1 text-neutral-400 hover:text-white p-1 rounded-full hover:bg-white/10"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-          )}
+      <div className="panel-header justify-between gap-2 sm:gap-3 px-4 sm:px-5 border-b border-white/[0.08]">
+        <div className="flex items-center gap-2 min-w-0 flex-shrink-0 max-w-[45%]">
+          <MobileMenuButton />
           {thread && !isGroup && roomBots.length > 0 && (
             <span className="flex -space-x-1.5 flex-shrink-0" aria-hidden="true">
               {roomBots.slice(0, 3).map(({ agent }) => (
@@ -300,8 +291,9 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                 }`}
               >
                 {spend.reached && <span className="w-1.5 h-1.5 rounded-full bg-red-400" aria-hidden="true" />}
+                <Zap className="w-3 h-3 text-neutral-500 sm:hidden" aria-hidden="true" />
                 <span className="font-medium">{formatCredits(spend.spent)}</span>
-                <span className="text-neutral-500">
+                <span className="text-neutral-500 hidden sm:inline">
                   {spend.cap ? t('/ {cap} this month', { cap: formatCredits(spend.cap) }) : t('credits this month')}
                 </span>
                 {spend.reached && <span className="sr-only">{t('Cap reached')}</span>}
@@ -320,7 +312,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
                 }`}
               >
                 {paused ? <Play className="w-3 h-3 fill-current" /> : <Square className="w-2.5 h-2.5 fill-current" />}
-                {paused ? t('Run') : t('Stop')}
+                <span className="hidden sm:inline">{paused ? t('Run') : t('Stop')}</span>
               </button>
             )}
           </div>

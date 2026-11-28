@@ -7,6 +7,14 @@ app and the desktop app share one version number. A release is tagged
 
 ## Unreleased
 
+### Changed
+- Phones and computers show the same design. Every page (Approvals, Apps,
+  Bots, Contacts, Workflows, Settings) has the same header, and on a phone a
+  menu button at its left opens the full sidebar, as does one in the chat.
+  Header buttons fit on a phone screen: secondary ones show only their icon,
+  and the chat's credits and Stop buttons get shorter. Settings tabs wrap
+  instead of being cut off.
+
 ## 0.8.0 — 2026-11-28
 
 ### Security

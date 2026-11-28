@@ -4,6 +4,7 @@ import { timeAgo } from '../utils/format';
 import { BotAvatar } from './BotAvatar';
 import { ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react';
 import { useT } from '../i18n';
+import { PageHeader } from './PageHeader';
 
 interface ApprovalsViewProps {
   approvals: Approval[];
@@ -31,22 +32,19 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({ approvals, onDecid
 
   return (
     <div className="w-full h-full flex flex-col justify-between overflow-hidden select-none">
-      {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between gap-4 px-6 py-4 border-b border-white/[0.08] bg-black/20 backdrop-blur-md">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold text-white tracking-tight">{t('Approvals')}</h1>
-          <p className="text-xs text-neutral-400 mt-0.5">
-            {t('Agents ask here before costly actions, public posts, or messages to clients.')}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-neutral-300 flex-shrink-0">
-          <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-          <span>{t('{n} waiting', { n: pending.length })}</span>
-        </div>
-      </div>
+      <PageHeader
+        title={t('Approvals')}
+        description={t('Agents ask here before costly actions, public posts, or messages to clients.')}
+        actions={
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-neutral-300">
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+            <span>{t('{n} waiting', { n: pending.length })}</span>
+          </div>
+        }
+      />
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-5">
         {pending.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 text-neutral-500">
             <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-3 text-emerald-400">

@@ -18,6 +18,7 @@ import type { OfficeSetup } from './components/OnboardModal';
 import { botModelLabel, roomName } from './utils/format';
 import { Bell, X, Check } from 'lucide-react';
 import { startUpdateChecks } from './state/updates';
+import { MobileNavContext } from './components/PageHeader';
 import { Theme, applyTheme, cacheTheme, loadCachedTheme, normalizeTheme, reapplyTheme, watchSystemMode, DEFAULT_THEME } from './utils/theme';
 import { VoiceSettings, loadVoiceSettings, speak } from './utils/voice';
 import {
@@ -131,6 +132,7 @@ export const App: React.FC = () => {
   // Navigation State
   const [activeTab, setActiveTab] = useState<Tab>(() => tabFromPath(window.location.pathname));
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const openMobileNav = useCallback(() => setIsMobileSidebarOpen(true), []);
   const [inDesktopApp] = useState(isDesktopApp);
   // The desktop window is an app, not a web page: right-click never shows
   // the webview's Back / Reload / Save as menu. Text fields and selected
@@ -1390,6 +1392,7 @@ export const App: React.FC = () => {
 
   return (
     <RecordsProvider officeId={isGuest ? null : appsOfficeId} onRecordEvent={onRecordEvent}>
+    <MobileNavContext.Provider value={openMobileNav}>
     <div
       className={`w-screen h-screen bg-transparent text-white flex flex-col overflow-hidden select-none p-3 md:p-4 box-border ${
         inDesktopApp ? '!pt-0' : ''
@@ -1491,7 +1494,6 @@ export const App: React.FC = () => {
                   thread={activeThread}
                   officeName={activeThread?.kind === 'office' ? activeOffice?.name : undefined}
                   notes={notes}
-                  onBackMobile={() => setIsMobileSidebarOpen(true)}
                   roomBots={roomBots}
                   onOpenBot={isGuest ? undefined : openBot}
                   onAction={isGuest ? undefined : handleNoteAction}
@@ -1721,12 +1723,13 @@ export const App: React.FC = () => {
       {/* Mobile Drawer */}
       {isMobileSidebarOpen && (
         <div
-          className="fixed inset-0 z-50 md:hidden bg-black/70 backdrop-blur-md"
+          className="fixed inset-0 z-50 md:hidden bg-black/70 backdrop-blur-md p-3"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsMobileSidebarOpen(false);
           }}
         >
-          <div className="w-4/5 max-w-xs h-full glass-panel border-r border-white/20">
+          {/* The same panel as the desktop sidebar, inset from the edges. */}
+          <div className="w-[85%] max-w-xs h-full glass-panel overflow-hidden flex flex-col">
             <Sidebar
               {...sidebarProps}
               onOpenOffice={openOffice}
@@ -1969,6 +1972,7 @@ export const App: React.FC = () => {
 
 
     </div>
+    </MobileNavContext.Provider>
     </RecordsProvider>
   );
 };
