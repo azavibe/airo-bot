@@ -207,7 +207,7 @@ export const ServerDrivenAppRenderer: React.FC<ServerDrivenAppRendererProps> = (
       {/* App Header & Navigation */}
       {/* relative z-20: the blur makes the header its own layer; without a
           z-index the cards below painted over the app picker's list. */}
-      <div className="relative z-20 flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 border-b border-white/[0.08] bg-black/20 backdrop-blur-md">
+      <div className="relative z-20 flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 px-4 sm:px-6 py-3 sm:py-4 border-b border-white/[0.08] bg-black/20 backdrop-blur-md">
         {headerLeft ?? (
           <div>
             <h1 className="text-xl font-bold text-white tracking-tight">{appTitle}</h1>

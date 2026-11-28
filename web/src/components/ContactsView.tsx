@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Search, Plus, Users, Trash2, Download, Loader2 } from 'lucide-react';
+import { Search, Plus, Trash2, Download, Loader2 } from 'lucide-react';
 import { Office } from '../types';
 import { recordTitle } from '../utils/format';
+import { HeaderButton, PageHeader } from './PageHeader';
 
 // The office's contacts: one per person or customer, linked from its
 // leads, invoices, bookings and tickets. Bots add contacts when the records
@@ -365,35 +366,34 @@ export const ContactsView: React.FC<{ office: Office | null; bottomDock?: React.
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
-      <div className="panel-header justify-between gap-3 px-5 border-b border-white/[0.08]">
-        <div className="flex items-center gap-2 min-w-0">
-          <Users className="w-4 h-4 text-neutral-400" />
-          <h1 className="text-[15px] font-semibold text-white truncate">Contacts</h1>
-          <span className="text-[12px] text-neutral-500 truncate">
+      <PageHeader
+        title="Contacts"
+        meta={
+          <>
             {office?.name}
             {contacts ? ` · ${total}` : ''}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={importStripe}
-            disabled={busy || !office}
-            title="Add your Stripe customers (connected under Settings → Connections)"
-            className="h-7 px-2.5 rounded-full border border-white/10 text-[11.5px] text-neutral-300 hover:text-white flex items-center gap-1.5 disabled:opacity-40"
-          >
-            <Download className="w-3 h-3" /> Import from Stripe
-          </button>
-          <button
-            type="button"
-            onClick={() => setAdding((v) => !v)}
-            disabled={!office}
-            className="h-7 px-2.5 rounded-full bg-accent text-accent-fg text-[11.5px] font-semibold flex items-center gap-1 disabled:opacity-40"
-          >
-            <Plus className="w-3 h-3" /> New contact
-          </button>
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <HeaderButton
+              compact
+              icon={<Download className="w-3.5 h-3.5" />}
+              label="Import from Stripe"
+              title="Add your Stripe customers (connected under Settings → Connections)"
+              onClick={importStripe}
+              disabled={busy || !office}
+            />
+            <HeaderButton
+              primary
+              icon={<Plus className="w-3.5 h-3.5 stroke-[2.5]" />}
+              label="New contact"
+              onClick={() => setAdding((v) => !v)}
+              disabled={!office}
+            />
+          </>
+        }
+      />
       {notice && <div className="px-5 py-2 text-[12px] text-neutral-300 border-b border-white/10">{notice}</div>}
       <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[minmax(240px,340px)_1fr]">
         <div className="min-h-0 flex flex-col border-r border-white/[0.06]">

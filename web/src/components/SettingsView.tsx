@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Office, Thread, UserProfile } from '../types';
 import type { SettingsSection } from './settingsPaths';
 import { AppearancePanel } from './AppearancePanel';
+import { PageHeader } from './PageHeader';
 import { Theme } from '../utils/theme';
 import { VoicePanel } from './VoicePanel';
 import { VoiceSettings } from '../utils/voice';
@@ -303,12 +304,11 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
 
   return (
     <div className="w-full h-full flex flex-col justify-between overflow-hidden">
-      <div className="flex-shrink-0 px-6 pt-4 pb-3 border-b border-white/[0.08] bg-black/20 backdrop-blur-md space-y-3">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">{t('Settings')}</h1>
-          <p className="text-xs text-neutral-400 mt-0.5">{t('Your account, how the app looks and sounds, and the tools it connects to.')}</p>
-        </div>
-        <div className="flex gap-1 overflow-x-auto" role="tablist">
+      <PageHeader
+        title={t('Settings')}
+        description={t('Your account, how the app looks and sounds, and the tools it connects to.')}
+      >
+        <div className="flex flex-wrap gap-1" role="tablist">
           {sections.map(([id, label]) => (
             <button
               key={id}
@@ -323,9 +323,9 @@ export const SettingsView: React.FC<SettingsViewProps> = (props) => {
             </button>
           ))}
         </div>
-      </div>
+      </PageHeader>
 
-      <div className={`flex-1 min-h-0 ${shown === 'admin' ? '' : 'overflow-y-auto p-6'}`}>
+      <div className={`flex-1 min-h-0 ${shown === 'admin' ? '' : 'overflow-y-auto p-4 sm:p-6'}`}>
         {shown === 'account' && (
           <div className="space-y-5">
             {(userProfile?.local_mode || !!(window as any).__TAURI__) && <UpdatesCard />}

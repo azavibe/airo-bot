@@ -132,7 +132,6 @@ const words: Dictionary = {
   "Questions, writing, plans or code. No setup needed.": "Вопросы, тексты, планы или код. Ничего настраивать не нужно.",
   "No messages yet": "Сообщений пока нет",
   "Ask your bots below to research leads, schedule videos, generate invoices, or review proposals.": "Попросите ботов ниже найти лидов, запланировать видео, выставить счета или проверить предложения.",
-  "Open rooms": "Открыть комнаты",
   "{bot} answers with {model}. Change it in its settings.": "{bot} отвечает через {model}. Изменить можно в его настройках.",
   "The bots of this office": "Боты этого офиса",
   "1 bot": "1 бот",

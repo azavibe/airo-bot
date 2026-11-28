@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Agent, Office, WorkspaceWallet } from '../types';
 import { Zap, Copy, Check, Plus, Search, ArrowLeft, Building2, Cpu, Bot as BotIcon } from 'lucide-react';
 import { BotAvatar } from './BotAvatar';
+import { HeaderButton, PageHeader } from './PageHeader';
 import { RowMenu, RowMenuItem, useContextMenu } from './RowMenu';
 import { agentStatus, botModelLabel, formatCredits, statusToneClass } from '../utils/format';
 
@@ -271,24 +272,17 @@ export const BotsView: React.FC<BotsViewProps> = ({
   return (
     <div className="w-full h-full flex flex-col justify-between overflow-hidden">
       {contextMenu.menu}
-      {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between gap-4 px-6 py-4 border-b border-white/[0.08] bg-black/20 backdrop-blur-md">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold text-white tracking-tight">Bots</h1>
-          <p className="text-xs text-neutral-400 mt-0.5 hidden sm:block">The bots that run your offices: who they are, what they use and what they spend.</p>
-        </div>
-        {onNewBot && !isGuest && (
-          <button
-            onClick={onNewBot}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-accent text-accent-fg text-xs font-semibold hover:bg-accent/90 transition-all shadow-glow-white active:scale-95 flex-shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> New bot
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="Bots"
+        description="The bots that run your offices: who they are, what they use and what they spend."
+        actions={
+          onNewBot &&
+          !isGuest && <HeaderButton primary icon={<Plus className="w-3.5 h-3.5 stroke-[2.5]" />} label="New bot" onClick={onNewBot} />
+        }
+      />
 
       {/* List and the chosen bot, like Workflows */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-12 gap-5 p-6 overflow-hidden">
+      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-12 gap-5 p-4 sm:p-6 overflow-hidden">
         <div className={`col-span-12 md:col-span-5 h-full min-h-0 overflow-y-auto pr-1 ${showingDetail ? 'hidden md:block' : ''}`}>
           {list}
         </div>

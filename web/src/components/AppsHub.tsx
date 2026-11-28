@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { OfficeApp, OfficeRecord } from '../types';
 import { ServerDrivenAppRenderer } from './ServerDrivenAppRenderer';
 import { RowMenu } from './RowMenu';
+import { HeaderButton, MobileMenuButton, PageHeader } from './PageHeader';
 import {
   Layers,
   Video,
@@ -118,30 +119,14 @@ export const AppsHub: React.FC<AppsHubProps> = ({
   if (apps.length === 0) {
     return (
       <div className="w-full h-full flex flex-col justify-between overflow-hidden select-none">
-        {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between gap-4 px-6 py-4 border-b border-white/[0.08] bg-black/20 backdrop-blur-md">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center text-white">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-white tracking-tight">Apps</h1>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                Pick a ready-made app to replace a paid tool, or set up your whole office at once.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={onOpenOnboard}
-            className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full bg-accent text-accent-fg text-xs font-semibold hover:bg-accent/90 transition-all shadow-glow-white active:scale-95"
-          >
-            Set up office
-          </button>
-        </div>
+        <PageHeader
+          title="Apps"
+          description="Pick a ready-made app to replace a paid tool, or set up your whole office at once."
+          actions={<HeaderButton primary icon={<Layers className="w-3.5 h-3.5" />} label="Set up office" onClick={onOpenOnboard} />}
+        />
 
         {/* Scrollable Catalog Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6">
           {archivedList && <div className="glass-card py-1 border-white/10">{archivedList}</div>}
           <div className="text-xs text-neutral-400 bg-white/[0.03] border border-white/5 rounded-2xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -278,15 +263,16 @@ export const AppsHub: React.FC<AppsHubProps> = ({
   // If apps exist: one header with the app picker, Design and Add, then the
   // active app. A picker instead of a row of tabs keeps working with many apps.
   const picker = (
-    <div className="relative">
+    <div className="relative flex items-center gap-2 min-w-0">
+      <MobileMenuButton />
       <button
         onClick={() => setPickerOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={pickerOpen}
-        className="flex items-center gap-2 text-left rounded-xl px-2 py-1 -ml-2 hover:bg-white/[0.05] transition-colors"
+        className="flex items-center gap-2 min-w-0 text-left rounded-xl px-2 py-1 -ml-2 hover:bg-white/[0.05] transition-colors"
       >
         <span>
-          <span className="block text-xl font-bold text-white tracking-tight">{activeApp?.title}</span>
+          <span className="block text-lg sm:text-xl font-bold text-white tracking-tight truncate">{activeApp?.title}</span>
           <span className="block text-xs text-neutral-400 mt-0.5">
             {officeName ? `${officeName} · ` : ''}
             {apps.length} {apps.length === 1 ? 'app' : 'apps'}
