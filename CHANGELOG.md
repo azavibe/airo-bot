@@ -35,6 +35,15 @@ app and the desktop app share one version number. A release is tagged
   instead of one or two per card (88 down to 8 for 40 approvals).
 
 ### Added
+- **WhatsApp for an office**, on Meta's official WhatsApp Business Cloud API:
+  Edit office → Channels → WhatsApp. Customers write to your business
+  number and a Receptionist bot answers them in your office's language,
+  books appointments and takes leads into your apps, adds them to Contacts,
+  and hands over to you when they ask. Every conversation shows in the
+  office's WhatsApp room, where you can answer a customer yourself by
+  starting with their number (`+15551234567 See you at 3!`), or turn the
+  bot off and answer everyone yourself. Needs Airobot on a server Meta can
+  reach (not the desktop app).
 - **Check for updates** in the desktop app: it checks at start and every 6
   hours, and when a new version is out a green "Update to x.y.z" button
   appears in the title bar and in Settings → Account. It downloads the
@@ -81,6 +90,8 @@ app and the desktop app share one version number. A release is tagged
   Phone calls room, and the office chat gets a line when each call ends.
 
 ### Fixed
+- The phone receptionist no longer reads out the "Added 1 to Appointments"
+  note meant for the office.
 - A workflow step's result sent twice (an agent retrying after a timeout)
   no longer posts a second result or moves the run on twice.
 - With more than one office, the task list could show the tasks of an office

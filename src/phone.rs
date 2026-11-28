@@ -772,7 +772,8 @@ async fn answer(
     // Bookings and messages it took go into the office's apps.
     let (text, _, cards) =
         crate::office::context::apply_records(pool, line.thread_id, line.agent_id, &text).await;
-    let say: String = text
+    // The caller hears the reply, not the "Added ..." line for the office.
+    let say: String = crate::office::context::customer_text(&text)
         .replace(['*', '#', '_', '`'], "")
         .split_whitespace()
         .collect::<Vec<_>>()

@@ -20,6 +20,7 @@ pub mod slack;
 pub mod state;
 pub mod telegram;
 pub mod web;
+pub mod whatsapp;
 
 use axum::extract::DefaultBodyLimit;
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
@@ -647,6 +648,18 @@ pub fn app(state: AppState) -> Router {
         .route("/phone/{office}/voice", post(phone::voice))
         .route("/phone/{office}/turn", post(phone::turn))
         .route("/phone/{office}/status", post(phone::status_callback))
+        .route(
+            "/api/offices/{id}/whatsapp",
+            get(whatsapp::status).post(whatsapp::connect),
+        )
+        .route(
+            "/api/offices/{id}/whatsapp/delete",
+            post(whatsapp::disconnect),
+        )
+        .route(
+            "/whatsapp/{office}/webhook",
+            get(whatsapp::verify).post(whatsapp::webhook),
+        )
         .route(
             "/api/offices/{id}/telegram/delete",
             post(telegram::disconnect),

@@ -9,6 +9,7 @@ import { TeamPanel } from './TeamPanel';
 import { TelegramPanel } from './TelegramPanel';
 import { SlackPanel } from './SlackPanel';
 import { PhonePanel } from './PhonePanel';
+import { WhatsAppPanel } from './WhatsAppPanel';
 
 // The office settings dialog: its details, memory, goal, team, documents
 // and outside channels. Kept apart from the small dialogs so it loads only
@@ -345,7 +346,7 @@ export const EditOfficeDialog: React.FC<{
       {tab === 'team' ? (
         <TeamPanel officeId={officeId} onLeft={onLeft} />
       ) : tab === 'chat_apps' ? (
-        // Telegram, Slack and the phone: reaching the office from outside.
+        // Telegram, Slack, the phone and WhatsApp: reaching the office from outside.
         <div className="space-y-5">
           <section className="space-y-2" aria-label="Telegram">
             <h3 className="text-[13px] font-semibold text-white">Telegram</h3>
@@ -358,6 +359,10 @@ export const EditOfficeDialog: React.FC<{
           <section className="space-y-2 pt-4 border-t border-white/10" aria-label={t('Phone')}>
             <h3 className="text-[13px] font-semibold text-white">{t('Phone')}</h3>
             <PhonePanel officeId={officeId} />
+          </section>
+          <section className="space-y-2 pt-4 border-t border-white/10" aria-label="WhatsApp">
+            <h3 className="text-[13px] font-semibold text-white">WhatsApp</h3>
+            <WhatsAppPanel officeId={officeId} />
           </section>
         </div>
       ) : tab === 'goal' ? (

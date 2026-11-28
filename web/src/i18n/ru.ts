@@ -341,7 +341,24 @@ const words: Dictionary = {
   "Online": "В сети",
   "Needs AI": "Нужен ИИ",
   "Ready": "Готов",
-  "just now": "только что"
+  "just now": "только что",
+  "WhatsApp needs Airobot on a server Meta can reach.": "Для WhatsApp нужен Airobot на сервере, доступном для Meta.",
+  "Customers write to your WhatsApp business number and a Receptionist bot answers: it takes bookings and leads into your apps, adds people to Contacts, and hands over to you when they ask.": "Клиенты пишут на ваш номер WhatsApp Business, и отвечает бот-администратор: он записывает брони и заявки в ваши приложения, добавляет людей в контакты и передаёт разговор вам, когда об этом просят.",
+  "In Meta for Developers, make an app with WhatsApp and add your business number.": "В Meta for Developers создайте приложение с WhatsApp и добавьте номер вашей компании.",
+  "Paste the number’s Phone number ID, a permanent access token and the app secret.": "Вставьте ID номера телефона, постоянный токен доступа и секрет приложения.",
+  "Phone number ID": "ID номера телефона",
+  "Access token": "Токен доступа",
+  "App secret": "Секрет приложения",
+  "The token and secret are stored encrypted. Each answer uses a few credits.": "Токен и секрет хранятся в зашифрованном виде. Каждый ответ стоит несколько кредитов.",
+  "Answering {number}. Conversations show in the WhatsApp room.": "Отвечаем на {number}. Разговоры видны в комнате WhatsApp.",
+  "In your Meta app’s WhatsApp settings, set the webhook to this address and verify token, and subscribe to messages:": "В настройках WhatsApp вашего приложения Meta укажите для вебхука этот адрес и токен подтверждения и подпишитесь на сообщения:",
+  "Callback URL": "URL обратного вызова",
+  "Verify token": "Токен подтверждения",
+  "The Receptionist answers customers": "Администратор отвечает клиентам",
+  "Off: messages still arrive in the WhatsApp room, and you answer them.": "Выключено: сообщения по-прежнему приходят в комнату WhatsApp, а отвечаете вы.",
+  "To answer a customer yourself, write in the WhatsApp room starting with their number, like +15551234567 Thanks!": "Чтобы ответить клиенту самому, напишите в комнате WhatsApp, начав с его номера, например +15551234567 Спасибо!",
+  "Recent conversations": "Недавние разговоры",
+  "{n} messages": "{n} сообщений"
 };
 
 export default words;

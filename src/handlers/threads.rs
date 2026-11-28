@@ -956,6 +956,11 @@ pub(crate) async fn post_and_answer(
         // Bots answer on the owner's account (their AI, keys and credits),
         // whoever in the office wrote.
         if let Caller::User(_) = caller {
+            // In an office's WhatsApp room, `+<number> <text>` goes to that
+            // customer instead of to the room's bot.
+            if crate::whatsapp::on_person_message(state, thread, text).await {
+                return Ok((note, created));
+            }
             let owner = thread.user_id;
             match (thread.kind.as_str(), thread.workspace_id) {
                 // The office group chat: the Architect (or an @mentioned
