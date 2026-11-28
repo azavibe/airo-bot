@@ -133,6 +133,14 @@ if ! docker compose pull; then
 fi
 docker run --rm -e DOMAIN="$domain" -v "$DIR/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 \
 	caddy validate --config /etc/caddy/Caddyfile >/dev/null
+# An install from before Caddy's address was reserved has the old network;
+# rebuild it (only the containers and network go: the data stays).
+if docker network inspect airobot_airobot >/dev/null 2>&1; then
+	ip_range=$(docker network inspect airobot_airobot --format '{{range .IPAM.Config}}{{.IPRange}}{{end}}')
+	if [ "$ip_range" != "172.30.0.128/25" ]; then
+		docker compose down
+	fi
+fi
 docker compose up -d
 
 echo "Waiting for Airobot to answer..."
