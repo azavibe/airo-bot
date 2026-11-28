@@ -358,7 +358,29 @@ const words: Dictionary = {
   "Off: messages still arrive in the WhatsApp room, and you answer them.": "Выключено: сообщения по-прежнему приходят в комнату WhatsApp, а отвечаете вы.",
   "To answer a customer yourself, write in the WhatsApp room starting with their number, like +15551234567 Thanks!": "Чтобы ответить клиенту самому, напишите в комнате WhatsApp, начав с его номера, например +15551234567 Спасибо!",
   "Recent conversations": "Недавние разговоры",
-  "{n} messages": "{n} сообщений"
+  "{n} messages": "{n} сообщений",
+  "Airobot address": "Адрес Airobot",
+  "Allow “{name}” ({code}) to sync your offices?": "Разрешить «{name}» ({code}) синхронизировать ваши офисы?",
+  "Allow": "Разрешить",
+  "Allowed. The computer starts syncing in a moment.": "Разрешено. Компьютер начнёт синхронизацию через минуту.",
+  "Computers that sync": "Синхронизируемые компьютеры",
+  "Desktop app": "Приложение для компьютера",
+  "Don’t allow": "Не разрешать",
+  "It keeps a copy of your offices, rooms, messages, bots, apps, contacts, memory and documents, and sends its changes here.": "Он хранит копию ваших офисов, комнат, сообщений, ботов, приложений, контактов, памяти и документов и отправляет сюда свои изменения.",
+  "Keep this computer’s offices the same as in your Airobot Cloud account, to use them from your phone and the web. Your AI tool settings and keys stay on this computer.": "Держите офисы этого компьютера такими же, как в вашем аккаунте Airobot Cloud, чтобы пользоваться ими с телефона и в браузере. Настройки вашего ИИ-инструмента и ключи остаются на этом компьютере.",
+  "Last synced {when}.": "Последняя синхронизация {when}.",
+  "Link this computer": "Связать этот компьютер",
+  "Not allowed.": "Не разрешено.",
+  "Not synced yet.": "Ещё не синхронизировано.",
+  "Offices, rooms, messages, bots, apps, contacts, memory and documents stay the same here and in the cloud. The cloud runs the morning plan and reports. Your AI tool settings and keys stay on this computer.": "Офисы, комнаты, сообщения, боты, приложения, контакты, память и документы одинаковы здесь и в облаке. Облако составляет утренний план и отчёты. Настройки вашего ИИ-инструмента и ключи остаются на этом компьютере.",
+  "Open Airobot Cloud": "Открыть Airobot Cloud",
+  "Open Airobot Cloud, sign in, and allow this computer. Its code is {code}.": "Откройте Airobot Cloud, войдите и разрешите этот компьютер. Его код: {code}.",
+  "Stop syncing": "Остановить синхронизацию",
+  "Sync now": "Синхронизировать сейчас",
+  "Sync with Airobot Cloud": "Синхронизация с Airobot Cloud",
+  "Synced with {address} as @{handle}.": "Синхронизировано с {address} как @{handle}.",
+  "That code expired. Start again on the computer.": "Код истёк. Начните заново на компьютере.",
+  "Waiting…": "Ожидание…"
 };
 
 export default words;

@@ -175,6 +175,7 @@ pub async fn serve(
     tokio::spawn(crate::office::daily::run_daily_plan_loop(state.clone()));
     tokio::spawn(crate::telegram::run_loop(state.clone()));
     tokio::spawn(crate::slack::run_loop(state.clone()));
+    tokio::spawn(crate::sync::run_loop(state.clone()));
     axum::serve(
         listener,
         crate::app(state).into_make_service_with_connect_info::<SocketAddr>(),

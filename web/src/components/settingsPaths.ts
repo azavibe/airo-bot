@@ -19,3 +19,6 @@ export const settingsSectionFromPath = (path: string): SettingsSection => {
   if (path.startsWith('/settings/voice')) return 'voice';
   return 'account';
 };
+
+/** Where a computer's sync code waits while the person signs in (issue #28). */
+export const SYNC_CODE_KEY = 'airobot.syncCode';

@@ -18,6 +18,7 @@ pub mod push;
 pub mod rate_limit;
 pub mod slack;
 pub mod state;
+pub mod sync;
 pub mod telegram;
 pub mod web;
 pub mod whatsapp;
@@ -660,6 +661,29 @@ pub fn app(state: AppState) -> Router {
             "/whatsapp/{office}/webhook",
             get(whatsapp::verify).post(whatsapp::webhook),
         )
+        // Desktop and cloud sync (issue #28): the cloud's side...
+        .route(
+            "/api/sync",
+            post(sync::exchange).layer(DefaultBodyLimit::max(sync::BODY_LIMIT)),
+        )
+        .route(
+            "/api/sync/link",
+            get(sync::show_link).post(sync::create_link),
+        )
+        .route("/api/sync/link/approve", post(sync::approve_link))
+        .route("/api/sync/link/deny", post(sync::deny_link))
+        .route("/api/sync/link/token", post(sync::link_token))
+        .route("/api/sync/computers", get(sync::computers))
+        .route(
+            "/api/sync/computers/{id}/revoke",
+            post(sync::revoke_computer),
+        )
+        .route("/api/sync/revoke", post(sync::revoke_own_key))
+        // ...and the desktop's.
+        .route("/api/sync/status", get(sync::status))
+        .route("/api/sync/connect", post(sync::connect))
+        .route("/api/sync/now", post(sync::sync_now))
+        .route("/api/sync/disconnect", post(sync::disconnect))
         .route(
             "/api/offices/{id}/telegram/delete",
             post(telegram::disconnect),

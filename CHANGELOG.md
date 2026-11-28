@@ -35,6 +35,15 @@ app and the desktop app share one version number. A release is tagged
   instead of one or two per card (88 down to 8 for 40 approvals).
 
 ### Added
+- **Sync the desktop app with Airobot Cloud** (issue #28): Settings → Account
+  → Sync with Airobot Cloud on the desktop, then **Allow** in the cloud's
+  Settings. Offices, rooms, messages, bots, apps and records, contacts,
+  memory and documents stay the same on your computer and in the cloud
+  (and so on your phone), every minute or with **Sync now**. The newest
+  edit wins, messages are only ever added, and your AI tool settings and
+  keys never leave the computer. The cloud runs the morning plan and
+  reports while the computer is linked. Linked computers are listed, and
+  can be removed, in the cloud's Settings → Account.
 - **WhatsApp for an office**, on Meta's official WhatsApp Business Cloud API:
   Edit office → Channels → WhatsApp. Customers write to your business
   number and a Receptionist bot answers them in your office's language,

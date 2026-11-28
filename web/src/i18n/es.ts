@@ -358,7 +358,29 @@ const words: Dictionary = {
   "Off: messages still arrive in the WhatsApp room, and you answer them.": "Desactivado: los mensajes siguen llegando a la sala de WhatsApp y los respondes tú.",
   "To answer a customer yourself, write in the WhatsApp room starting with their number, like +15551234567 Thanks!": "Para responder tú a un cliente, escribe en la sala de WhatsApp empezando por su número, por ejemplo +15551234567 ¡Gracias!",
   "Recent conversations": "Conversaciones recientes",
-  "{n} messages": "{n} mensajes"
+  "{n} messages": "{n} mensajes",
+  "Airobot address": "Dirección de Airobot",
+  "Allow “{name}” ({code}) to sync your offices?": "¿Permitir que «{name}» ({code}) sincronice tus oficinas?",
+  "Allow": "Permitir",
+  "Allowed. The computer starts syncing in a moment.": "Permitido. El ordenador empieza a sincronizar en un momento.",
+  "Computers that sync": "Ordenadores que sincronizan",
+  "Desktop app": "App de escritorio",
+  "Don’t allow": "No permitir",
+  "It keeps a copy of your offices, rooms, messages, bots, apps, contacts, memory and documents, and sends its changes here.": "Guarda una copia de tus oficinas, salas, mensajes, bots, apps, contactos, memoria y documentos, y envía sus cambios aquí.",
+  "Keep this computer’s offices the same as in your Airobot Cloud account, to use them from your phone and the web. Your AI tool settings and keys stay on this computer.": "Mantén las oficinas de este ordenador igual que en tu cuenta de Airobot Cloud, para usarlas desde el móvil y la web. Los ajustes de tu herramienta de IA y tus claves se quedan en este ordenador.",
+  "Last synced {when}.": "Última sincronización {when}.",
+  "Link this computer": "Vincular este ordenador",
+  "Not allowed.": "No permitido.",
+  "Not synced yet.": "Aún sin sincronizar.",
+  "Offices, rooms, messages, bots, apps, contacts, memory and documents stay the same here and in the cloud. The cloud runs the morning plan and reports. Your AI tool settings and keys stay on this computer.": "Las oficinas, salas, mensajes, bots, apps, contactos, memoria y documentos son los mismos aquí y en la nube. La nube hace el plan de la mañana y los informes. Los ajustes de tu herramienta de IA y tus claves se quedan en este ordenador.",
+  "Open Airobot Cloud": "Abrir Airobot Cloud",
+  "Open Airobot Cloud, sign in, and allow this computer. Its code is {code}.": "Abre Airobot Cloud, inicia sesión y permite este ordenador. Su código es {code}.",
+  "Stop syncing": "Dejar de sincronizar",
+  "Sync now": "Sincronizar ahora",
+  "Sync with Airobot Cloud": "Sincronizar con Airobot Cloud",
+  "Synced with {address} as @{handle}.": "Sincronizado con {address} como @{handle}.",
+  "That code expired. Start again on the computer.": "Ese código caducó. Empieza de nuevo en el ordenador.",
+  "Waiting…": "Esperando…"
 };
 
 export default words;
