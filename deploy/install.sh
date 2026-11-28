@@ -84,12 +84,27 @@ else
 	echo
 	echo "Sign-in links are sent by email, so Airobot needs a mail service"
 	echo "(Resend, Postmark, Amazon SES, ...). Its SMTP settings:"
-	ask smtp_host "SMTP host (e.g. smtp.resend.com)"
-	[ -n "$smtp_host" ] || fail "an SMTP host is needed; run the script again when you have one."
-	ask smtp_port "SMTP port" "587"
-	ask smtp_user "SMTP username"
-	ask_secret smtp_password "SMTP password (not shown)"
-	ask smtp_from "Send as" "Airobot <noreply@$domain>"
+	ask smtp_host "SMTP host (e.g. smtp.resend.com; press Enter to skip for now)"
+	if [ -z "$smtp_host" ]; then
+		# The server won't start without mail settings, so fill in placeholders:
+		# the site loads, but no sign-in email can be sent until the real ones
+		# are in $DIR/.env.
+		smtp_host="mail-not-set-up.invalid"
+		smtp_port="587"
+		smtp_user="not-set-up"
+		smtp_password="not-set-up"
+		smtp_from="Airobot <noreply@$domain>"
+		echo "Mail skipped. The site will load, but nobody can sign in until you put"
+		echo "real SMTP settings in $DIR/.env (see deploy/README.md) and run:"
+		echo "  cd $DIR && docker compose up -d"
+	else
+		ask smtp_port "SMTP port" "587"
+		ask smtp_user "SMTP username"
+		ask_secret smtp_password "SMTP password (not shown)"
+		ask smtp_from "Send as" "Airobot <noreply@$domain>"
+		[ -n "$smtp_user" ] && [ -n "$smtp_password" ] ||
+			fail "the SMTP username and password can't be empty; run the script again."
+	fi
 	for value in "$domain" "$smtp_host" "$smtp_port" "$smtp_user" "$smtp_password" "$smtp_from"; do
 		case "$value" in
 			*\'* | *$'\n'*) fail "settings can't contain a ' or a line break." ;;
@@ -133,6 +148,14 @@ if ! docker compose pull; then
 fi
 docker run --rm -e DOMAIN="$domain" -v "$DIR/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 \
 	caddy validate --config /etc/caddy/Caddyfile >/dev/null
+# An install from before Caddy's address was reserved has the old network;
+# rebuild it (only the containers and network go: the data stays).
+if docker network inspect airobot_airobot >/dev/null 2>&1; then
+	ip_range=$(docker network inspect airobot_airobot --format '{{range .IPAM.Config}}{{.IPRange}}{{end}}')
+	if [ "$ip_range" != "172.30.0.128/25" ]; then
+		docker compose down
+	fi
+fi
 docker compose up -d
 
 echo "Waiting for Airobot to answer..."
